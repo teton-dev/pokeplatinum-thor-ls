@@ -1,12 +1,10 @@
 [wrap-git]
 # Thor/Android fork: GLES renderer, android target, second-screen output.
 # Pinned to a commit of its thor-android branch; bump it in a commit of its own ("libntr: bump to <sha>").
-url = https://github.com/SilasMayes/libntr.git
-revision = 90c17752f4e5b34d8a5a4fbb08dd44b65fe9cc9a
+url = https://github.com/teton-dev/libntr.git
+revision = 1192a72fade05da1193ad7d272b11b36370fdbde
 depth = 1
 directory = libntr
-# Left stick works as a second D-pad (packagefiles/libntr_left_stick.patch)
-diff_files = libntr_left_stick.patch
 
 [provide]
 dependency_names = NitroSDK
