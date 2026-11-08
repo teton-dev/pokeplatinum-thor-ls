@@ -55,8 +55,7 @@ by pokebw2's build from its data. Keep pokebw2 in its own clone next to this rep
 
 ## Testing locally on the Mac
 
-The owner's ROMs live outside the repository (ask where). The desktop build runs in Docker with the repository's
-own helper: `./drun.sh make linux` (`tools/docker/Dockerfile`). The Linux target is x86 (`SDK_X86`), so on the
-Apple Silicon Mac run the container as x86 under Rosetta: `export DOCKER_DEFAULT_PLATFORM=linux/amd64` before
-`drun.sh` (and enable Rosetta in Docker Desktop's settings). Setting this up, and a way to run the game in the
-container and see it (a virtual display with screenshots, or VNC), is the first task.
+The owner's ROMs are in `~/thor-dev` (`PKMNPLAT.nds`, `PKMNB2.nds`). `tools/docker/desktop.sh` builds and runs the
+desktop build in Docker (x86 under Rosetta) and shows it over VNC (`vnc://localhost:5900`); its `shot`, `key`,
+`hold` and `click` commands let Claude check things on screen. The game's data folder is `~/thor-dev/desktop`.
+`docs/thor/dev/desktop-docker.md` has the details and the known problems (WrapDB outages, the AppImage step).
