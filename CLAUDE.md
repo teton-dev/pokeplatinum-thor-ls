@@ -46,12 +46,10 @@ Decisions made with the owner:
 - **Fork-only** because of the GPL; ask upstream's developer before proposing any of it there.
 - Out of scope: following Pokémon, visible wild Pokémon, BW2 Phenomena, name capitalisation.
 
-Status: the plan is written; **milestone 1 (BW2's battle code compiling into the app) is next.** Findings so far:
-the battle needs roughly `src/ov167`, `src/ov168`, `src/ov169`, `src/gfl` and parts of `src/system` (about
-100,000 lines), with stubs for field and network calls. BW2's own SDK copies (`lib/`) are not used: libntr
-provides the SDK. Only three functions near it are ARM assembly (`src/gfl/arc_tool.c`, `src/system/wipe_sub.c`,
-`src/system/wipe_wnd.c`). Its constant headers (`constants/species.h`, `moves.h`, `abilities.h`...) are generated
-by pokebw2's build from its data. Keep pokebw2 in its own clone next to this repository, not inside it.
+Status: **milestone 1 is done on the desktop build** (see the plan's "Milestone 1: where it stands"): `gen5/` builds
+207 of pokebw2's files into `libgen5_battle_bw2.a` with `-Dpokebw2=../pokebw2`, links (`desktop.sh gen5-check`) and
+compiles for arm64; an NDK build of the APK is the step left. pokebw2 is never changed: the port's shims, patches and
+boundary stubs are in `gen5/`. Keep pokebw2 in its own clone next to this repository, not inside it.
 
 ## Testing locally on the Mac
 

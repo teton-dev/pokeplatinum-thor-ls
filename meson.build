@@ -280,6 +280,11 @@ subdir('res')
 ############################################################
 subdir('src')
 
+# Gen 5 battles (teton-dev fork): pokebw2's battle code, built when -Dpokebw2 is set (gen5/meson.build)
+if (build_target != 'arm' and get_option('pokebw2') != '')
+subdir('gen5')
+endif
+
 if (build_target == 'arm')
 trainer_ai_o = custom_target(
     'trainer_ai_script.o',

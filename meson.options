@@ -5,3 +5,4 @@ option('build_target', type: 'combo', choices: ['arm', 'win64', 'linux', 'nx', '
 option('tracy_enable' , type : 'boolean' , value : false, description : 'Enable profiling')
 option('skip_anim_scripts', type : 'boolean', value : false, description : 'True to skip building anim scripts' )
 option('port_sanitize', type: 'string', value: '', description: 'Sanitizers for the game code only, e.g. address,undefined (the Thor rule\'s desktop gate). libntr stays uninstrumented: its emulated registers are separate globals that its own code reads across')
+option('pokebw2', type: 'string', value: '', description: 'Gen 5 battles (teton-dev fork): a pokebw2 clone, such as ../pokebw2, whose battle code is compiled in. Empty: none')
