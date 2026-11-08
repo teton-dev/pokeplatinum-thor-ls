@@ -2,7 +2,7 @@
 # Thor/Android fork: GLES renderer, android target, second-screen output.
 # Pinned to a commit of its thor-android branch; bump it in a commit of its own ("libntr: bump to <sha>").
 url = https://github.com/teton-dev/libntr.git
-revision = 1192a72fade05da1193ad7d272b11b36370fdbde
+revision = 5068cdaacc7b5dfb6ab53030fae2f4b0b1a82e94
 depth = 1
 directory = libntr
 
