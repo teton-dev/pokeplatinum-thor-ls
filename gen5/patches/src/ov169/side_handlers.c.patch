@@ -1,0 +1,20 @@
+--- a/src/ov169/side_handlers.c
++++ b/src/ov169/side_handlers.c
+@@ -387,7 +387,7 @@
+         target = PML_MoveGetParam(move, MOVE_PARAM_TARGET);
+         if (PML_MoveIsDamaging(move) && (target == MOVE_TARGET_ALL_ADJACENT || target == MOVE_TARGET_ADJACENT_FOES) &&
+             BattleEventVar_RewriteValue(BTL_EVAR_NO_EFFECT_FLAG, 1)) {
+-            string = (BattleHandlerString *)BattleEventVar_GetValue(BTL_EVAR_STRING);
++            string = (BattleHandlerString *)Gen5_U32ToPtr(BattleEventVar_GetValue(BTL_EVAR_STRING));
+             BattleHandler_StrSetup(string, 2, 0x31d);
+             BattleHandler_AddArg(string, targetId);
+         }
+@@ -413,7 +413,7 @@
+         move = BattleEventVar_GetValue(BTL_EVAR_MOVE);
+         if (PML_MoveGetParam(move, MOVE_PARAM_PRIORITY) >= 1 &&
+             BattleEventVar_RewriteValue(BTL_EVAR_NO_EFFECT_FLAG, 1)) {
+-            string = (BattleHandlerString *)BattleEventVar_GetValue(BTL_EVAR_STRING);
++            string = (BattleHandlerString *)Gen5_U32ToPtr(BattleEventVar_GetValue(BTL_EVAR_STRING));
+             BattleHandler_StrSetup(string, 2, 0x320);
+             BattleHandler_AddArg(string, attackerId);
+         }

@@ -17,6 +17,12 @@
 
 static char sPaths[ARC_COUNT][PATH_MAX_LENGTH];
 static const char *sPathTable[ARC_COUNT];
+static BOOL sPathsReady;
+
+const char *Gen5_ArcPath(u32 arcId, const char *romPath)
+{
+    return sPathsReady && arcId < ARC_COUNT ? sPathTable[arcId] : romPath;
+}
 
 // From the current folder to dir: libntr opens a game's files by paths from the folder of the game being played
 // (the data folder, or carts/<game>/ in it), and only relative ones
@@ -54,10 +60,12 @@ int Gen5_FilesInit(const char *gen5Dir)
         printf("Gen 5: can't reach %s from the game's folder\n", gen5Dir);
         return FALSE;
     }
+    sPathsReady = FALSE;
     for (u32 i = 0; i < ARC_COUNT; i++) {
         snprintf(sPaths[i], PATH_MAX_LENGTH, "%s/%s", base, GFL_ArcSysGetResourcePath(i));
         sPathTable[i] = sPaths[i];
     }
+    sPathsReady = TRUE;
     GFL_ArcSysInit(sPathTable, ARC_COUNT);
     return TRUE;
 }

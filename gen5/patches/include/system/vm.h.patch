@@ -1,0 +1,22 @@
+--- a/include/system/vm.h
++++ b/include/system/vm.h
+@@ -40,7 +40,7 @@
+     u8 cmpResult;
+     VMCommand native;
+     const u8 *pc;
+-    u32 *stack;
++    uptr *stack; // The port: return addresses, 64 bits
+     u32 *work;
+     void *env;
+     VMVerifier verifier;
+@@ -68,8 +68,8 @@
+ 
+ u16 VM_Read16(VM *vm);
+ u32 VM_Read32(VM *vm);
+-void VM_StackPush(VM *vm, u32 value);
+-u32 VM_StackPop(VM *vm);
++void VM_StackPush(VM *vm, uptr value);
++uptr VM_StackPop(VM *vm);
+ void VM_Jump(VM *vm, const u8 *pc);
+ void VM_Call(VM *vm, const u8 *pc);
+ void VM_Return(VM *vm);

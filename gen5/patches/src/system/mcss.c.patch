@@ -13,3 +13,48 @@
          << 8;
      G3_Translate(nodeX, nodeY, *z);
      G3_RotZ(-FX_SinIdx(cellSrt->rotZ), FX_CosIdx(cellSrt->rotZ));
+@@ -515,19 +515,20 @@
+         G3_Translate(-0x100, 0, 0);
+         s = FX32_CONST(512) - s - width;
+     }
+-    // The packed texture coordinates are written again for the shadow's quad
++    // The packed texture coordinates are written again for the shadow's quad. The port: as commands, which the
++    // simulator reads (it doesn't read the register)
+     G3_Begin(GX_BEGIN_QUADS);
+     texCoord0 = GX_ST(s, t);
+-    reg_G3_TEXCOORD = texCoord0;
++    G3_Direct1(G3OP_TEXCOORD, texCoord0);
+     G3_Vtx(0, 0, 0);
+     texCoord1 = GX_ST(s, t + height);
+-    reg_G3_TEXCOORD = texCoord1;
++    G3_Direct1(G3OP_TEXCOORD, texCoord1);
+     G3_Vtx(0, -0x100, 0);
+     texCoord2 = GX_ST(s + width, t + height);
+-    reg_G3_TEXCOORD = texCoord2;
++    G3_Direct1(G3OP_TEXCOORD, texCoord2);
+     G3_Vtx(0x100, -0x100, 0);
+     texCoord3 = GX_ST(s + width, t);
+-    reg_G3_TEXCOORD = texCoord3;
++    G3_Direct1(G3OP_TEXCOORD, texCoord3);
+     G3_Vtx(0x100, 0, 0);
+     G3_End();
+     G3_MtxMode(GX_MTXMODE_PROJECTION);
+@@ -544,13 +545,13 @@
+         G3_Translate(x, y, 0);
+         G3_Scale(width, height, FX32_ONE);
+         G3_Begin(GX_BEGIN_QUADS);
+-        reg_G3_TEXCOORD = texCoord0;
++        G3_Direct1(G3OP_TEXCOORD, texCoord0);
+         G3_Vtx(0, 0, 0);
+-        reg_G3_TEXCOORD = texCoord1;
+-        G3_Vtx(0, -0x100, 0);
+-        reg_G3_TEXCOORD = texCoord2;
++        G3_Direct1(G3OP_TEXCOORD, texCoord1);
++        G3_Vtx(0, -0x100, 0);
++        G3_Direct1(G3OP_TEXCOORD, texCoord2);
+         G3_Vtx(0x100, -0x100, 0);
+-        reg_G3_TEXCOORD = texCoord3;
++        G3_Direct1(G3OP_TEXCOORD, texCoord3);
+         G3_Vtx(0x100, 0, 0);
+         G3_End();
+     }

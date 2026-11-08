@@ -19,6 +19,8 @@
 #include "port/autosave.h"
 #include "port/gba_slot.h"
 #ifdef GEN5_BATTLES
+#include "constants/species.h"
+#include "port/gen5_battle.h"
 #include "port/gen5_rom.h"
 #endif
 #include "port/nuzlocke.h"
@@ -802,6 +804,14 @@ void DrawDebug()
     ConfigToggle("Check the game's assertions", "Report failed GF_ASSERTs as a communication error.",
         &config->enableAsserts);
     ConfigToggle("Stop in the debugger on a failed check", nullptr, &config->breakDebuggerOnGfAssert);
+#ifdef GEN5_BATTLES
+    Section("Gen 5 battles");
+    if (Button("Wild battle in the Gen 5 engine", "A level 5 Bidoof against your first Pokemon, in Black 2 and White "
+               "2's engine (Settings > Games > Gen 5 battles needs the ROM first). Close the settings to see it.",
+            false, Gen5Rom_GameName() != nullptr)) {
+        Gen5Battle_StartDebug(SPECIES_BIDOOF, 5);
+    }
+#endif
     char text[96];
     snprintf(text, sizeof(text), "pokeplatinum %s", SIM_GetProjectGitHash());
     Note(text);

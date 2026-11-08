@@ -5,6 +5,9 @@ url = https://github.com/teton-dev/libntr.git
 revision = 5068cdaacc7b5dfb6ab53030fae2f4b0b1a82e94
 depth = 1
 directory = libntr
+# teton-dev fork, Gen 5 battles: G3_MultMtx33/44, G3_MultTransMtx33 and G3_Shininess through the simulator (BW2's
+# models call them; Platinum doesn't, and the register writes overran into GXSTAT). For libntr itself, later
+diff_files = libntr_g3_mult.patch
 
 [provide]
 dependency_names = NitroSDK

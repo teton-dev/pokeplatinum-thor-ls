@@ -1,0 +1,38 @@
+--- a/src/ov168/btlv_finger_cursor.c
++++ b/src/ov168/btlv_finger_cursor.c
+@@ -99,7 +99,7 @@
+     cursor->seq = FINGER_SEQ_WAIT;
+     cursor->tapFrame = tapFrame;
+     cursor->touched = FALSE;
+-    callback.param = (u32)cursor;
++    callback.param = Gen5_PtrToU32(cursor); // The port: 64 bits
+     callback.type = CLACT_CALLBACK_LAST_FRAME;
+     callback.frame = 0;
+     callback.func = BtlvFingerCursor_AnimCallback;
+@@ -120,7 +120,7 @@
+ 
+ // The actor's animation callback, at the end of each animation and on the tap's frame
+ static void BtlvFingerCursor_AnimCallback(u32 param, fx32 frame) {
+-    BtlvFingerCursor *cursor = (BtlvFingerCursor *)param;
++    BtlvFingerCursor *cursor = (BtlvFingerCursor *)Gen5_U32ToPtr(param);
+ 
+     switch (cursor->seq) {
+     case FINGER_SEQ_WAIT:
+@@ -129,7 +129,7 @@
+ 
+             ClActor_SetSequence(cursor->actor, 1);
+             cursor->seq++;
+-            callback.param = (u32)cursor;
++            callback.param = Gen5_PtrToU32(cursor); // The port: 64 bits
+             callback.type = CLACT_CALLBACK_FRAME;
+             callback.frame = cursor->tapFrame;
+             callback.func = BtlvFingerCursor_AnimCallback;
+@@ -141,7 +141,7 @@
+ 
+         cursor->touched = TRUE;
+         cursor->seq++;
+-        callback.param = (u32)cursor;
++        callback.param = Gen5_PtrToU32(cursor); // The port: 64 bits
+         callback.type = CLACT_CALLBACK_EVERY_FRAME;
+         callback.frame = 0;
+         callback.func = BtlvFingerCursor_AnimCallback;

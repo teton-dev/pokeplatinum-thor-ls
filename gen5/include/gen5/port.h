@@ -8,6 +8,9 @@
 #include <nnsys/g3d.h>
 #include <string.h>
 
+// The port's interface (Gen5_... functions and their types)
+#include "gen5.h"
+
 // NitroSDK's older name, which pokebw2's fx.h keeps
 #ifndef DEG_TO_IDX
 #define DEG_TO_IDX(deg) ((u16)((deg) * 0x10000 / 360))
@@ -67,5 +70,31 @@ void RTC_GetCachedTime(RTCTime *time);
 #define NNS_G3D_SIGNATURE_BMA0 NNS_G3D_SIGNATURE_NSBMA
 #define NNS_G3D_SIGNATURE_BTP0 NNS_G3D_SIGNATURE_NSBTP
 #define NNS_G3D_SIGNATURE_BTA0 NNS_G3D_SIGNATURE_NSBTA
+
+// The port's heaps for GFL (gen5/src/runtime.c), in place of GFLAppInit's (gfl_use.c's patch)
+void Gen5_MemInit(void);
+
+// An archive's file in the extracted ROM's folder once Gen5_FilesInit has run, else BW2's own path (gen5/src/files.c,
+// for GFL_ArcSysGetResourcePath: gfl_use.c's patch)
+const char *Gen5_ArcPath(u32 arcId, const char *romPath);
+
+// The keys and the touch the game read this frame (gen5/src/runtime.c, from Gen5_SetInput), for key.c's and
+// touchpanel.c's patches
+u16 Gen5_PadRead(void);
+void Gen5_TouchRead(TPData *touch);
+
+// BW2's silent sound's frame (gen5/src/sound.c): its music fades take their time
+void Gen5_SoundUpdate(void);
+
+// What happened in the battle, for Gen5_TakeEvents (gen5/src/runtime.c; the events are in api/gen5.h)
+void Gen5_Event(u32 event);
+
+// 64 bits: a pointer as a 32-bit handle, and back, where BW2 keeps pointers in 32-bit values (gen5/src/pointers.c)
+u32 Gen5_PtrToU32(const void *pointer);
+void *Gen5_U32ToPtr(u32 handle);
+
+// A multi-cell (NMCR) file's bank in the 64-bit layout, replacing the file (gen5/src/g2d.c, for arc_util.c's patch)
+struct NNSG2dMultiCellDataBank;
+BOOL Gen5_UnpackMultiCellBank(void **file, struct NNSG2dMultiCellDataBank **bank, u32 heapId);
 
 #endif // GEN5_PORT_H

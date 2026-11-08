@@ -46,10 +46,12 @@ Decisions made with the owner:
 - **Fork-only** because of the GPL; ask upstream's developer before proposing any of it there.
 - Out of scope: following Pokémon, visible wild Pokémon, BW2 Phenomena, name capitalisation.
 
-Status: **milestones 1 and 2 are done on the desktop build** (the plan's "Milestone 1" and "Milestone 2"): `gen5/`
+Status: **milestones 1, 2 and 3 are done on the desktop build** (the plan's "Milestone 1" to "Milestone 3"): `gen5/`
 builds 207 of pokebw2's files, renamed `bw2_...`, into one object the game links whole (`-Dpokebw2=../pokebw2`);
 *Settings > Games > Gen 5 battles* imports a Black 2 / White 2 ROM into the data folder's `gen5/`, and BW2's code reads
-it. Next is milestone 3, the first battle. An NDK build of the APK with the option is still to do. pokebw2 is never
+it; *Settings > Advanced > Gen 5 battles* runs a wild battle in BW2's engine (moves, running away, back to the
+overworld), still silent and with black patches in the arena's distant background (libntr's renderer doesn't clip
+polygons). Next is milestone 4, the bridge. An NDK build of the APK with the option is still to do. pokebw2 is never
 changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this
 repository, not inside it.
 
@@ -63,4 +65,5 @@ desktop build in Docker (x86 under Rosetta) and shows it over VNC (`vnc://localh
 Scripted tests (`tests/README.md`): `desktop.sh test tests/scripts/new_game.txt --keep before-starter` plays a new
 game to Prof. Rowan's briefcase and keeps the save as a fixture; `first_battle.txt --from before-starter` picks
 Turtwig and passes once Barry's battle asks for a command. That is the check that the Gen 5 engine loads and runs a
-battle (milestone 3 on).
+battle (milestone 3 on); `gen5_battle.txt --from turtwig` plays a debug battle in BW2's engine to the end. A crash,
+hang or unexpected exit in a test run prints where (functions and lines), since gdb can't run under Rosetta.

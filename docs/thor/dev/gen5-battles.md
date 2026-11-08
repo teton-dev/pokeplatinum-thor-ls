@@ -65,7 +65,8 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
 1. **Builds:** BW2's battle code and GFL compile into the desktop and Android builds, unused. *Done on the desktop.*
 2. **ROM:** the import screen extracts a BW2 ROM; the Gen 5 code reads files from it. *Done on the desktop.*
 3. **First battle:** a debug menu entry starts one wild single battle (a fixed Pokémon against the first party
-   Pokémon) in BW2's engine and returns to the overworld. Arena, camera, sprites, moves, running away.
+   Pokémon) in BW2's engine and returns to the overworld. Arena, camera, sprites, moves, running away. *Done on the
+   desktop, but for the arena's distant background and sound* (see "Milestone 3").
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
    (Pokédex entry, nickname, box), fainting and whiting out.
 5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages.
@@ -106,7 +107,7 @@ Done on the desktop build; the Android build is checked by compiling for arm64, 
   compile. `-fsigned-char`, since BW2 was built with a signed `char` and arm64's isn't.
 - **64 bits:** the arm64 check lists 88 places in BW2's code where a pointer goes through a 32-bit integer or back
   (Pokémon data, move handlers, gauges, bitmaps...). Some are harmless (alignment tests); the rest are the first
-  suspects when the battle runs (milestone 3).
+  suspects when the battle runs (milestone 3, which fixed those the battle runs).
 - **Left for milestones 1 and 2:** an NDK build of the APK with `-Dpokebw2` (`tools/android/build_apk.sh` now gives meson
   the NDK's `llvm-nm` and `llvm-objcopy`; the CI would need a pokebw2 clone at a pinned commit).
 
@@ -136,6 +137,62 @@ Done on the desktop build; the Android build is checked by compiling for arm64, 
   `CPUE`). The settings import was also tried on the desktop, with the ImGui file picker.
 - **Not checked yet:** the Android build (no NDK on the Mac; `std::filesystem` and `std::thread` need nothing the
   NDK lacks) and the import on the Thor, where 270 MB more goes into the app's folder.
+
+## Milestone 3: the first battle (2026-11-08)
+
+Done on the desktop: *Settings > Advanced > Gen 5 battles > Wild battle in the Gen 5 engine* starts a battle against a
+level 5 Bidoof in BW2's engine with the first party Pokémon. The intro, the camera, both Pokémon and the trainer, the
+gauges, the messages, the touch screen's menus, moves (their animations and damage) and running away all work, and the
+game is back on the overworld afterwards. `tests/scripts/gen5_battle.txt` plays it: Tackle, then RUN until it works.
+
+- **How it runs:** the debug entry asks for the next battle in BW2's engine (`Gen5Battle_StartDebug`,
+  `src/port/gen5_battle.c`) and starts an ordinary Platinum wild battle; `FieldSystem_StartBattleProcess` then runs
+  `gGen5BattleApplicationTemplate` instead of Platinum's battle. Its Init builds the `Gen5WildBattle` (species and
+  levels) from the DTO, Main runs a frame of BW2 (`Gen5_BattleFrame`), Exit maps the result back (no other result is
+  written yet: milestone 4). BW2's VBlank work runs in the game's VBlank callback (`Gen5_BattleVBlank`).
+- **BW2's systems** (`gen5/src/runtime.c`) start the first time and stay up: GFL's heaps in a 24 MB block of their
+  own (`GFLAppInit` takes them from `Gen5_MemInit`, `gfl_use.c`'s patch), the archives, text, species names, Pokémon
+  data, zone data. Each battle gets a heap (512 KB) for its `BtlSetup`, parties and the stand-ins for the player's
+  info, config, bag, Pokédex and records, freed at the end (BW2 checks that a deleted heap is empty).
+- **The save** (`gen5/src/game_data.c`): `SaveControl_GetBlockPtr` hands out the 17 blocks of BW2's save the battle
+  reads (Chatot's cry, the box, trainer data...), each created and initialized from `save_table.c`'s definitions the
+  first time; nothing is written back.
+- **Input:** the keys and touch Platinum read each frame (with the test scripts' own) go to BW2 through
+  `Gen5_SetInput`: `key.c` and `touchpanel.c` read them instead of the hardware. The command selection raises
+  `GEN5_EVENT_COMMAND` (`Gen5_TakeEvents`), which the test scripts' `command` event waits for.
+- **Sound is silent for now:** NitroSystem's sound library holds one sound archive, Platinum's. `gen5/src/sound.c`
+  stands in for `snd_sys.c` with the 22 functions the battle calls, keeping only the music fades' timing (the battle
+  waits for them); cries get no wave, which `PokeVoice` never plays. Playing BW2's music and cries needs its own
+  archive loaded next to Platinum's, later.
+- **What 64 bits and libntr needed** (each found by running the battle):
+  - libntr: `G3_MultMtx33`/`44`, `G3_MultTransMtx33` and `G3_Shininess` had no simulator path and wrote the
+    matrices into the registers, over `GXSTAT` (the geometry engine then looked busy forever). Fixed in libntr
+    (`subprojects/packagefiles/libntr_g3_mult.patch`, the wrap's `diff_files`; for libntr itself later). libntr's
+    `VCOUNT` stays 0: the battle's VBlank work runs with it at 192, the line BW2's sprite loads wait for.
+  - NitroSystem files: libntrsystem rebuilds cells and animations in the 64-bit layout but not multi-cells (NMCR),
+    which BW2's Pokémon sprites use: `gen5/src/g2d.c` (`arc_util.c`'s patch).
+  - Pointers through 32-bit values: the battle's event variables (a handler's string), animation callbacks' `u32`
+    parameter, and the like get a handle from `gen5/src/pointers.c`; address arithmetic uses `uptr` (gauges, touch
+    screen, particle work); the effect VM's call stack holds `uptr` return addresses. The arm64 check's list went
+    from 88 to 33 places, all harmless (alignment tests, pointer differences) or in code the battle doesn't run (Join
+    Avenue, Wi-Fi, trade evolutions).
+  - The particle library's structures are larger on 64 bits: the effects' particle work is twice the DS's, and its
+    allocator says when it runs out instead of writing past the end (that overwrote the send-out's effect script).
+  - What the DS tolerates: reading through NULL (a cry's channel that never started, `pm_voice.c`), `exit` as the
+    debugger's stop when a heap is deleted with blocks left (`heap.c`: listed and carried on).
+  - Sprites' texture coordinates were written to the `TEXCOORD` register, which the simulator doesn't read: as
+    commands (`mcss.c`).
+- **Debugging it:** gdb can't run under Rosetta, so test runs print backtraces themselves (`src/port/test_crash.cpp`):
+  for a crash (on a stack of its own, with the faulting address when the unwinder can't go further), for an exit the
+  script didn't ask for, and, when the harness stops a run at its time limit, three samples of where the game thread
+  is. `desktop.sh test` turns them into functions and lines.
+- **Not done yet:**
+  - The arena's distant background: libntr's renderer has no polygon clipping (its clipper's segment code is
+    commented out) and drops polygons that come out far off screen, so BW2's large sky and ground meshes, which reach
+    behind the camera, leave black patches when the camera is close. Platinum's scenes don't have such polygons. The
+    fix is in libntr's renderer (clipping, or letting OpenGL clip).
+  - Sound (above). A block of 0 bytes is left in one of BW2's heaps at the end (listed, harmless).
+  - The Android build, as for milestones 1 and 2.
 
 ## Risks
 

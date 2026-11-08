@@ -1,0 +1,23 @@
+--- a/src/gfl/particle.c
++++ b/src/gfl/particle.c
+@@ -191,10 +191,17 @@
+ // Takes size bytes of the system's work, rounded up to a word
+ static inline void *Particle_Alloc(ParticleSystem *system, u32 size) {
+     void *ret = system->work;
+-    u32 next = (u32)system->work + size;
++    // The port: 64 bits, rounded up to a pointer's size, and no further than the work's end, which the DS's sizes
++    // of the work are for 32-bit structures
++    uptr next = (uptr)system->work + size;
+ 
+-    if (next % 4 != 0) {
+-        next += 4 - next % 4;
++    if (next % sizeof(void *) != 0) {
++        next += sizeof(void *) - next % sizeof(void *);
++    }
++    if (next > (uptr)system->workEnd) {
++        OS_Printf("Gen 5: a particle system's work is too small (%lu bytes more)\n",
++                  (unsigned long)(next - (uptr)system->workEnd));
++        return NULL;
+     }
+     system->work = (void *)next;
+     return ret;
