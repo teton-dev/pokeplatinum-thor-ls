@@ -66,6 +66,8 @@ c = toolchain / 'aarch64-linux-android$API-clang'
 cpp = toolchain / 'aarch64-linux-android$API-clang++'
 ar = toolchain / 'llvm-ar'
 strip = toolchain / 'llvm-strip'
+nm = toolchain / 'llvm-nm'
+objcopy = toolchain / 'llvm-objcopy'
 
 [built-in options]
 # The decompiled game code type-puns and relies on wrapping signed arithmetic (as the

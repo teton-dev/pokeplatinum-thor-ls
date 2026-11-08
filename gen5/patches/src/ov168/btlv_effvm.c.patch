@@ -1,0 +1,16 @@
+--- a/src/ov168/btlv_effvm.c
++++ b/src/ov168/btlv_effvm.c
+@@ -3630,9 +3630,10 @@
+         VEC_CrossProduct(&base, &dir, &axis);
+         VEC_Normalize(&axis, &axis);
+         MTX_RotAxis43(&work->mtx, &axis, FX_SinIdx(angle), FX_CosIdx(angle));
+-        work->mtx.rt.trans.x = from.x;
+-        work->mtx.rt.trans.y = from.y;
+-        work->mtx.rt.trans.z = from.z;
++        // The port: the SDK's names of the translation row (pokebw2's fx.h adds rt.trans)
++        work->mtx._30 = from.x;
++        work->mtx._31 = from.y;
++        work->mtx._32 = from.z;
+     }
+     if (param->from != EFFVM_EMIT_EXPLICIT && param->to != EFFVM_EMIT_EXPLICIT && param->from != param->to) {
+         spinAxis = 2;

@@ -1,0 +1,13 @@
+--- a/src/gfl/key.c
++++ b/src/gfl/key.c
+@@ -58,9 +58,7 @@
+ static u32 GFL_HIDGetTypedKeys(SystemUI *ui);
+ static void GFL_HIDGetRepeat(SystemUI *ui, u32 *repeatWait, u32 *repeatStart);
+ 
+-static inline u16 PAD_Read(void) {
+-    return (u16)(((reg_PAD_KEYINPUT | *(vu16 *)HW_BUTTON_XY_BUF) ^ PAD_ALL_MASK) & PAD_ALL_MASK);
+-}
++// The port: libntr's PAD_Read, which reads the emulated keys (this one reads the DS's registers)
+ 
+ KeypadManager *GFL_HIDCreateKeypadManager(HeapID heapId) {
+     KeypadManager *keypad = GFL_HeapAllocate(heapId, sizeof(KeypadManager), FALSE, "key.c", 68);
