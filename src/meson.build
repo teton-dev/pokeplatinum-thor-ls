@@ -1023,6 +1023,7 @@ pokeplatinum_c += files(
     'port/randomizer.c',
     'port/soft_reset.c',
     'port/speed_up.c',
+    'port/test_script.c',
     'port/hm_free.c',
     'port/widescreen.c',
     'port/gba_slot.c',

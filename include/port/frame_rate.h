@@ -27,6 +27,10 @@ void FrameRate_Update(void);
 // This iteration runs the game logic at 60 Hz
 BOOL FrameRate_Is60Hz(void);
 
+// The player is free on the overworld: the field map runs with no sub-screen open and no event, menu, warp or
+// battle (all of which are field tasks), and not linked up with another game
+BOOL FrameRate_PlayerIsFreeOnOverworld(void);
+
 // A 30 Hz iteration is about to wait for its first vblank. The frame shown then is
 // replaced by the one at the second before it can be seen, so it isn't drawn (half the
 // drawing in battles and menus), unless DrawEveryFrame is on.

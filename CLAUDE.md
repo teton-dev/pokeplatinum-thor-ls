@@ -57,3 +57,8 @@ The owner's ROMs are in `~/thor-dev` (`PKMNPLAT.nds`, `PKMNB2.nds`). `tools/dock
 desktop build in Docker (x86 under Rosetta) and shows it over VNC (`vnc://localhost:5900`); its `shot`, `key`,
 `hold` and `click` commands let Claude check things on screen. The game's data folder is `~/thor-dev/desktop`.
 `docs/thor/dev/desktop-docker.md` has the details and the known problems (WrapDB outages, the AppImage step).
+
+Scripted tests (`tests/README.md`): `desktop.sh test tests/scripts/new_game.txt --keep before-starter` plays a new
+game to Prof. Rowan's briefcase and keeps the save as a fixture; `first_battle.txt --from before-starter` picks
+Turtwig and passes once Barry's battle asks for a command. That is the check that the Gen 5 engine loads and runs a
+battle (milestone 3 on).

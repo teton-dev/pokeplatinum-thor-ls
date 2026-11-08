@@ -19,9 +19,7 @@ static BOOL s60Hz = FALSE;
 static BOOL sSpeedFix = FALSE;
 static BOOL sOddTick = FALSE; // alternates every 60 Hz iteration
 
-// The player is free on the overworld: the field map runs with no sub-screen open and
-// no event, menu, warp or battle (all of which are field tasks)
-static BOOL PlayerIsFreeOnOverworld(void)
+BOOL FrameRate_PlayerIsFreeOnOverworld(void)
 {
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
     return fieldSystem != NULL
@@ -46,7 +44,7 @@ void FrameRate_Update(void)
     } else if (config->enable60fpsEverywhere) {
         s60Hz = TRUE;
     } else {
-        s60Hz = PlayerIsFreeOnOverworld();
+        s60Hz = FrameRate_PlayerIsFreeOnOverworld();
     }
     sSpeedFix = s60Hz && config->enable60fpsSpeedFix;
     sOddTick = sSpeedFix ? !sOddTick : FALSE;

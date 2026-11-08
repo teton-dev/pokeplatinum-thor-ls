@@ -12,6 +12,9 @@
 #   tools/docker/desktop.sh log              the game's output
 #   tools/docker/desktop.sh stop             stop the game and the display
 #   tools/docker/desktop.sh shell [CMD...]   a shell (or a command) in the build container
+#   tools/docker/desktop.sh test SCRIPT [--from FIXTURE] [--keep FIXTURE]
+#                                            run a test script (tests/README.md) in a fresh data folder, from a
+#                                            fixture's save, and keep the save it ends with as a fixture
 #
 # The container is x86-64 (the Linux target is SDK_X86) and runs under Rosetta on Apple Silicon.
 # THOR_DEV (default ~/thor-dev) holds the ROMs and, in desktop/, the game's data folder: the extracted ROM, saves
@@ -60,8 +63,11 @@ build)
         docker run --rm -i --user "$(id -u):$(id -g)" -e HOME=/home -e APPIMAGE_EXTRACT_AND_RUN=1 $(mounts) -w "$ROOT" \
             $IMAGE sh -c "$*"
     }
+    LOG=$ROOT/build_linux/desktop-build.log
     run_make() {
-        in_container make linux "$@"
+        mkdir -p "$ROOT/build_linux"
+        in_container make linux "$@" 2>&1 | tee "$LOG"
+        return "${PIPESTATUS[0]}"
     }
     # The Gen 5 battle code (gen5/meson.build) with a pokebw2 clone next to this repository
     if [ -d "$POKEBW2" ]; then
@@ -79,13 +85,108 @@ build)
     [ -s "$LINUXDEPLOY" ] || rm -f "$LINUXDEPLOY"
     unmark || true
     run_make "$@" || { unmark && run_make "$@"; } || {
-        # The AppImage is the last step: the game and its files are in place before it (copy_pc_files.sh)
-        if cmp -s "$ROOT/build_linux/main" "$ROOT/build_linux/pokeplatinum/main"; then
+        # The AppImage is the last step: the game and its files are in place before it (copy_pc_files.sh). Only
+        # when it is the one failure
+        if [ "$(grep -c '^FAILED: ' "$LOG")" = 1 ] && grep -q '^FAILED: pokeplatinum.us' "$LOG" &&
+            cmp -s "$ROOT/build_linux/main" "$ROOT/build_linux/pokeplatinum/main"; then
             echo "The game is built in build_linux/pokeplatinum; only its AppImage failed (not needed to play here)."
         else
             exit 1
         fi
     }
+    ;;
+test)
+    image
+    shift
+    SCRIPT=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+    shift
+    [ -f "$SCRIPT" ] || { echo "No script $SCRIPT"; exit 1; }
+    FROM= KEEP=
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --from) FROM=$2; shift 2 ;;
+        --keep) KEEP=$2; shift 2 ;;
+        *) echo "Unknown option $1"; exit 1 ;;
+        esac
+    done
+    BIN=$ROOT/build_linux/pokeplatinum
+    [ -x "$BIN/main" ] || { echo "No build: run $0 build first"; exit 1; }
+    [ -f "$DATA/arm9.bin" ] || { echo "No extracted ROM in $DATA: start the game once ($0 start)"; exit 1; }
+    TEST_NAME=$(basename "$SCRIPT" .txt)
+    RUN=$THOR_DEV/test-run
+    SHOTS=$THOR_DEV/test-shots/$TEST_NAME
+    FIXTURES=$THOR_DEV/fixtures
+    # A fresh data folder: the extracted ROM linked, no saves but the fixture's, and the default settings, so
+    # that the player's (text speed...) don't change a test's timing
+    rm -rf "$RUN" "$SHOTS"
+    mkdir -p "$RUN" "$SHOTS"
+    for entry in "$DATA"/*; do
+        name=$(basename "$entry")
+        case "$name" in
+        save.bin | save_slot* | *.sav | DbgLog.txt | *.nds | sim_config.ini | sim_config_prj.ini | imgui.ini) ;;
+        carts.ini | cart.name) cp "$entry" "$RUN/" ;;
+        *) ln -s "$entry" "$RUN/$name" ;;
+        esac
+    done
+    # The 3D at the DS's own size: the default (10 times as large) is far too slow in software, at a few frames a
+    # second on the overworld
+    printf '[General]\nInternalResolutionScale=1\n' > "$RUN/sim_config.ini"
+    if [ -n "$FROM" ]; then
+        [ -f "$FIXTURES/$FROM/save.bin" ] || { echo "No fixture $FIXTURES/$FROM"; exit 1; }
+        cp "$FIXTURES/$FROM/save.bin" "$RUN/save.bin"
+    fi
+    TEST=pokeplatinum-test
+    docker rm -f $TEST >/dev/null 2>&1 || true
+    docker run -d --name $TEST --user "$(id -u):$(id -g)" -e HOME=/home -e DISPLAY=:1 -e SDL_AUDIODRIVER=dummy \
+        -e LIBGL_ALWAYS_SOFTWARE=1 -e LIBNTR_TEST_MODE=1 -e POKEPLATINUM_TEST_SCRIPT="$SCRIPT" $(mounts) -w "$RUN" \
+        $IMAGE sh -c "Xvfb :1 -screen 0 ${SCREEN}x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
+                      sleep 1
+                      cp -f '$BIN/firmware.bin' '$BIN/header.bin' .
+                      exec '$BIN/main'" >/dev/null
+    echo "Running $TEST_NAME${FROM:+ from $FROM}"
+    # The script's log, and its screenshots as it asks for them, while the container runs
+    docker logs -f $TEST 2>&1 | while IFS= read -r line; do
+        case "$line" in
+        "[test] shot "*)
+            shot=${line#\[test\] shot }
+            # The game's window (both screens), found by its title
+            docker exec -e DISPLAY=:1 $TEST sh -c \
+                'import -window "$(xdotool search --name POKEMON | head -n 1)" /tmp/shot.png' 2>/dev/null &&
+                docker cp $TEST:/tmp/shot.png "$SHOTS/$shot.png" >/dev/null 2>&1 && echo "$line -> $SHOTS/$shot.png" ;;
+        "[test] "* | *"[assert]"* | *"Assert"*) echo "$line" ;;
+        esac
+    done &
+    READER=$!
+    # Whatever the script's own timeouts, a run ends after TEST_LIMIT seconds. Polled here, so that nothing left
+    # running holds the output open after the run
+    START=$(date +%s)
+    TIMED_OUT=
+    while [ "$(docker inspect -f '{{.State.Running}}' $TEST 2>/dev/null)" = true ]; do
+        if [ $(($(date +%s) - START)) -ge "${TEST_LIMIT:-600}" ]; then
+            echo "[test] FAIL: still running after ${TEST_LIMIT:-600} s"
+            docker exec -e DISPLAY=:1 $TEST sh -c \
+                'import -window "$(xdotool search --name POKEMON | head -n 1)" /tmp/shot.png' 2>/dev/null &&
+                docker cp $TEST:/tmp/shot.png "$SHOTS/timeout.png" >/dev/null 2>&1
+            docker stop -t 1 $TEST >/dev/null 2>&1
+            TIMED_OUT=1
+            break
+        fi
+        sleep 1
+    done
+    wait $READER 2>/dev/null || true
+    CODE=$(docker inspect -f '{{.State.ExitCode}}' $TEST)
+    [ "$CODE" = 0 ] || [ "$CODE" = 1 ] || CODE=1
+    [ -z "$TIMED_OUT" ] || CODE=1
+    docker logs $TEST > "$SHOTS/log.txt" 2>&1
+    docker rm -f $TEST >/dev/null 2>&1 || true
+    if [ "$CODE" = 0 ] && [ -n "$KEEP" ]; then
+        [ -f "$RUN/save.bin" ] || { echo "The run ended without a save to keep"; exit 1; }
+        mkdir -p "$FIXTURES/$KEEP"
+        cp "$RUN/save.bin" "$FIXTURES/$KEEP/save.bin"
+        echo "Kept the save as the fixture $KEEP ($FIXTURES/$KEEP)"
+    fi
+    echo "$TEST_NAME: $([ "$CODE" = 0 ] && echo passed || echo "FAILED (exit $CODE)"); log and screenshots in $SHOTS"
+    exit "$CODE"
     ;;
 gen5-check)
     image
@@ -146,7 +247,7 @@ shell)
     fi
     ;;
 *)
-    sed -n 2,18p "$0" | sed 's/^# \{0,1\}//'
+    sed -n 2,21p "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac
