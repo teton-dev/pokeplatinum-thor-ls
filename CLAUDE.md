@@ -46,10 +46,12 @@ Decisions made with the owner:
 - **Fork-only** because of the GPL; ask upstream's developer before proposing any of it there.
 - Out of scope: following Pokémon, visible wild Pokémon, BW2 Phenomena, name capitalisation.
 
-Status: **milestone 1 is done on the desktop build** (see the plan's "Milestone 1: where it stands"): `gen5/` builds
-207 of pokebw2's files into `libgen5_battle_bw2.a` with `-Dpokebw2=../pokebw2`, links (`desktop.sh gen5-check`) and
-compiles for arm64; an NDK build of the APK is the step left. pokebw2 is never changed: the port's shims, patches and
-boundary stubs are in `gen5/`. Keep pokebw2 in its own clone next to this repository, not inside it.
+Status: **milestones 1 and 2 are done on the desktop build** (the plan's "Milestone 1" and "Milestone 2"): `gen5/`
+builds 207 of pokebw2's files, renamed `bw2_...`, into one object the game links whole (`-Dpokebw2=../pokebw2`);
+*Settings > Games > Gen 5 battles* imports a Black 2 / White 2 ROM into the data folder's `gen5/`, and BW2's code reads
+it. Next is milestone 3, the first battle. An NDK build of the APK with the option is still to do. pokebw2 is never
+changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this
+repository, not inside it.
 
 ## Testing locally on the Mac
 

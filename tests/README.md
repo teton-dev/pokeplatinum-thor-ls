@@ -15,6 +15,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 |---|---|---|---|
 | `new_game.txt` | nothing | a new game (a boy named Claude, the rival Barry) to Prof. Rowan's briefcase on Route 201, saved there | ~20 s |
 | `first_battle.txt` | `before-starter` | Turtwig from the briefcase, then Barry's battle, until it asks what to do | ~10 s |
+| `gen5_rom.txt` | nothing | imports the Black 2 or White 2 ROM as the settings do, and BW2's code reads it (Gen 5 builds) | ~10 s |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
 engine, and the test passes once that asks for a command. (BW2's battle view needs the same `command` event as
@@ -24,7 +25,8 @@ Platinum's, `TestScript_OnEvent(TEST_EVENT_BATTLE_COMMAND)`, when it is wired in
 
 `desktop.sh test SCRIPT [--from FIXTURE] [--keep FIXTURE]`:
 
-- A run's data folder is `~/thor-dev/test-run`: the extracted ROM linked from `~/thor-dev/desktop`, no saves, and
+- A run's data folder is `~/thor-dev/test-run`: the extracted ROM linked from `~/thor-dev/desktop` (not its Gen 5
+  files: `gen5_rom.txt` imports its own), no saves, and
   the default settings, with the 3D at the DS's own size (the default, ten times larger, is far too slow in software).
 - `--from FIXTURE` starts it from `~/thor-dev/fixtures/FIXTURE/save.bin`; `--keep FIXTURE` keeps the save it ends
   with there, when it passes. Fixtures are saves: never commit them.
@@ -50,6 +52,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `mash KEYS [touch X Y] until EVENT [timeout N]` | presses (and touches) 2 frames out of 8 until the event |
 | `mash KEYS [touch X Y] for N` | the same for N frames |
 | `save` | saves the game, as the menu does, once the player is free |
+| `gen5-import` | imports the Black 2 or White 2 ROM in `POKEPLATINUM_GEN5_ROM` (the harness passes `GEN5_ROM`, or `~/thor-dev/PKMNB2.nds`) and waits; fails if it is refused or the self-check fails |
 | `shot NAME` | a screenshot, `NAME.png` |
 | `log TEXT` | prints the text |
 | `exit [code]` | ends the run: 0 passes |

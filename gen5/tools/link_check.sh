@@ -1,11 +1,11 @@
 #!/bin/bash
-# Milestone 1's link check (Gen 5 battles): lists the symbols libgen5_battle.a needs that neither it, libntr's
+# The Gen 5 code's link check: lists the symbols gen5_battle_bw2.o (what the game links) needs that neither it, libntr's
 # libraries (the SDK, NitroSystem) nor the C library define. Prints nothing when the battle code links.
 #
 #   gen5/tools/link_check.sh BUILD_DIR      (build_linux)
 set -e
 BUILD=$1
-LIB=$BUILD/gen5/libgen5_battle_bw2.a
+LIB=$BUILD/gen5/gen5_battle_bw2.o
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 nm -g --defined-only "$LIB" 2>/dev/null | awk 'NF==3{print $3}' | sort -u > "$TMP/defined"

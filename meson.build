@@ -400,6 +400,17 @@ trainer_ai_o = custom_target(
 )
 endif
 
+# Gen 5 battles: the game's code calls the Gen 5 code (gen5/api) and links it whole, BW2's symbols renamed
+gen5_includes = []
+gen5_objects = []
+gen5_cpp_args = []
+if (build_target != 'arm' and get_option('pokebw2') != '')
+    gen5_includes = include_directories('gen5/api')
+    gen5_objects = [gen5_battle_prefixed]
+    pokeplatinum_args += '-DGEN5_BATTLES'
+    gen5_cpp_args += '-DGEN5_BATTLES'
+endif
+
 if (build_target == 'arm')
 libmslc = fs.copyfile('tools/metroskrew/lib/metroskrew/sdk/ds/2.0/sp2/msl/MSL_C/MSL_ARM/Lib/MSL_C_NITRO_Ai_LE.a')
 libmslcpp = fs.copyfile('tools/metroskrew/lib/metroskrew/sdk/ds/2.0/sp2/msl/MSL_C++/MSL_ARM/Lib/MSL_CPP_NITRO_Ai_LE.a')
@@ -461,13 +472,14 @@ main = executable('main',
         h_headers,
         embed_headers,
     ],
-    objects: trainer_ai_o,
+    objects: [trainer_ai_o, gen5_objects],
     c_args: [
         pokeplatinum_args,
     ],
-    cpp_args: sanitize_args,
+    cpp_args: [sanitize_args, gen5_cpp_args],
     c_pch: 'include/pch/global_pch.h',
     include_directories: [
+        gen5_includes,
         public_includes,
         libcrypto_public_includes,
         libgds_public_includes,
@@ -513,12 +525,14 @@ main = executable('main',
         embed_headers,
         win64_icon_o
     ],
-    objects: trainer_ai_o,
+    objects: [trainer_ai_o, gen5_objects],
+    cpp_args: gen5_cpp_args,
     c_args: [
         pokeplatinum_args,
     ],
     c_pch: 'include/pch/global_pch.h',
     include_directories: [
+        gen5_includes,
         public_includes,
         libcrypto_public_includes,
         libgds_public_includes,
@@ -559,12 +573,14 @@ main = executable('main',
         h_headers,
         embed_headers,
     ],
-    objects: trainer_ai_o,
+    objects: [trainer_ai_o, gen5_objects],
+    cpp_args: gen5_cpp_args,
     c_args: [
         pokeplatinum_args,
     ],
     c_pch: 'include/pch/global_pch.h',
     include_directories: [
+        gen5_includes,
         public_includes,
         libcrypto_public_includes,
         libgds_public_includes,
@@ -607,12 +623,14 @@ main = executable('main',
         h_headers,
         embed_headers,
     ],
-    objects: trainer_ai_o,
+    objects: [trainer_ai_o, gen5_objects],
+    cpp_args: gen5_cpp_args,
     c_args: [
         pokeplatinum_args,
     ],
     c_pch: 'include/pch/global_pch.h',
     include_directories: [
+        gen5_includes,
         public_includes,
         libcrypto_public_includes,
         libgds_public_includes,

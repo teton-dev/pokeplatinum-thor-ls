@@ -247,6 +247,7 @@ gen5_patched = [
 # save, network and DSi systems
 gen5_port_sources = files(
     'src/field.c',       # Beacons, Festival Missions, network devices... (none)
+    'src/files.c',       # BW2's archives from the extracted ROM, and the self-check (api/gen5.h)
     'src/game_data.c',   # GameData and SaveControl: milestone 4 answers them from Platinum's save
     'src/gfl_overlay.c', # src/gfl/gf_overlay.c: no overlays
     'src/net.c',         # src/system/net_err.c: no network errors
@@ -272,6 +273,7 @@ gen5_args = [
     '-DBLACK2',
     # pokebw2's headers by quote only, so that its copies of MSL's string.h and the like don't hide the host's
     '-iquote', meson.current_source_dir() / 'include',
+    '-iquote', meson.current_source_dir() / 'api',
     '-iquote', meson.current_build_dir() / 'generated',
     '-iquote', pokebw2 / 'include',
     '-iquote', pokebw2 / 'lib/spl/include',
@@ -311,11 +313,12 @@ gen5_battle = static_library('gen5_battle',
     native: (build_target == 'linux' or build_target == 'win64'),
 )
 
-# BW2's symbols renamed to bw2_<name> (tools/prefix_symbols.py): what the game links
+# BW2's symbols renamed to bw2_<name> (tools/prefix_symbols.py), in one object: what the game links
 gen5_battle_prefixed = custom_target('gen5_battle_prefixed',
     input: gen5_battle,
-    output: 'libgen5_battle_bw2.a',
+    output: 'gen5_battle_bw2.o',
     build_by_default: true,
     command: [gen5_python, files('tools/prefix_symbols.py'), find_program('nm', 'llvm-nm'),
-              find_program('objcopy', 'llvm-objcopy'), find_program('ar', 'llvm-ar'), '@INPUT@', '@OUTPUT@'],
+              find_program('objcopy', 'llvm-objcopy'), find_program('ar', 'llvm-ar'), '@INPUT@', '@OUTPUT@',
+              meson.get_compiler('c', native: (build_target == 'linux' or build_target == 'win64')).cmd_array()],
 )
