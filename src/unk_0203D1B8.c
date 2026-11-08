@@ -6,6 +6,9 @@
 #ifdef SDK_PORT
 #include "port/test_script.h"
 #endif
+#ifdef GEN5_BATTLES
+#include "port/gen5_battle.h"
+#endif
 
 #include "constants/heap.h"
 #include "generated/game_records.h"
@@ -249,6 +252,12 @@ void FieldSystem_StartBattleProcess(FieldSystem *fieldSystem, FieldBattleDTO *dt
 {
 #ifdef SDK_PORT
     TestScript_OnEvent(TEST_EVENT_BATTLE);
+#endif
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_TakeRequest()) {
+        FieldSystem_StartChildProcess(fieldSystem, &gGen5BattleApplicationTemplate, dto);
+        return;
+    }
 #endif
     FieldSystem_StartChildProcess(fieldSystem, &gBattleApplicationTemplate, dto);
 }

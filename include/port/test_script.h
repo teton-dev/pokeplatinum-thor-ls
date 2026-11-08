@@ -32,6 +32,14 @@ BOOL TestScript_Touch(u16 *x, u16 *y);
 // The game reached one of the events
 void TestScript_OnEvent(enum TestScriptEvent event);
 
+// Desktop Linux: a crash prints the game's backtrace, and so does SIGQUIT (the harness's sign of a run past its time
+// limit), and so does a quit the script didn't ask for, as "[test] ..." lines for the harness's addr2line
+// (test_crash.cpp). Called on the game's thread
+void TestScript_InstallCrashHandlers(void);
+
+// The script is about to quit the game, as it should: no backtrace of the exit
+void TestScript_ExitExpected(void);
+
 #ifdef __cplusplus
 }
 #endif

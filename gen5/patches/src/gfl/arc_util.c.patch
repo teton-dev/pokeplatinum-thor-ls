@@ -1,0 +1,20 @@
+--- a/src/gfl/arc_util.c
++++ b/src/gfl/arc_util.c
+@@ -392,7 +392,7 @@
+ void *GFL_G2DIOReadNMCR(u32 arcId, u32 fileId, BOOL compressed, NNSG2dMultiCellDataBank **cells, HeapID heapId) {
+     void *file = GFL_ArcSysReadHeapNewLZ(arcId, fileId, compressed, heapId);
+ 
+-    if (file != NULL && !NNS_G2dGetUnpackedMultiCellBank(file, cells)) {
++    if (file != NULL && !Gen5_UnpackMultiCellBank(&file, cells, heapId) /* The port: in the 64-bit layout (gen5/src/g2d.c) */) {
+         GFL_HeapFree(file);
+         return NULL;
+     }
+@@ -402,7 +402,7 @@
+ void *GFL_G2DIOReadNMCRArc(ArcTool *arc, u32 fileId, BOOL compressed, NNSG2dMultiCellDataBank **cells, HeapID heapId) {
+     void *file = GFL_ArcToolReadHeapNewLZ(arc, fileId, compressed, heapId);
+ 
+-    if (file != NULL && !NNS_G2dGetUnpackedMultiCellBank(file, cells)) {
++    if (file != NULL && !Gen5_UnpackMultiCellBank(&file, cells, heapId) /* The port: in the 64-bit layout (gen5/src/g2d.c) */) {
+         GFL_HeapFree(file);
+         return NULL;
+     }

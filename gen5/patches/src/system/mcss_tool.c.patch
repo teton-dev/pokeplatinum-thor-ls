@@ -1,0 +1,14 @@
+--- a/src/system/mcss_tool.c
++++ b/src/system/mcss_tool.c
+@@ -168,9 +168,9 @@
+ 
+ // Restarts the sprite's animation each time it ends
+ void MCSS_SetLoopAnimation(MCSS *mcss) {
+-    MCSS_SetAnimationEndCallback(mcss, (u32)mcss, MCSS_RestartOnAnimationEnd, 1);
++    MCSS_SetAnimationEndCallback(mcss, Gen5_PtrToU32(mcss) /* The port: 64 bits */, MCSS_RestartOnAnimationEnd, 1);
+ }
+ 
+ static void MCSS_RestartOnAnimationEnd(u32 param, fx32 frame) {
+-    MCSS_RequestRestart((MCSS *)param);
++    MCSS_RequestRestart((MCSS *)Gen5_U32ToPtr(param));
+ }

@@ -15,6 +15,7 @@
 #include "port/frame_rate.h"
 #include "port/port_game.h"
 #ifdef GEN5_BATTLES
+#include "port/gen5_battle.h"
 #include "port/gen5_rom.h"
 #endif
 
@@ -34,6 +35,7 @@ enum TestOp {
     OP_MASH,
     OP_SAVE,
     OP_GEN5_IMPORT,
+    OP_GEN5_BATTLE,
     OP_SHOT,
     OP_LOG,
     OP_EXIT,
@@ -253,6 +255,14 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_GEN5_IMPORT;
         command->timeout = DEFAULT_TIMEOUT * 20;
         return TRUE;
+    } else if (strcmp(words[0], "gen5-battle") == 0 && count >= 3) {
+        // A debug wild battle against SPECIES at LEVEL in the Gen 5 engine, once the player is free
+        command->op = OP_GEN5_BATTLE;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
     } else if (strcmp(words[0], "save") == 0) {
         command->op = OP_SAVE;
         command->condition = COND_FREE;
@@ -274,6 +284,7 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
     return FALSE;
 }
 
+
 static void Load(void)
 {
     sTest.loaded = TRUE;
@@ -284,6 +295,7 @@ static void Load(void)
     FILE *file = fopen(path, "r");
     if (file == NULL) {
         printf("[test] FAIL can't open %s\n", path);
+        TestScript_ExitExpected();
         exit(1);
     }
 
@@ -298,12 +310,16 @@ static void Load(void)
         }
         if (sTest.count == MAX_COMMANDS || !ParseLine(text, number, &sTest.commands[sTest.count])) {
             printf("[test] FAIL %s:%d: can't read \"%s\"\n", path, number, text);
+            TestScript_ExitExpected();
             exit(1);
         }
         sTest.count++;
     }
     fclose(file);
     sTest.active = TRUE;
+#if defined(SDK_BUILD_LINUX) && !defined(SDK_BUILD_ANDROID)
+    TestScript_InstallCrashHandlers();
+#endif
     printf("[test] running %s (%d commands)\n", path, sTest.count);
     fflush(stdout);
 }
@@ -363,6 +379,7 @@ static u16 Step(void)
     sTest.touching = FALSE;
     if (sTest.failed) {
         if (!Paused()) {
+            TestScript_ExitExpected();
             exit(1);
         }
         return 0;
@@ -550,6 +567,25 @@ static u16 Step(void)
             return 0;
 #endif
         }
+        case OP_GEN5_BATTLE:
+#ifdef GEN5_BATTLES
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the battle");
+                }
+                return 0;
+            }
+            if (!Gen5Battle_StartDebug(command->x, command->y)) {
+                Fail(command, "the Gen 5 battle couldn't start (no BW2 ROM imported?)");
+                return 0;
+            }
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
+#else
+            Fail(command, "built without the Gen 5 code (-Dpokebw2)");
+            return 0;
+#endif
         case OP_SHOT:
             // The harness takes the screenshot while the game runs on without input
             printf("[test] shot %s\n", command->text);
@@ -564,12 +600,14 @@ static u16 Step(void)
         case OP_EXIT:
             printf("[test] %s\n", command->frames == 0 ? "PASS" : "exit");
             fflush(stdout);
+            TestScript_ExitExpected();
             exit(command->frames);
         }
     }
 
     printf("[test] PASS (end of script)\n");
     fflush(stdout);
+    TestScript_ExitExpected();
     exit(0);
 }
 

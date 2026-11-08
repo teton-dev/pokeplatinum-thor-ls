@@ -146,7 +146,7 @@ test)
         $IMAGE sh -c "Xvfb :1 -screen 0 ${SCREEN}x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
                       sleep 1
                       cp -f '$BIN/firmware.bin' '$BIN/header.bin' .
-                      exec '$BIN/main'" >/dev/null
+                      exec stdbuf -oL -eL '$BIN/main'" >/dev/null # Line-buffered: nothing lost if it dies
     echo "Running $TEST_NAME${FROM:+ from $FROM}"
     # The script's log, and its screenshots as it asks for them, while the container runs
     docker logs -f $TEST 2>&1 | while IFS= read -r line; do
@@ -171,6 +171,10 @@ test)
             docker exec -e DISPLAY=:1 $TEST sh -c \
                 'import -window "$(xdotool search --name POKEMON | head -n 1)" /tmp/shot.png' 2>/dev/null &&
                 docker cp $TEST:/tmp/shot.png "$SHOTS/timeout.png" >/dev/null 2>&1
+            # Where the game is: three samples of its backtrace, a second apart (src/port/test_crash.cpp)
+            for sample in 1 2 3; do
+                docker exec $TEST pkill -QUIT -x main >/dev/null 2>&1 && sleep 1
+            done
             docker stop -t 1 $TEST >/dev/null 2>&1
             TIMED_OUT=1
             break
@@ -179,9 +183,25 @@ test)
     done
     wait $READER 2>/dev/null || true
     CODE=$(docker inspect -f '{{.State.ExitCode}}' $TEST)
+    # Anything but the script's 0 or 1: the game quit by itself (128 + a signal it doesn't catch)
+    [ "$CODE" = 0 ] || [ "$CODE" = 1 ] || [ -n "$TIMED_OUT" ] || echo "[test] FAIL: the game exited with code $CODE"
     [ "$CODE" = 0 ] || [ "$CODE" = 1 ] || CODE=1
     [ -z "$TIMED_OUT" ] || CODE=1
     docker logs $TEST > "$SHOTS/log.txt" 2>&1
+    # A crash's or an unexpected exit's backtrace, or a hang's samples (src/port/test_crash.cpp), in functions and lines
+    if grep -q '^\[test\] \(CRASH\|HANG\|EXIT\)' "$SHOTS/log.txt"; then
+        grep '^\[test\] \(CRASH\|HANG\|EXIT\)' "$SHOTS/log.txt" | head -n 1 | grep 'CRASH\|EXIT' ||
+            echo "[test] still running at the limit: samples of the game thread's backtrace"
+        # Each sample's addresses in one addr2line, its lines after "-- sample"
+        grep '^\[test\] \(frame 0x\|HANG\|EXIT\)' "$SHOTS/log.txt" | sed 's/.*frame //; s/.*\(HANG\|EXIT\).*/HANG/' |
+            awk '/HANG/ { n++; next } { print n + 0, $0 }' > "$SHOTS/frames.txt"
+        for n in $(cut -d' ' -f1 "$SHOTS/frames.txt" | uniq); do
+            [ "$n" = 0 ] || echo "  -- sample $n"
+            awk -v n="$n" '$1 == n { print $2 }' "$SHOTS/frames.txt" |
+                docker run --rm -i $(mounts) $IMAGE addr2line -f -C -i -p -e "$BIN/main" | sed 's#'"$ROOT"'/##; s#^#  #'
+        done | tee "$SHOTS/crash.txt"
+        rm -f "$SHOTS/frames.txt"
+    fi
     docker rm -f $TEST >/dev/null 2>&1 || true
     if [ "$CODE" = 0 ] && [ -n "$KEEP" ]; then
         [ -f "$RUN/save.bin" ] || { echo "The run ended without a save to keep"; exit 1; }

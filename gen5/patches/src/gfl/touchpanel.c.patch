@@ -1,0 +1,11 @@
+--- a/src/gfl/touchpanel.c
++++ b/src/gfl/touchpanel.c
+@@ -163,6 +163,8 @@
+     if (!failed) {
+         TP_GetCalibratedPoint(&disp, &raw);
+     }
++    // The port: the touch the game read this frame (Gen5_TouchRead, gen5/src/runtime.c)
++    Gen5_TouchRead(&disp);
+     if (disp.validity == TP_VALIDITY_VALID) {
+         tp->x = disp.x;
+         tp->y = disp.y;

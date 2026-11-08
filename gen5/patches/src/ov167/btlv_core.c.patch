@@ -1,0 +1,10 @@
+--- a/src/ov167/btlv_core.c
++++ b/src/ov167/btlv_core.c
+@@ -561,6 +561,7 @@
+     core->result = 0;
+     core->laterMon = laterMon;
+     BtlvCore_SetMainProc(core, BtlvCore_ProcCommandSelect);
++    Gen5_Event(GEN5_EVENT_COMMAND); // The port: for the game's test scripts
+ }
+ 
+ void BtlvCore_StopCommandSelect(BtlvCore *core) {

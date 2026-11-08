@@ -1,0 +1,56 @@
+--- a/src/ov167/move_handlers.c
++++ b/src/ov167/move_handlers.c
+@@ -1917,7 +1917,7 @@
+ 
+     if (BattleEventVar_GetValue(BTL_EVAR_ATTACKER) == monId &&
+         BattleEventVar_GetValue(BTL_EVAR_CONDITION) == CONDITION_BIND) {
+-        string = (BattleHandlerString *)BattleEventVar_GetValue(BTL_EVAR_STRING);
++        string = (BattleHandlerString *)Gen5_U32ToPtr(BattleEventVar_GetValue(BTL_EVAR_STRING));
+         targetId = BattleEventVar_GetValue(BTL_EVAR_DEFENDER);
+         switch (BattleEventItem_GetSubID(item)) {
+         case MOVE_WRAP:
+@@ -2540,7 +2540,7 @@
+             move = BattleAction_GetFightMove(&action);
+             if (move == 0 || !PML_MoveIsDamaging(move)) {
+                 if (BattleEventVar_RewriteValue(BTL_EVAR_NO_EFFECT_FLAG, 1)) {
+-                    BattleHandler_StrSetup((BattleHandlerString *)BattleEventVar_GetValue(BTL_EVAR_STRING), 1, 0x47);
++                    BattleHandler_StrSetup((BattleHandlerString *)Gen5_U32ToPtr(BattleEventVar_GetValue(BTL_EVAR_STRING)), 1, 0x47);
+                 }
+             }
+         }
+@@ -4528,7 +4528,7 @@
+     BattleHandlerString *string;
+ 
+     if (BattleEventVar_GetValue(BTL_EVAR_MON) == monId) {
+-        string = (BattleHandlerString *)BattleEventVar_GetValue(BTL_EVAR_STRING);
++        string = (BattleHandlerString *)Gen5_U32ToPtr(BattleEventVar_GetValue(BTL_EVAR_STRING));
+         switch (work[0]) {
+         case 1:
+             BattleHandler_StrSetup(string, 2, 0x2e9);
+@@ -7194,7 +7194,7 @@
+     u16 move;
+ 
+     if (BattleEventVar_GetValue(BTL_EVAR_MON) == monId) {
+-        string = (BattleHandlerString *)BattleEventVar_GetValue(BTL_EVAR_STRING);
++        string = (BattleHandlerString *)Gen5_U32ToPtr(BattleEventVar_GetValue(BTL_EVAR_STRING));
+         move = BattleEventVar_GetValue(BTL_EVAR_MOVE);
+         BattleHandler_StrSetup(string, 1, 0x78);
+         BattleHandler_AddArg(string, move);
+@@ -7267,7 +7267,7 @@
+     u16 move;
+ 
+     if (BattleEventVar_GetValue(BTL_EVAR_MON) == monId) {
+-        string = (BattleHandlerString *)BattleEventVar_GetValue(BTL_EVAR_STRING);
++        string = (BattleHandlerString *)Gen5_U32ToPtr(BattleEventVar_GetValue(BTL_EVAR_STRING));
+         move = BattleEventVar_GetValue(BTL_EVAR_MOVE);
+         BattleHandler_StrSetup(string, 1, 0x79);
+         BattleHandler_AddArg(string, move);
+@@ -8472,7 +8472,7 @@
+     BattleHandlerString *string;
+ 
+     if (BattleEventVar_GetValue(BTL_EVAR_ATTACKER) == monId) {
+-        string = (BattleHandlerString *)BattleEventVar_GetValue(BTL_EVAR_STRING);
++        string = (BattleHandlerString *)Gen5_U32ToPtr(BattleEventVar_GetValue(BTL_EVAR_STRING));
+         BattleEventVar_RewriteValue(BTL_EVAR_CONDITION, 0x20);
+         BattleHandler_StrSetup(string, 2, 0x474);
+         BattleHandler_AddArg(string, BattleEventVar_GetValue(BTL_EVAR_DEFENDER));

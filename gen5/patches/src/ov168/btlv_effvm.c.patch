@@ -1,6 +1,20 @@
 --- a/src/ov168/btlv_effvm.c
 +++ b/src/ov168/btlv_effvm.c
-@@ -3630,9 +3630,10 @@
+@@ -1176,10 +1176,11 @@
+     BtlvEffvmParticleVBlankWork *vblank;
+ 
+     if (BtlvEffvm_FindOrAddParticleId(wk, fileId, &index) == TRUE) {
+-        work = GFL_HeapAllocate(HEAPID_TAIL(wk->heapId), 0x4800, FALSE, "btlv_effvm.c", 1912);
++        // The port: twice the work, for the particle library's 64-bit structures
++        work = GFL_HeapAllocate(HEAPID_TAIL(wk->heapId), 0x4800 * 2, FALSE, "btlv_effvm.c", 1912);
+         resource = Particle_ReadResource(ARCID_BTLV_EFFVM_PARTICLES, fileId, HEAPID_TAIL(wk->heapId));
+         if (work != NULL && resource != NULL) {
+-            wk->particles[index] = Particle_CreateSystemEx(work, 0x4800, FALSE, 5, 6, 54, HEAPID_TAIL(wk->heapId));
++            wk->particles[index] = Particle_CreateSystemEx(work, 0x4800 * 2, FALSE, 5, 6, 54, HEAPID_TAIL(wk->heapId));
+             if (wk->particles[index] != NULL) {
+                 Particle_SetResourceNoUpload(wk->particles[index], resource);
+                 vblank = GFL_HeapAllocate(HEAPID_TAIL(wk->heapId), sizeof(BtlvEffvmParticleVBlankWork), FALSE,
+@@ -3630,9 +3631,10 @@
          VEC_CrossProduct(&base, &dir, &axis);
          VEC_Normalize(&axis, &axis);
          MTX_RotAxis43(&work->mtx, &axis, FX_SinIdx(angle), FX_CosIdx(angle));

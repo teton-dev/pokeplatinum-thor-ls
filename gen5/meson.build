@@ -19,6 +19,14 @@ gen5_headers = custom_target('gen5_headers',
     build_always_stale: true,
 )
 
+# pokebw2's headers with the port's changes (patches/include): patched copies, ahead of pokebw2's on the quote path
+gen5_header_patches = custom_target('gen5_header_patches',
+    output: 'gen5_header_patches_stamp.h',
+    command: [gen5_python, files('tools/apply_header_patches.py'), pokebw2, meson.current_source_dir() / 'patches',
+              meson.current_build_dir() / 'include', '@OUTPUT@'],
+    build_always_stale: true,
+)
+
 # pokebw2's files, unchanged
 gen5_sources = [
     # The battle engine and the battle view's core (overlay 167)
@@ -38,14 +46,11 @@ gen5_sources = [
     'src/ov167/btl_rec.c',
     'src/ov167/btl_server.c',
     'src/ov167/btl_server_cmd.c',
-    'src/ov167/btl_server_flow.c',
     'src/ov167/btl_server_flow_sub.c',
     'src/ov167/btl_string.c',
-    'src/ov167/btlv_core.c',
     'src/ov167/btlv_scu.c',
     'src/ov167/handler_common.c',
     'src/ov167/item_handlers.c',
-    'src/ov167/move_handlers.c',
     'src/ov167/poke_type_pair.c',
     'src/ov167/pokewood_cutin.c',
     # The battle view: arena, camera, sprites, gauges, move animations, touch input (overlay 168)
@@ -55,9 +60,6 @@ gen5_sources = [
     'src/ov168/btlv_clact.c',
     'src/ov168/btlv_effect.c',
     'src/ov168/btlv_field.c',
-    'src/ov168/btlv_finger_cursor.c',
-    'src/ov168/btlv_gauge.c',
-    'src/ov168/btlv_input.c',
     'src/ov168/btlv_mcss.c',
     'src/ov168/btlv_stage.c',
     'src/ov168/btlv_timer.c',
@@ -71,8 +73,6 @@ gen5_sources = [
     'src/ov169/btlv_scd.c',
     'src/ov169/condition_effects.c',
     'src/ov169/field_handlers.c',
-    'src/ov169/pos_handlers.c',
-    'src/ov169/side_handlers.c',
     # The trainer AI (overlay 170)
     'src/ov170/tr_ai.c',
     # The battle screens' shared cursor and windows (overlay 285)
@@ -96,7 +96,6 @@ gen5_sources = [
     # The battle's choice screen (overlay 289)
     'src/ov289/b_choice_main.c',
     # Game Freak's library (ARM9 main)
-    'src/gfl/arc_util.c',
     'src/gfl/areaman.c',
     'src/gfl/assert.c',
     'src/gfl/backup_card.c',
@@ -113,7 +112,6 @@ gen5_sources = [
     'src/gfl/g3d_camera.c',
     'src/gfl/gf_standard.c',
     'src/gfl/gx_layers.c',
-    'src/gfl/heap.c',
     'src/gfl/heap_dtcm.c',
     'src/gfl/heapsys.c',
     'src/gfl/msgdata.c',
@@ -126,7 +124,6 @@ gen5_sources = [
     'src/gfl/net_ring_buff.c',
     'src/gfl/net_state.c',
     'src/gfl/net_system.c',
-    'src/gfl/particle.c',
     'src/gfl/procsys.c',
     'src/gfl/rtc_cache.c',
     'src/gfl/savedata.c',
@@ -135,7 +132,6 @@ gen5_sources = [
     'src/gfl/tcb.c',
     'src/gfl/tcbl.c',
     'src/gfl/textprint.c',
-    'src/gfl/touchpanel.c',
     'src/gfl/ui.c',
     'src/gfl/vman.c',
     'src/gfl/wm_icon.c',
@@ -157,14 +153,12 @@ gen5_sources = [
     'src/system/field_light_status.c',
     'src/system/file_util.c',
     'src/system/gf_font.c',
-    'src/system/gfl_use.c',
     'src/system/hp_gauge.c',
     'src/system/infowin.c',
     'src/system/join_avenue_savedata.c',
     'src/system/key_data_savedata.c',
     'src/system/key_info.c',
     'src/system/mail.c',
-    'src/system/mcss_tool.c',
     'src/system/medal_box.c',
     'src/system/memory_link_savedata.c',
     'src/system/misc_savedata.c',
@@ -177,10 +171,8 @@ gen5_sources = [
     'src/system/perapvoice.c',
     'src/system/player_volume_fader.c',
     'src/system/playtime.c',
-    'src/system/pm_voice.c',
     'src/system/pml_hm_check.c',
     'src/system/pml_item.c',
-    'src/system/pml_met_data.c',
     'src/system/pml_species_names.c',
     'src/system/pms_data.c',
     'src/system/pms_word.c',
@@ -189,7 +181,6 @@ gen5_sources = [
     'src/system/poke_personal.c',
     'src/system/poke_recover.c',
     'src/system/poke_regulation.c',
-    'src/system/poke_tool.c',
     'src/system/pokedex_habitat_savedata.c',
     'src/system/pokedex_savedata.c',
     'src/system/pokegra.c',
@@ -205,8 +196,6 @@ gen5_sources = [
     'src/system/save_error.c',
     'src/system/shooter_item.c',
     'src/system/sin_wave_table.c',
-    'src/system/snd_bgm_stack.c',
-    'src/system/snd_sys.c',
     'src/system/str_tool.c',
     'src/system/survey_data.c',
     'src/system/survey_savedata.c',
@@ -217,7 +206,6 @@ gen5_sources = [
     'src/system/trainer_game_info_savedata.c',
     'src/system/union_view.c',
     'src/system/version.c',
-    'src/system/vm.c',
     'src/system/wipe.c',
     'src/system/wipe_sub.c',
     'src/system/wipe_wnd.c',
@@ -236,22 +224,45 @@ gen5_sources = [
 
 # pokebw2's files with the port's changes (patches/), each compiled from a patched copy
 gen5_patched = [
-    'src/gfl/arc_tool.c',     # An assembly function in C
-    'src/gfl/g3d_system.c',   # NitroSystem's name for a G3D file's signature as a u32
-    'src/gfl/key.c',          # libntr's PAD_Read
-    'src/ov168/btlv_effvm.c', # The SDK's names of a matrix's translation
-    'src/system/mcss.c',      # NitroSystem's names of a multi-cell node's position
+    'src/gfl/arc_tool.c',             # An assembly function in C
+    'src/ov167/btlv_core.c',          # The command selection's event, for the test scripts (runtime.c)
+    'src/gfl/arc_util.c',             # Multi-cell files in the 64-bit layout (src/g2d.c)
+    'src/gfl/heap.c',                 # A heap deleted with blocks left: listed, not the debugger's exit
+    'src/gfl/g3d_system.c',           # NitroSystem's name for a G3D file's signature as a u32
+    'src/gfl/key.c',                  # The keys the game read (runtime.c)
+    'src/gfl/touchpanel.c',           # The touch the game read (runtime.c)
+    'src/ov168/btlv_effvm.c',         # The SDK's names of a matrix's translation; particle work for 64 bits
+    'src/system/mcss.c',              # NitroSystem's names of a node's position; texture coordinates as commands
+    'src/system/gfl_use.c',           # GFLAppInit takes the port's heaps (runtime.c)
+    'src/system/pm_voice.c',          # No NULL sound channel handles (a cry that never started)
+    # 64 bits: values that can be pointers, as uptr
+    'src/gfl/particle.c',             # Particle_Alloc's address arithmetic, and a check of the work's end
+    'src/ov167/btl_server_flow.c',    # A handler's string through an event variable (src/pointers.c)
+    'src/ov167/move_handlers.c',      # The handler's string back from its event variable
+    'src/ov168/btlv_finger_cursor.c', # A pointer through an animation callback's u32
+    'src/ov168/btlv_gauge.c',         # VRAM address arithmetic
+    'src/ov168/btlv_input.c',         # VRAM address arithmetic
+    'src/ov169/pos_handlers.c',       # A pointer as a BOOL
+    'src/ov169/side_handlers.c',      # The handler's string back from its event variable
+    'src/system/mcss_tool.c',         # A pointer through an animation callback's u32
+    'src/system/vm.c',                # Return addresses on the VM's stack
+    'src/system/poke_tool.c',         # PokeParty_SetParam, PML_PkmSetParam (nicknames, OT names, mail)
+    'src/system/pml_met_data.c',
 ]
 
 # The port's own code in place of pokebw2's: where BW2's battle meets what the port has instead of BW2's field,
 # save, network and DSi systems
 gen5_port_sources = files(
     'src/field.c',       # Beacons, Festival Missions, network devices... (none)
+    'src/pointers.c',    # Pointers through 32-bit values as handles (64 bits)
+    'src/g2d.c',         # NitroSystem 2D files libntrsystem doesn't convert for 64 bits
     'src/files.c',       # BW2's archives from the extracted ROM, and the self-check (api/gen5.h)
     'src/game_data.c',   # GameData and SaveControl: milestone 4 answers them from Platinum's save
     'src/gfl_overlay.c', # src/gfl/gf_overlay.c: no overlays
     'src/net.c',         # src/system/net_err.c: no network errors
+    'src/runtime.c',     # BW2's systems run in the port, and a battle on them (api/gen5.h)
     'src/sdk.c',         # What pokebw2's own SDK copies have and libntr lacks
+    'src/sound.c',       # src/system/snd_sys.c: silent for now (Platinum holds the sound library)
 )
 
 gen5_files = []
@@ -274,6 +285,7 @@ gen5_args = [
     # pokebw2's headers by quote only, so that its copies of MSL's string.h and the like don't hide the host's
     '-iquote', meson.current_source_dir() / 'include',
     '-iquote', meson.current_source_dir() / 'api',
+    '-iquote', meson.current_build_dir() / 'include',
     '-iquote', meson.current_build_dir() / 'generated',
     '-iquote', pokebw2 / 'include',
     '-iquote', pokebw2 / 'lib/spl/include',
@@ -304,6 +316,7 @@ gen5_battle = static_library('gen5_battle',
         gen5_patched_sources,
         gen5_port_sources,
         gen5_headers,
+        gen5_header_patches,
     ],
     c_args: gen5_args,
     dependencies: [

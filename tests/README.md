@@ -16,10 +16,13 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `new_game.txt` | nothing | a new game (a boy named Claude, the rival Barry) to Prof. Rowan's briefcase on Route 201, saved there | ~20 s |
 | `first_battle.txt` | `before-starter` | Turtwig from the briefcase, then Barry's battle, until it asks what to do | ~10 s |
 | `gen5_rom.txt` | nothing | imports the Black 2 or White 2 ROM as the settings do, and BW2's code reads it (Gen 5 builds) | ~10 s |
+| `turtwig.txt` | `before-starter` | Turtwig and Barry's battle, then home: keep it as the fixture `turtwig` | ~1 min |
+| `gen5_battle.txt` | `turtwig` | a wild battle in BW2's engine, as the debug entry starts it: Tackle, run away, back on the overworld (Gen 5 builds) | ~1 min |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
-engine, and the test passes once that asks for a command. (BW2's battle view needs the same `command` event as
-Platinum's, `TestScript_OnEvent(TEST_EVENT_BATTLE_COMMAND)`, when it is wired in.)
+engine, and the test passes once that asks for a command (BW2's battle raises the same `command` event as Platinum's).
+`gen5_battle.txt` plays a whole battle in BW2's engine; BW2 reads the keys and touches the game read, the script's
+among them.
 
 ## Running
 
@@ -35,6 +38,9 @@ Platinum's, `TestScript_OnEvent(TEST_EVENT_BATTLE_COMMAND)`, when it is wired in
   `~/thor-dev/test-shots/SCRIPT/`; a failure takes `failure.png`.
 - It exits 0 when the script passes and 1 when it fails: a wait that times out, a walk that is blocked, or a run
   longer than `TEST_LIMIT` seconds (600).
+- When the game crashes, quits by itself, or is still running at the limit, the run prints where, as functions and
+  lines (`crash.txt`): the backtrace of a crash or of the exit, or three samples a second apart of where the game
+  thread is (`src/port/test_crash.cpp`; gdb can't run under Rosetta).
 
 ## Writing scripts
 
