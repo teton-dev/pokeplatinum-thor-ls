@@ -2,6 +2,7 @@
 
 #ifdef SDK_PORT
 #include "port/gear_data.h"
+#include "port/test_script.h"
 #endif
 
 #include <nitro.h>
@@ -762,6 +763,11 @@ void BattleDisplay_InitTaskSetCommandSelection(BattleSystem *battleSys, BattlerD
     }
 
     SysTask_Start(battlerData->taskFuncs.setCommandSelection, commandSetData, 0);
+#ifdef SDK_PORT
+    if (battlerData->taskFuncs.setCommandSelection == Task_PlayerSetCommandSelection) {
+        TestScript_OnEvent(TEST_EVENT_BATTLE_COMMAND);
+    }
+#endif
 }
 
 typedef struct MoveSelectMenuData {

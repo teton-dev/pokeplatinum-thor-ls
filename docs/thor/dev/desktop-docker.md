@@ -42,6 +42,7 @@ For checks without a person at the screen (and for Claude):
 | `desktop.sh stop` | stops the game |
 | `desktop.sh shell [CMD]` | a shell, or one command, in the build container |
 | `desktop.sh gen5-check` | the Gen 5 battle code's link check and arm64 compile check ([plan](gen5-battles.md)) |
+| `desktop.sh test SCRIPT` | a scripted test: a new game, the first battle... ([tests/README.md](../../../tests/README.md)) |
 
 ## Known problems
 
@@ -54,3 +55,7 @@ For checks without a person at the screen (and for Claude):
   [wrapdb repository](https://github.com/mesonbuild/wrapdb) (`subprojects/packagefiles/<name>` at the
   `<name>_<version>` tag) and applying the wrap's `diff_files` gets past it; meson uses an existing directory as is.
 - **No sound** in the container (`SDL_AUDIODRIVER=dummy`).
+- **Slow 3D:** the 3D is rendered in software, at the internal resolution the settings ask for (10 times the DS's
+  by default). Under Rosetta that runs the overworld at a few frames a second; *Internal Resolution* at 1x or 2x
+  in the libntr panel's *Config* (or `InternalResolutionScale` in `~/thor-dev/desktop/sim_config.ini`) makes it
+  play smoothly. Test runs use 1.

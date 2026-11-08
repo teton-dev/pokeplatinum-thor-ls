@@ -3,6 +3,10 @@
 #include <nitro.h>
 #include <string.h>
 
+#ifdef SDK_PORT
+#include "port/test_script.h"
+#endif
+
 #include "constants/heap.h"
 #include "generated/game_records.h"
 #include "generated/pokemon_contest_ranks.h"
@@ -243,6 +247,9 @@ const ApplicationManagerTemplate gBattleApplicationTemplate = {
 
 void FieldSystem_StartBattleProcess(FieldSystem *fieldSystem, FieldBattleDTO *dto)
 {
+#ifdef SDK_PORT
+    TestScript_OnEvent(TEST_EVENT_BATTLE);
+#endif
     FieldSystem_StartChildProcess(fieldSystem, &gBattleApplicationTemplate, dto);
 }
 
