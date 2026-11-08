@@ -1,6 +1,7 @@
 #include "applications/pokedex/ov21_021E8D48.h"
 
 #include <nitro.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "applications/pokedex/footprint.h"
@@ -575,6 +576,9 @@ static void ov21_021E95F8(UnkStruct_ov21_021E968C *param0, SpriteList *param1, S
     SpriteResourcesHeader v1;
     int type1 = SpeciesData_GetSpeciesValue(param4, SPECIES_DATA_TYPE_1);
     int type2 = SpeciesData_GetSpeciesValue(param4, SPECIES_DATA_TYPE_2);
+#ifdef SDK_PORT
+    printf("Pokedex entry: species %d, types %d/%d\n", param4, type1, type2);
+#endif
     type1 = PokedexGraphics_GetAnimIDfromType(type1);
     type2 = PokedexGraphics_GetAnimIDfromType(type2);
 
@@ -590,6 +594,9 @@ static void ov21_021E95F8(UnkStruct_ov21_021E968C *param0, SpriteList *param1, S
 
     param0->unk_00[0] = SpriteList_Add(&v0);
 
+#ifdef SDK_PORT
+    printf("Pokedex entry: type icons %d/%d of %u\n", type1, type2, (unsigned)Sprite_GetAnimCount(param0->unk_00[0]));
+#endif
     Sprite_SetAnim(param0->unk_00[0], 0 + type1);
 
     if (type1 != type2) {

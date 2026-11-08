@@ -1,6 +1,7 @@
 #include "sprite.h"
 
 #include <nitro.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "heap.h"
@@ -378,6 +379,14 @@ u32 Sprite_GetAnimCount(const Sprite *sprite)
 void Sprite_SetAnim(Sprite *sprite, u32 animID)
 {
     GF_ASSERT(Sprite_GetAnimCount(sprite) > animID);
+#ifdef SDK_PORT
+    // With the asserts off (the default) an animation past the end of the bank reads garbage
+    // as a sequence, and drawing it writes past the sprite's buffers (data from ROM hacks)
+    if (animID >= Sprite_GetAnimCount(sprite)) {
+        printf("Sprite: animation %u asked for, the bank has %u; showing animation 0\n", (unsigned)animID, (unsigned)Sprite_GetAnimCount(sprite));
+        animID = 0;
+    }
+#endif
     sprite->activeAnimID = animID;
 
     if (sprite->type == CELL_ANIM_TYPE_CELL || sprite->type == CELL_ANIM_TYPE_VRAM_CELL) {
