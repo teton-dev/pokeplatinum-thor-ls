@@ -18,6 +18,9 @@
 
 #include "port/autosave.h"
 #include "port/gba_slot.h"
+#ifdef GEN5_BATTLES
+#include "port/gen5_rom.h"
+#endif
 #include "port/nuzlocke.h"
 #include "port/randomizer.h"
 #include "port/save_slots.h"
@@ -94,6 +97,52 @@ void DrawReset(Uint64 now)
     }
 }
 
+#ifdef GEN5_BATTLES
+// --- Gen 5 battles: the Black 2 or White 2 ROM (port/gen5_rom.h) ---------------------------------
+
+void OnGen5RomPicked(const char *path, void *)
+{
+    if (path != nullptr) {
+#ifdef SDK_BUILD_ANDROID
+        // The picker's copy in the app's folder: no need to keep it
+        Gen5Rom_Import(path, TRUE);
+#else
+        Gen5Rom_Import(path, FALSE);
+#endif
+    }
+}
+
+void DrawGen5Rom()
+{
+    Gen5Rom_Update();
+    const enum Gen5RomState state = Gen5Rom_State();
+    const char *game = Gen5Rom_GameName();
+    Section("Gen 5 battles");
+    if (game != nullptr) {
+        std::string title = std::string("Pokemon ") + game + " (USA)";
+        Card(title.c_str(), "Its battle files are in the app's folder (about 270 MB).", true);
+    }
+    if (state == GEN5_ROM_IMPORTING) {
+        Status(Gen5Rom_Status());
+    } else if (state == GEN5_ROM_FAILED) {
+        Status(Gen5Rom_Status(), true);
+    } else if (state == GEN5_ROM_READY) {
+        Note(Gen5Rom_Status());
+    }
+    const bool busy = state == GEN5_ROM_IMPORTING || SIM_Files_IsBusy() != FALSE;
+    if (Button(game == nullptr ? "Add Black 2 or White 2" : "Replace it",
+            "Your own dump of Pokemon Black 2 or White 2 (USA), unpatched: the Gen 5 battles' graphics, sounds and "
+            "data come from it. Its files are extracted once; the ROM isn't kept.",
+            false, !busy)) {
+        SIM_Files_PickToOpen("Black 2 or White 2 (.nds)", ".nds,.*", OnGen5RomPicked, nullptr);
+    }
+    if (game != nullptr && Button("Remove it", "Deletes the extracted files.", false, !busy)) {
+        Gen5Rom_Remove();
+    }
+    Note("Black 2 and White 2's battles, run on this game's battles, are being built: this only imports the ROM.");
+}
+#endif
+
 void DrawGames()
 {
     SIM_Cart carts[SIM_CARTS_MAX];
@@ -152,6 +201,9 @@ void DrawGames()
     }
     Note("Each game has its own files and saves; the settings are shared. Switching saves your game first when it "
          "can be.");
+#ifdef GEN5_BATTLES
+    DrawGen5Rom();
+#endif
 }
 
 // --- Saves -----------------------------------------------------------------------------------

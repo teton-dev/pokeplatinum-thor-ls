@@ -58,12 +58,12 @@ it runs a **Gen 5 battle application** instead:
 
 *Settings > Games > Gen 5 battles > Add Black 2 or White 2*: choose the `.nds`; the app checks it (game code
 `IREO`/`IRDO`, SHA1 of pokebw2's table) and extracts the files the battle uses. Nothing from it is committed or
-redistributed.
+redistributed. Done in milestone 2; see "Milestone 2" below.
 
 ## Milestones
 
-1. **Builds:** BW2's battle code and GFL compile into the desktop and Android builds, unused.
-2. **ROM:** the import screen extracts a BW2 ROM; the Gen 5 code reads files from it.
+1. **Builds:** BW2's battle code and GFL compile into the desktop and Android builds, unused. *Done on the desktop.*
+2. **ROM:** the import screen extracts a BW2 ROM; the Gen 5 code reads files from it. *Done on the desktop.*
 3. **First battle:** a debug menu entry starts one wild single battle (a fixed Pokémon against the first party
    Pokémon) in BW2's engine and returns to the overworld. Arena, camera, sprites, moves, running away.
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
@@ -107,8 +107,35 @@ Done on the desktop build; the Android build is checked by compiling for arm64, 
 - **64 bits:** the arm64 check lists 88 places in BW2's code where a pointer goes through a 32-bit integer or back
   (Pokémon data, move handlers, gauges, bitmaps...). Some are harmless (alignment tests); the rest are the first
   suspects when the battle runs (milestone 3).
-- **Left for milestone 1:** an NDK build of the APK with `-Dpokebw2` (`tools/android/build_apk.sh` now gives meson
+- **Left for milestones 1 and 2:** an NDK build of the APK with `-Dpokebw2` (`tools/android/build_apk.sh` now gives meson
   the NDK's `llvm-nm` and `llvm-objcopy`; the CI would need a pokebw2 clone at a pinned commit).
+
+## Milestone 2: the ROM (2026-11-08)
+
+- **Import:** *Settings > Games > Gen 5 battles* (`src/port/gui_settings.cpp`, with `GEN5_BATTLES`) picks the
+  `.nds` with libntr's file picker (on Android a copy, deleted afterwards). `src/port/gen5_rom.cpp`, on a thread of its
+  own, checks the game code and the SHA1 against pokebw2's two dumps (Black 2 `e51e6dfb...`, White 2 `b5d7490b...`;
+  anything else, patched ones included, is refused with the reason), then reads the ROM's file system (FNT and FAT)
+  and extracts its archives (`a/`, 308 files) and sound data (`swan_sound_data.sdat`): 270 MB of the 512 MB ROM, in
+  about 3 s on the Mac. Download Play's and Wi-Fi's files are left out. They go into `gen5.tmp/`, which becomes the
+  data folder's `gen5/` once complete, with `rom.txt` (the game and the self-check's result). The ROM isn't kept.
+- **Shared by every game:** `gen5/` is in the data folder, while a game added through *Add a game* runs in
+  `carts/<id>/`, and libntr opens files by paths relative to the current game's folder. `Gen5_FilesInit`
+  (`gen5/src/files.c`) gives BW2's GFL its archive table (`GFL_ArcSysInit`) with paths from there to `gen5/`
+  (`gen5/a/0/1/6`, or `../../gen5/a/0/1/6`).
+- **The self-check:** after an import, `Gen5_SelfCheck` reads Bulbasaur's entry of BW2's Pokémon data (`ARCID_PERSONAL`)
+  through BW2's own archive code (`GFL_ArcSysGetDataLength`, `GFL_ArcSysRead`, the C version of `ArchiveMoveImageTop`)
+  and checks his base stats; the settings show the result. A failed check deletes the files. libntr asks for a ROM
+  when a file it opens is missing, so the Gen 5 code checks that a file exists before reading it.
+- **Linked:** the game now links the Gen 5 code whole: `gen5_battle_bw2.o`, one relocatable object (`ld -r`) of
+  every renamed BW2 symbol (5263), rather than a library, which meson won't link into the desktop's native `main` and
+  which would only bring in what is called. So the game's own link checks that everything BW2's code calls exists.
+  The interface is `gen5/api/gen5.h`; its functions are named `Gen5_...`, which the renaming leaves alone.
+- **Tests:** `tests/scripts/gen5_rom.txt` imports `~/thor-dev/PKMNB2.nds` (`GEN5_ROM=...` for another) with the
+  test command `gen5-import`, as the settings do, and passes on the self-check. A Platinum ROM is refused (game code
+  `CPUE`). The settings import was also tried on the desktop, with the ImGui file picker.
+- **Not checked yet:** the Android build (no NDK on the Mac; `std::filesystem` and `std::thread` need nothing the
+  NDK lacks) and the import on the Thor, where 270 MB more goes into the app's folder.
 
 ## Risks
 

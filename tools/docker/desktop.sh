@@ -124,6 +124,7 @@ test)
         name=$(basename "$entry")
         case "$name" in
         save.bin | save_slot* | *.sav | DbgLog.txt | *.nds | sim_config.ini | sim_config_prj.ini | imgui.ini) ;;
+        gen5 | gen5.tmp) ;;
         carts.ini | cart.name) cp "$entry" "$RUN/" ;;
         *) ln -s "$entry" "$RUN/$name" ;;
         esac
@@ -137,8 +138,11 @@ test)
     fi
     TEST=pokeplatinum-test
     docker rm -f $TEST >/dev/null 2>&1 || true
+    # The Black 2 or White 2 ROM a script's gen5-import imports
+    GEN5_ROM=${GEN5_ROM:-$(ls "$THOR_DEV"/PKMNB2.nds "$THOR_DEV"/PKMNW2.nds 2>/dev/null | head -n 1)}
     docker run -d --name $TEST --user "$(id -u):$(id -g)" -e HOME=/home -e DISPLAY=:1 -e SDL_AUDIODRIVER=dummy \
-        -e LIBGL_ALWAYS_SOFTWARE=1 -e LIBNTR_TEST_MODE=1 -e POKEPLATINUM_TEST_SCRIPT="$SCRIPT" $(mounts) -w "$RUN" \
+        -e LIBGL_ALWAYS_SOFTWARE=1 -e LIBNTR_TEST_MODE=1 -e POKEPLATINUM_TEST_SCRIPT="$SCRIPT" \
+        -e POKEPLATINUM_GEN5_ROM="$GEN5_ROM" $(mounts) -w "$RUN" \
         $IMAGE sh -c "Xvfb :1 -screen 0 ${SCREEN}x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
                       sleep 1
                       cp -f '$BIN/firmware.bin' '$BIN/header.bin' .
@@ -191,7 +195,7 @@ test)
 gen5-check)
     image
     docker run --rm -i --user "$(id -u):$(id -g)" -e HOME=/home $(mounts) -w "$ROOT" $IMAGE sh -c "
-        ninja -C build_linux gen5/libgen5_battle_bw2.a >/dev/null &&
+        ninja -C build_linux gen5/gen5_battle_bw2.o >/dev/null &&
         echo 'Link check (symbols nothing defines):' && gen5/tools/link_check.sh build_linux &&
         python3 gen5/tools/arm64_check.py build_linux"
     ;;

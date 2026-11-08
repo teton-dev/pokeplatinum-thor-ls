@@ -14,6 +14,9 @@
 #include "port/debug_field.h"
 #include "port/frame_rate.h"
 #include "port/port_game.h"
+#ifdef GEN5_BATTLES
+#include "port/gen5_rom.h"
+#endif
 
 #define MAX_COMMANDS 1024
 #define DEFAULT_TIMEOUT 3000 // Frames: 100 s on the overworld, where Docker's software 3D runs at about 30 a second
@@ -30,6 +33,7 @@ enum TestOp {
     OP_UNTIL,
     OP_MASH,
     OP_SAVE,
+    OP_GEN5_IMPORT,
     OP_SHOT,
     OP_LOG,
     OP_EXIT,
@@ -244,6 +248,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
             return TRUE;
         }
         return strcmp(words[next], "until") == 0 && ParseCondition(words + next + 1, count - next - 1, command);
+    } else if (strcmp(words[0], "gen5-import") == 0) {
+        // Imports the Black 2 / White 2 ROM in POKEPLATINUM_GEN5_ROM, as the settings do, and waits for it
+        command->op = OP_GEN5_IMPORT;
+        command->timeout = DEFAULT_TIMEOUT * 20;
+        return TRUE;
     } else if (strcmp(words[0], "save") == 0) {
         command->op = OP_SAVE;
         command->condition = COND_FREE;
@@ -507,6 +516,40 @@ static u16 Step(void)
             printf("[test] saved\n");
             Next();
             continue;
+        case OP_GEN5_IMPORT: {
+#ifdef GEN5_BATTLES
+            if (elapsed == 0) {
+                const char *rom = getenv("POKEPLATINUM_GEN5_ROM");
+                if (rom == NULL || rom[0] == '\0') {
+                    Fail(command, "no POKEPLATINUM_GEN5_ROM to import");
+                    return 0;
+                }
+                Gen5Rom_Import(rom, FALSE);
+                return 0;
+            }
+            Gen5Rom_Update();
+            const enum Gen5RomState state = Gen5Rom_State();
+            if (state == GEN5_ROM_IMPORTING) {
+                if (elapsed % 300 == 0) {
+                    printf("[test] %s\n", Gen5Rom_Status());
+                }
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the import is taking too long");
+                }
+                return 0;
+            }
+            printf("[test] gen5: %s\n", Gen5Rom_Status());
+            if (state != GEN5_ROM_READY) {
+                Fail(command, "the import failed");
+                return 0;
+            }
+            Next();
+            continue;
+#else
+            Fail(command, "built without the Gen 5 code (-Dpokebw2)");
+            return 0;
+#endif
+        }
         case OP_SHOT:
             // The harness takes the screenshot while the game runs on without input
             printf("[test] shot %s\n", command->text);

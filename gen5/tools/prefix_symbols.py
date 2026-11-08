@@ -3,17 +3,18 @@
 code can sit in the app beside Platinum's (PlayTime_Init, SaveData_Load, SPL... are in both). The SDK and C library
 calls it makes keep their names. The port's interface to Platinum, the functions named Gen5_..., keeps its own.
 
-    prefix_symbols.py NM OBJCOPY AR INPUT.a OUTPUT.a
+    prefix_symbols.py NM OBJCOPY AR INPUT.a OUTPUT.o CC...
 
 Meson's static libraries are thin archives (lists of objects), which objcopy can't rewrite: each object is renamed
-on its own and the output is a normal archive."""
+on its own. The output is one relocatable object (CC -r), which the game links whole: so the link also checks that
+everything BW2's code calls is there."""
 import os
 import pathlib
 import subprocess
 import sys
 import tempfile
 
-nm, objcopy, ar, source, output = sys.argv[1:]
+nm, objcopy, ar, source, output, *cc = sys.argv[1:]
 listing = subprocess.run([nm, "-g", "--defined-only", source], capture_output=True, text=True, check=True).stdout
 symbols = sorted({line.split()[2] for line in listing.splitlines() if len(line.split()) == 3})
 renames = output + ".syms"
@@ -30,7 +31,5 @@ with tempfile.TemporaryDirectory(dir=os.path.dirname(os.path.abspath(output))) a
         renamed = os.path.join(work, f"{index:04}_{path.name}")
         subprocess.run([objcopy, f"--redefine-syms={renames}", str(path), renamed], check=True)
         objects.append(renamed)
-    if os.path.exists(output):
-        os.remove(output)
-    subprocess.run([ar, "rcs", output, *objects], check=True)
+    subprocess.run([*cc, "-r", "-nostdlib", "-o", output, *objects], check=True)
 os.remove(renames)
