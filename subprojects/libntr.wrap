@@ -14,8 +14,9 @@ directory = libntr
 # (SIM_SetWidescreenObjWrap: the overworld's weather sprites fill a wide screen). libntr_snd_waveout.patch: the
 # simulated ARM7 carries out the direct channel commands and keeps the channels' status, so that NitroSystem's wave
 # output plays (BW2's cries use it). libntr_g3_translucent_state.patch: each deferred translucent polygon is drawn with its own
-# culling and depth test (BW2's battle particles were culled)
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch
+# culling and depth test (BW2's battle particles were culled). libntr_wide_edge.patch: SIM_SetWidescreenBgEdgeExtend,
+# a BG layer's edge columns continued across the sides of a wide scene (BW2's text box reaches the screen's edges)
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch
 
 [provide]
 dependency_names = NitroSDK

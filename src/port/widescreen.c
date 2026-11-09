@@ -86,6 +86,8 @@ void Widescreen_Update(void)
     }
     SIM_SetWidescreenSceneOptions(FALSE, wideBgs);
     SIM_SetWidescreenObjWrap(objWrap);
+    // BW2's text box (BG1) reaches the edges of the wide screen; its text stays in the middle
+    SIM_SetWidescreenBgEdgeExtend(Gen5BattleShown() ? (1 << 1) : 0);
     SIM_SetWidescreenScene(wide);
 }
 

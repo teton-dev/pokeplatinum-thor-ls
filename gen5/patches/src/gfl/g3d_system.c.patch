@@ -29,7 +29,24 @@
                                     sys->projection.near, sys->projection.far, sys->projection.ndcRangeOverride);
          }
          break;
-@@ -336,7 +345,7 @@
+@@ -249,11 +258,12 @@
+         break;
+     case G3DCAM_PROJECTION_ORTHO:
+         if (sys->projection.ndcRangeOverride == 0) {
+-            NNS_G3dGlbOrtho(sys->projection.param1, sys->projection.param2, sys->projection.param3,
+-                            sys->projection.param4, sys->projection.near, sys->projection.far);
++            // The port: as wide as the screen, centred (widescreen, Gen5_Widen)
++            NNS_G3dGlbOrtho(sys->projection.param1, sys->projection.param2, Gen5_Widen(sys->projection.param3),
++                            Gen5_Widen(sys->projection.param4), sys->projection.near, sys->projection.far);
+         } else {
+-            NNS_G3dGlbOrthoW(sys->projection.param1, sys->projection.param2, sys->projection.param3,
+-                             sys->projection.param4, sys->projection.near, sys->projection.far,
++            NNS_G3dGlbOrthoW(sys->projection.param1, sys->projection.param2, Gen5_Widen(sys->projection.param3),
++                             Gen5_Widen(sys->projection.param4), sys->projection.near, sys->projection.far,
+                              sys->projection.ndcRangeOverride);
+         }
+         break;
+@@ -336,7 +346,7 @@
      NNSG3dResFileHeader *header = data;
      u16 type;
  
