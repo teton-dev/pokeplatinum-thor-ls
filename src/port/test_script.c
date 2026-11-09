@@ -10,6 +10,20 @@
 #include <simulator/sim.h>
 
 #include "field/field_system.h"
+#include "bag.h"
+#include "constants/heap.h"
+#include "party.h"
+#include "pc_boxes.h"
+#include "pokemon.h"
+#include "port/sim_config_prj.h"
+#include "gui_createmon_utils.h"
+#include "constants/charcode.h"
+#include "constants/string.h"
+#include "charcode_convert.h"
+#include "save_player.h"
+#include "savedata.h"
+#include "savedata/save_table.h"
+#include "trainer_info.h"
 #include "player_avatar.h"
 #include "port/debug_field.h"
 #include "port/frame_rate.h"
@@ -36,6 +50,12 @@ enum TestOp {
     OP_SAVE,
     OP_GEN5_IMPORT,
     OP_GEN5_BATTLE,
+    OP_WILD,
+    OP_LEAD,
+    OP_GEN5_SETTING,
+    OP_PARTY,
+    OP_GIVE,
+    OP_ITEM,
     OP_SHOT,
     OP_LOG,
     OP_EXIT,
@@ -263,6 +283,41 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
+    } else if (strcmp(words[0], "wild") == 0 && count >= 3) {
+        // A wild battle against SPECIES at LEVEL, as one in grass (the Gen 5 engine's with gen5-battles on), once
+        // the player is free
+        command->op = OP_WILD;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if (strcmp(words[0], "lead") == 0 && count >= 3) {
+        // A new SPECIES at LEVEL first in the party (the party must have room)
+        command->op = OP_LEAD;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "gen5-battles") == 0 && count >= 2) {
+        // Settings > Games > Gen 5 battles: on or off (for this run; not saved)
+        command->op = OP_GEN5_SETTING;
+        command->x = strcmp(words[1], "on") == 0;
+        return TRUE;
+    } else if (strcmp(words[0], "party") == 0) {
+        // Logs the party (species, level, HP, experience, status) and the money
+        command->op = OP_PARTY;
+        return TRUE;
+    } else if (strcmp(words[0], "give") == 0 && count >= 3) {
+        // Puts COUNT of item ITEM (its number) in the bag
+        command->op = OP_GIVE;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "item") == 0 && count >= 2) {
+        // Logs how many of item ITEM the bag has
+        command->op = OP_ITEM;
+        command->x = atoi(words[1]);
+        return TRUE;
     } else if (strcmp(words[0], "save") == 0) {
         command->op = OP_SAVE;
         command->condition = COND_FREE;
@@ -371,6 +426,31 @@ static void Next(void)
 {
     sTest.current++;
     sTest.started = FALSE;
+}
+
+// The party as the save has it, a line each, and the money and the PC's Pokémon
+static void LogParty(SaveData *save)
+{
+    Party *party = SaveData_GetParty(save);
+    for (int i = 0; i < Party_GetCurrentCount(party); i++) {
+        Pokemon *mon = Party_GetPokemonBySlotIndex(party, i);
+        charcode_t nickname[MON_NAME_LEN + 1];
+        char name[MON_NAME_LEN + 1] = { 0 };
+        Pokemon_GetValue(mon, MON_DATA_NICKNAME, nickname);
+        int length = 0;
+        while (length < MON_NAME_LEN && nickname[length] != CHAR_EOS) {
+            length++;
+        }
+        CharCode_ToAsciiString(nickname, name, length);
+        printf("[test] party %d: %s, species %u level %u HP %u/%u exp %u status %u item %u ball %u\n", i + 1, name,
+            (unsigned)Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_LEVEL, NULL),
+            (unsigned)Pokemon_GetValue(mon, MON_DATA_HP, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MAX_HP, NULL),
+            (unsigned)Pokemon_GetValue(mon, MON_DATA_EXPERIENCE, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_STATUS, NULL),
+            (unsigned)Pokemon_GetValue(mon, MON_DATA_HELD_ITEM, NULL),
+            (unsigned)Pokemon_GetValue(mon, MON_DATA_POKEBALL, NULL));
+    }
+    printf("[test] money %u, %u Pokémon in the PC\n", (unsigned)TrainerInfo_Money(SaveData_GetTrainerInfo(save)),
+        (unsigned)PCBoxes_CountAllBoxMons(SaveData_GetPCBoxes(save)));
 }
 
 // Runs the script for this frame: the keys to hold
@@ -586,6 +666,59 @@ static u16 Step(void)
             Fail(command, "built without the Gen 5 code (-Dpokebw2)");
             return 0;
 #endif
+        case OP_WILD:
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the battle");
+                }
+                return 0;
+            }
+            if (!GUI_CreateMon_StartWildEncounter(command->x, command->y)) {
+                Fail(command, "the wild battle couldn't start");
+                return 0;
+            }
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
+        case OP_GEN5_SETTING:
+            SIM_Config_prj_GetConfig()->gen5Battles = command->x;
+            printf("[test] Gen 5 battles %s\n", command->x ? "on" : "off");
+            Next();
+            continue;
+        case OP_LEAD:
+        case OP_PARTY:
+        case OP_GIVE:
+        case OP_ITEM: {
+            FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+            if (fieldSystem == NULL || fieldSystem->saveData == NULL) {
+                Fail(command, "no save to read");
+                return 0;
+            }
+            if (command->op == OP_LEAD) {
+                Party *party = SaveData_GetParty(fieldSystem->saveData);
+                if (!GUI_CreateMon_GenPokemon(command->x, command->y)) {
+                    Fail(command, "the party is full");
+                    return 0;
+                }
+                for (int i = Party_GetCurrentCount(party) - 1; i > 0; i--) {
+                    Party_SwapSlots(party, i, i - 1);
+                }
+                printf("[test] species %d at level %d leads the party\n", command->x, command->y);
+            } else if (command->op == OP_PARTY) {
+                LogParty(fieldSystem->saveData);
+            } else if (command->op == OP_GIVE) {
+                if (!Bag_TryAddItem(SaveData_GetBag(fieldSystem->saveData), command->x, command->y, HEAP_ID_FIELD1)) {
+                    Fail(command, "the item doesn't fit in the bag");
+                    return 0;
+                }
+                printf("[test] gave %d of item %d\n", command->y, command->x);
+            } else {
+                printf("[test] item %d: %d\n", command->x,
+                    Bag_GetItemQuantity(SaveData_GetBag(fieldSystem->saveData), command->x, HEAP_ID_FIELD1));
+            }
+            Next();
+            continue;
+        }
         case OP_SHOT:
             // The harness takes the screenshot while the game runs on without input
             printf("[test] shot %s\n", command->text);

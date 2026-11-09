@@ -13,6 +13,8 @@
 
 #include "constants/heap.h"
 #include "encounter.h"
+#include "field_battle_data_transfer.h"
+#include "constants/battle.h"
 #include "field/field_system.h"
 #include "field_task.h"
 #include "heap.h"
@@ -79,6 +81,26 @@ static BOOL FieldTask_DebugBattle(FieldTask *task)
     }
 
     Heap_Free(battle);
+    return TRUE;
+}
+
+int GUI_CreateMon_StartWildEncounter(int speciesNo, int level)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)
+        || Party_GetCurrentCount(SaveData_GetParty(fieldSystem->saveData)) == 0
+        || speciesNo <= 0 || speciesNo > MAX_SPECIES) {
+        return FALSE;
+    }
+
+    // As a random encounter in grass starts one: its task blacks the player out after a loss
+    FieldBattleDTO *dto = FieldBattleDTO_New(HEAP_ID_FIELD2, BATTLE_TYPE_WILD_MON);
+    FieldBattleDTO_Init(dto, fieldSystem);
+    Pokemon *mon = Pokemon_New(HEAP_ID_FIELD2);
+    Pokemon_InitWith(mon, speciesNo, level, INIT_IVS_RANDOM, FALSE, 0, OTID_NOT_SHINY, 0);
+    FieldBattleDTO_AddPokemonToBattler(dto, mon, BATTLER_ENEMY_1);
+    Heap_Free(mon);
+    Encounter_NewVsWild(fieldSystem, dto);
     return TRUE;
 }
 

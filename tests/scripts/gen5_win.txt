@@ -1,0 +1,18 @@
+# Gen 5 battles, milestone 4: with the setting on, a level 14 Bidoof leads and beats a level 12 Chansey (as one in
+# grass) in Black 2 and White 2's engine, choosing its first move every turn; the experience takes it to level 15,
+# and Platinum's evolution scene makes it a Bibarel. Its log shows the party before and after.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_win.txt --from turtwig
+
+gen5-import
+mash A until free
+gen5-battles on
+lead 399 14
+party
+wild 113 12
+until command
+wait 30
+shot gen5-command
+mash A until free timeout 20000
+party
+exit 0

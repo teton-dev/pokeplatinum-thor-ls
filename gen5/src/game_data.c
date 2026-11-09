@@ -121,9 +121,10 @@ PlayerInfo *GetGameDataPlayerInfo(GameData *gameData) {
     return sGameData.info;
 }
 
+// The trainer's cash and badges (runtime.c sets them for each battle)
 TrainerCardSave *getTrainerCardDataBlkAddress(GameData *gameData) {
     (void)gameData;
-    return NULL;
+    return (TrainerCardSave *)getTrainerGameInfoAddress(SaveControl_GetInstance());
 }
 
 // Platinum has no C-Gear

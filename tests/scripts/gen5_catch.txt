@@ -1,0 +1,33 @@
+# Gen 5 battles, milestone 4: with the setting on, a wild Bidoof (as one in grass) in Black 2 and White 2's engine,
+# caught with a Master Ball from the bag, named B on Platinum's naming screen. Its log shows Bidoof in the party
+# (named B, ball 1) and no Master Ball left.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_catch.txt --from turtwig
+
+gen5-import
+mash A until free
+gen5-battles on
+give 1 1
+party
+wild 399 3
+until command
+wait 60
+# BAG, POKÉ BALLS, the Master Ball, USE
+touch 50 167
+wait 60
+touch 191 47
+wait 60
+shot gen5-balls
+touch 64 54
+wait 60
+touch 107 175
+# Through the catch's messages to Platinum's naming screen: B, then OK
+mash A until naming timeout 6000
+wait 60
+shot gen5-naming
+touch 51 100
+touch 215 71
+mash B until free
+party
+item 1
+exit 0

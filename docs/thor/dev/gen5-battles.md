@@ -19,7 +19,7 @@ project for now (see Licensing).
   fork (its source is public); the main repository's developer would have to agree before anything goes upstream.
 - **Testing: a local Linux desktop build on the Mac** (Docker), not only cloud builds and the Thor.
 - **Out of scope:** following Pokémon, visible wild Pokémon, BW2 Phenomena, name capitalisation.
-- **Setting:** *Settings > Gameplay > Gen 5 battles*, off by default, only offered once a BW2 ROM is added.
+- **Setting:** *Settings > Games > Gen 5 battles > Battles in Black 2 and White 2's engine*, next to the ROM import, off by default, only offered once a BW2 ROM is added.
 
 ## How it fits together
 
@@ -68,8 +68,11 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
    Pokémon) in BW2's engine and returns to the overworld. Arena, camera, sprites, moves, running away. *Done on the
    desktop, but for the arena's distant background and sound* (see "Milestone 3").
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
-   (Pokédex entry, nickname, box), fainting and whiting out.
-5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages.
+   (Pokédex entry, nickname, box), fainting and whiting out. *Done on the desktop* (see "Milestone 4").
+5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages. Must work (the
+   owner's checks): badges after Gym Leader battles (Platinum's gym scripts give them on a win, so the result and
+   what the scripts read after must be right), and trainers sliding in with their lines mid-battle (Cyrus, the Elite
+   Four, the Champion and others: Platinum's trainer messages, such as the last Pokémon's, in BW2's own slide-in).
 6. **The rest:** doubles, tag battles (Cheryl, Riley...), multi battles, the catching tutorial, the Safari Zone,
    Pal Park, legendaries and roamers, the Battle Frontier; items from the bag; weather and terrain arenas.
 7. **Renegade Platinum:** the game's own Pokémon, move and item data in the Gen 5 engine, and Fairy.
@@ -193,6 +196,42 @@ game is back on the overworld afterwards. `tests/scripts/gen5_battle.txt` plays 
     fix is in libntr's renderer (clipping, or letting OpenGL clip).
   - Sound (above). A block of 0 bytes is left in one of BW2's heaps at the end (listed, harmless).
   - The Android build, as for milestones 1 and 2.
+
+## Milestone 4: the bridge (2026-11-08)
+
+Done on the desktop: with *Settings > Games > Gen 5 battles > Battles in Black 2 and White 2's engine* on, wild
+battles against one Pokémon run in BW2's engine with the player's party, bag and money, and what they change comes
+back to Platinum's save.
+
+- **Which battles:** `Gen5Battle_Handles` (`src/port/gen5_battle.c`): the setting on, a ROM imported, the type
+  `BATTLE_TYPE_WILD_MON` with one wild Pokémon, and none of the status flags the bridge doesn't carry yet (first
+  battle, no running, legendary, Giratina and the Distortion World, recordings). Honey trees and scripted wild
+  battles count. Everything else stays Platinum's (milestone 5 on).
+- **The interface** (`gen5/api/gen5.h`): `Gen5BattleSetup` in, `Gen5BattleResults` out, in neither game's types:
+  `Gen5Mon` (species, personality, IDs, experience, moves and PP, IVs, EVs, ability, nature, item, HP, status, ball,
+  OT, names in UTF-16), the bag's items, the player's name, ID, gender, badges and money, the time. Platinum's side
+  fills it (`src/port/gen5_battle.c`); BW2's side builds its Pokémon from it (`gen5/src/bridge.c`: BW2 works out the
+  stats from its own data and keeps the nature apart from the personality) and reads back what a battle changes.
+- **Platinum's Pokémon stay the source:** after the battle only what a battle changes is written back (experience,
+  then level and stats as Platinum computes them, HP, status, moves, PP, EVs, friendship, item, Pokérus). Names are
+  converted with the port's ASCII table (Western names; other characters become `?` in BW2's battle only).
+- **Bag and money:** the item, medicine, Poké Ball, berry and battle item pockets go into BW2's bag; afterwards each
+  item's count is set to what BW2's bag has (items used, or found). BW2's money change comes back (a loss's).
+- **After the battle,** the Gen 5 application does what Platinum's battle does after its own: a caught Pokémon gets its
+  catch data (`Pokemon_SetCatchData`), the naming screen (straight away: Platinum's battle asks first; an empty name
+  keeps the species name), the Pokédex, the Pokétch history, records, then the party or the first box with room; then
+  the evolutions of those that gained a level (`Battle_FindEvolvingPartyMember`, Platinum's evolution scene). Seen is
+  set when the battle starts. A loss blacks the player out through Platinum's encounter task, as before.
+- **What BW2's systems needed:** Pass Powers initialized (zeroed, they scaled experience to nothing), Join Avenue's save
+  blocks (a catch records an activity there), the trainer's cash and badges in the port's save (a loss reads them).
+- **Moves learned on levelling up come from BW2's learnsets,** and its rules apply (Gen 5 experience, abilities, move
+  effects). Expected; Renegade Platinum (milestone 7) brings its own data.
+- **Tests** (from the `turtwig` fixture): `gen5_catch.txt` (Master Ball, named B), `gen5_win.txt` (Bidoof beats a
+  Chansey, reaches level 15 and evolves into Bibarel), `gen5_lose.txt` (blackout, home, money taken). New script
+  commands: `wild SPECIES LEVEL` (a wild battle as in grass), `gen5-battles on|off`, `lead SPECIES LEVEL`,
+  `give ITEM COUNT`, `item ITEM`, `party`.
+- **Not done yet:** Platinum's "Give it a nickname?" question and Pokédex entry screen on a first catch; sound;
+  trainer battles (milestone 5); the Android build.
 
 ## Risks
 
