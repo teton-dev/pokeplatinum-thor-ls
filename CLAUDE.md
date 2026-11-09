@@ -42,16 +42,16 @@ battle Platinum sets up (`FieldSystem_StartBattleProcess`, `src/unk_0203D1B8.c`)
 Decisions made with the owner:
 - The player's own **Black 2 or White 2 (USA)** ROM supplies the Gen 5 files (not Black/White: only BW2 is
   decompiled).
-- **Vanilla Platinum first.** Renegade Platinum (its data, the Fairy type) is the last milestone.
+- **Vanilla Platinum first.** Renegade Platinum (its data, the Fairy type) comes after widescreen, then HeartGold and
+  SoulSilver with the same Gen 5 battles. Trainers keep the AI level their game gives them.
 - **Fork-only** because of the GPL; ask upstream's developer before proposing any of it there.
 - Out of scope: following Pokémon, visible wild Pokémon, BW2 Phenomena, name capitalisation.
 
-Status: **milestones 1, 2 and 3 are done on the desktop build** (the plan's "Milestone 1" to "Milestone 3"): `gen5/`
-builds 207 of pokebw2's files, renamed `bw2_...`, into one object the game links whole (`-Dpokebw2=../pokebw2`);
-*Settings > Games > Gen 5 battles* imports a Black 2 / White 2 ROM into the data folder's `gen5/`, and BW2's code reads
-it; *Settings > Advanced > Gen 5 battles* runs a wild battle in BW2's engine (moves, running away, back to the
-overworld), still silent and with black patches in the arena's distant background (libntr's renderer doesn't clip
-polygons). Next is milestone 4, the bridge. An NDK build of the APK with the option is still to do. pokebw2 is never
+Status (the plan has the details): milestones 1 to 3 are done (`gen5/` builds 207 of pokebw2's files, renamed
+`bw2_...`, into one object the game links whole, `-Dpokebw2=../pokebw2`; a BW2 ROM is imported in *Settings > Games >
+Gen 5 battles*; libntr now clips polygons), milestone 4 (the bridge: party, player, bag, catching, real wild
+encounters through *Settings > Gameplay > Gen 5 battles*) is done to 4c, and milestone 5 (trainers) has single
+trainer battles with Platinum's AI levels. The APK builds with the option (the NDK in Docker). pokebw2 is never
 changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this
 repository, not inside it.
 

@@ -553,9 +553,10 @@ void DrawGameplay()
         "Species without an overworld sprite in Platinum walk as their party icon.", &config->followerPokemon);
 #ifdef GEN5_BATTLES
     Section("Gen 5 battles");
-    ConfigToggle("Gen 5 battles", "Wild battles in Black 2 and White 2's engine: their 3D arenas, moving camera, "
+    ConfigToggle("Gen 5 battles", "Battles in Black 2 and White 2's engine: their 3D arenas, moving camera, "
         "animated Pokemon and Gen 5 rules, with your party, your bag and the results kept, and catching. Experimental: "
-        "trainer battles aren't there yet (Pokemon you meet in tall grass, caves and water only). Needs the ROM in "
+        "wild Pokemon in tall grass, caves and water, and single battles against the trainers on routes (with "
+        "Platinum's AI); double battles, Gym Leaders and the rival stay in Platinum's battles for now. Needs the ROM in "
         "Settings > Games > Gen 5 battles.", &config->gen5Battles, Gen5Rom_GameName() != nullptr);
 #endif
     Section("Field moves");

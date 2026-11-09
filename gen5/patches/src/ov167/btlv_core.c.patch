@@ -1,6 +1,14 @@
 --- a/src/ov167/btlv_core.c
 +++ b/src/ov167/btlv_core.c
-@@ -561,6 +561,7 @@
+@@ -9,6 +9,7 @@
+ #include "battle/btl_poke_select.h"
+ #include "battle/btl_pokeparam.h"
+ #include "battle/btl_pospoke.h"
++#include "battle/btl_result.h"
+ #include "battle/btl_string.h"
+ #include "battle/btl_tables.h"
+ #include "battle/btlv.h"
+@@ -561,6 +562,7 @@
      core->result = 0;
      core->laterMon = laterMon;
      BtlvCore_SetMainProc(core, BtlvCore_ProcCommandSelect);
@@ -8,3 +16,20 @@
  }
  
  void BtlvCore_StopCommandSelect(BtlvCore *core) {
+@@ -1395,6 +1397,16 @@
+ }
+ 
+ BOOL BtlvCore_StartMsgTrainer(BtlvCore *core, u32 trainerId, u32 msgId) {
++    // The port: trainers from 0x800 (another game's, as the Pokémon World Tournament's) have their defeat line in
++    // the setup, not in BW2's trainer messages
++    if (trainerId >= 0x800 && msgId == 1) {
++        BtlString_LoadTrainerWinLoseMsg(core->strbuf, trainerId, BTL_RESULT_VICTORY);
++        if (GFL_StrBufGetCharCount(core->strbuf) == 0) {
++            return FALSE;
++        }
++        BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++        return TRUE;
++    }
+     if (TrainerMsg_CheckExists(trainerId, msgId, core->heapId)) {
+         TrainerMsg_Load(trainerId, msgId, core->strbuf, core->heapId);
+         BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
