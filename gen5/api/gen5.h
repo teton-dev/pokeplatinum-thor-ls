@@ -17,13 +17,66 @@ int Gen5_FilesInit(const char *gen5Dir);
 // says what was read, or what went wrong. Gen5_FilesInit first.
 int Gen5_SelfCheck(char *message, int size);
 
-// A wild single battle in BW2's engine (milestone 3): the player's Pokémon and the wild one, by species and level
-// (Gen 4 and Gen 5 share their numbers)
+// A Pokémon as both games see it (milestone 4). Species, forms, moves, items, abilities, natures and balls have the
+// same numbers in Gen 4 and Gen 5. Stats are left out: BW2 computes them from these.
+#define GEN5_NAME_LENGTH 11 // Characters of a Pokémon's name, with the terminator; a trainer's has 8
+#define GEN5_PARTY_MAX 6
+
+// Major status conditions, as BW2 numbers them
+enum Gen5Status {
+    GEN5_STATUS_NONE,
+    GEN5_STATUS_PARALYSIS,
+    GEN5_STATUS_SLEEP,
+    GEN5_STATUS_FREEZE,
+    GEN5_STATUS_BURN,
+    GEN5_STATUS_POISON,
+};
+
+typedef struct Gen5Pokemon {
+    unsigned species;
+    unsigned form;
+    unsigned level;
+    unsigned exp;
+    unsigned personality;
+    unsigned otId;
+    unsigned heldItem;
+    unsigned ability;
+    unsigned friendship;
+    unsigned gender; // 0 male, 1 female, 2 none
+    unsigned moves[4];
+    unsigned pp[4];
+    unsigned ppUps[4];
+    unsigned hp;
+    unsigned status; // enum Gen5Status
+    unsigned ivs[6]; // HP, Attack, Defense, Speed, Sp. Atk, Sp. Def
+    unsigned evs[6];
+    unsigned ball;
+    unsigned pokerus;
+    unsigned metLevel;
+    unsigned otGender;
+    unsigned isEgg;
+    unsigned hasNickname;
+    unsigned short nickname[GEN5_NAME_LENGTH]; // Unicode, 0xFFFF after the last character
+    unsigned short otName[8];
+} Gen5Pokemon;
+
+// The player, for BW2's messages, its traded-Pokémon check (the OT's ID and name) and the money a loss costs
+typedef struct Gen5Player {
+    unsigned short name[8]; // Unicode, 0xFFFF after the last character
+    unsigned id;
+    unsigned gender; // 0 male, 1 female
+    unsigned money;
+    unsigned badges;
+} Gen5Player;
+
+// A wild single battle: the player's party against one wild Pokémon. Gen5_BattleEnd writes back the party as the
+// battle left it (HP, status, PP, experience, levels, moves, held items) and the money won or lost.
 typedef struct Gen5WildBattle {
-    int playerSpecies;
-    int playerLevel;
-    int wildSpecies;
-    int wildLevel;
+    Gen5Player player;
+    Gen5Pokemon party[GEN5_PARTY_MAX];
+    int partyCount;
+    Gen5Pokemon wild;
+    int moneyChange;
 } Gen5WildBattle;
 
 // How a battle ended, for Platinum
@@ -56,8 +109,9 @@ int Gen5_BattleFrame(void);
 // In the VBlank: BW2's VBlank work (VRAM transfers, its VBlank tasks and callback)
 void Gen5_BattleVBlank(void);
 
-// After the last frame: frees the battle and gives its result
-enum Gen5BattleResult Gen5_BattleEnd(void);
+// After the last frame: frees the battle and gives its result. The party and money change go into battle, the one
+// Gen5_BattleBegin had (unchanged if the battle failed).
+enum Gen5BattleResult Gen5_BattleEnd(Gen5WildBattle *battle);
 
 #ifdef __cplusplus
 }
