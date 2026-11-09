@@ -300,6 +300,9 @@ gen5_args = [
     # BW2 was built with a signed char (-char signed), which arm64's default isn't
     '-fsigned-char',
     '-fno-strict-aliasing',
+    # Android's SDL_main.h renames main to SDL_main, which clashes with system/main.h's void main(void). The game's
+    # entry point isn't in here
+    '-DSDL_MAIN_HANDLED',
     # Pointers passed as integers: libntr takes the emulated registers' addresses as u64, which is right. The
     # warnings are the list to check for pointers cut to 32 bits
     '-Wno-error=int-conversion',
