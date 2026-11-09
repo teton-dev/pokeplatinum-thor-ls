@@ -6,7 +6,7 @@ This file adds what is specific to this fork and to the Gen 5 battles work.
 ## The fork
 
 `teton-dev/pokeplatinum-thor-ls`, a fork of `SilasMayes/pokeplatinum-thor`. The owner plays on an AYN Thor
-(Android) and works from an M2 Mac.
+(Android).
 
 - `platinum-thor`: the owner's personal build. Its `build_android.yml` sets
   `VERSION_CODE: 90000${{ github.run_number }}` so its APKs install over the official ones (keep that line).
@@ -55,7 +55,7 @@ polygons). Next is milestone 4, the bridge. An NDK build of the APK with the opt
 changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this
 repository, not inside it.
 
-## Testing locally on the Mac
+## Testing locally (Docker)
 
 The owner's ROMs are in `~/thor-dev` (`PKMNPLAT.nds`, `PKMNB2.nds`). `tools/docker/desktop.sh` builds and runs the
 desktop build in Docker (x86 under Rosetta) and shows it over VNC (`vnc://localhost:5900`); its `shot`, `key`,
