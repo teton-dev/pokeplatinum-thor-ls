@@ -2323,7 +2323,13 @@ static void ov5_021D7960(UnkStruct_ov5_021D6FA8 *param0)
 {
     int v0;
     UnkStruct_ov5_021D6FA8 *v1 = param0;
+#ifdef SDK_PORT
+    // As ov5_021D78A4 writes the drop's work: s64 on the port (read as s32, the lifetime was 0
+    // and each drop splashed at the top of the screen on its second frame)
+    s64 *v2 = (s64 *)v1->unk_08;
+#else
     s32 *v2 = (s32 *)v1->unk_08;
+#endif
     VecFx32 v3;
 
     v3 = ov5_021D7010(v1);

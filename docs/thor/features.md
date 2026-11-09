@@ -136,6 +136,9 @@ on the second display (not swapped):
   forests' light span the whole width. While the start menu is open, the falling
   particles show only in the middle (its icons would repeat at the left otherwise).
   Dark caves before Flash stay 4:3: the darkness is a circle drawn for the 4:3 screen.
+
+**Rain** falls from the top of the screen to the bottom and splashes, as on the DS (earlier
+builds only showed a few drops near the bottom: each drop stopped on its second frame).
 * **Gen 5 battles** (*Settings > Gameplay > Gen 5 battles*) fill the wide screen: the
   arena is 3D, so its camera sees more of it on the left and right, unstretched. The
   Pokemon, trainers, HP boxes and text stay where they are, in the 4:3 middle.
