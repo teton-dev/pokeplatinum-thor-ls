@@ -61,8 +61,8 @@ SPRITES = {
         'anchors': {'stand': 31, 'overhead': 86, 'lean': 138},
         'poses': [
             [('arm_fist', 19, 73), 'stand'],
-            [('arm_ball', 15, 27), 'stand'],
-            [('arm_ball_high', 7, 28), 'stand'],
+            [('arm_ball', 7, 35), 'stand'],
+            [('arm_ball_high', -1, 36), 'stand'],
             ['overhead'],
             ['lean', ('arm_back', 113, 70)],
         ],
