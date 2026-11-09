@@ -27,6 +27,8 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `gen5_trainer.txt` | `turtwig` | with *Gen 5 battles* on, Youngster Tristan (trainer 1, the test command `trainer`) in BW2's engine with Platinum's AI: won, the prize money in the log (Gen 5 builds) | ~1 min |
 | `pc.txt` | `turtwig` | a Pokémon Center's PC (Sandgem Town): the box screen shows, then back to the overworld (the check is the shot) | ~30 s |
 | `gen5_loss.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig loses (a level 100 Charizard): the blackout, back home (Gen 5 builds) | ~1 min |
+| `new_game_girl.txt` | nothing | `new_game.txt` with a girl: keep it as `before-starter-girl`, then `turtwig.txt --from before-starter-girl --keep turtwig-girl` | ~20 s |
+| `gen5_player_back.txt` | `turtwig` or `turtwig-girl` | a wild and a trainer battle in BW2's engine: the player's back sprite is the fork's own art of Lucas or Dawn through the throw (the check is the shots) (Gen 5 builds) | ~1 min |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
 engine, and the test passes once that asks for a command (BW2's battle raises the same `command` event as Platinum's).
@@ -40,6 +42,8 @@ among them.
 - A run's data folder is `~/thor-dev/test-run`: the extracted ROM linked from `~/thor-dev/desktop` (not its Gen 5
   files: `gen5_rom.txt` imports its own), no saves, and
   the default settings, with the 3D at the DS's own size (the default, ten times larger, is far too slow in software).
+- `TEST_ID=name` gives the run a container and a data folder (`test-run-name`) of its own, so that runs from
+  two worktrees can go side by side; without it they stop each other.
 - `--from FIXTURE` starts it from `~/thor-dev/fixtures/FIXTURE/save.bin`; `--keep FIXTURE` keeps the save it ends
   with there, when it passes. Fixtures are saves: never commit them.
 - It prints the script's progress (`[test] ...`): each time the player is free, the map and tile
