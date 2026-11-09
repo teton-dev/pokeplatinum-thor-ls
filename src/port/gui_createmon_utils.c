@@ -13,10 +13,12 @@
 
 #include "constants/heap.h"
 #include "encounter.h"
+#include "field_battle_data_transfer.h"
 #include "field/field_system.h"
 #include "field_task.h"
 #include "heap.h"
 #include "port/debug_field.h"
+#include "unk_020528D0.h"
 
 #include <stdlib.h>
 
@@ -63,19 +65,30 @@ typedef struct DebugBattle {
     int level;
     int trainerID;
     BOOL doubles;
+    int resultMask;
 } DebugBattle;
 
 static BOOL FieldTask_DebugBattle(FieldTask *task)
 {
     DebugBattle *battle = FieldTask_GetEnv(task);
 
-    if (battle->state++ == 0) {
+    switch (battle->state++) {
+    case 0:
         if (battle->trainerID != 0) {
-            Encounter_NewVsTrainer(task, battle->trainerID, battle->doubles ? battle->trainerID : 0, 0, HEAP_ID_FIELD2, NULL);
+            Encounter_NewVsTrainer(task, battle->trainerID, battle->doubles ? battle->trainerID : 0, 0, HEAP_ID_FIELD2,
+                &battle->resultMask);
         } else {
-            Encounter_NewVsSpeciesAtLevel(task, battle->species, battle->level, NULL, FALSE);
+            Encounter_NewVsSpeciesAtLevel(task, battle->species, battle->level, &battle->resultMask, FALSE);
         }
         return FALSE;
+    case 1:
+        // These are the scripted encounters' calls, whose script blacks out after a loss (the encounter leaves the
+        // map closed for it). Without one, the screen stayed black
+        if (!CheckPlayerWonBattle(battle->resultMask)) {
+            FieldTask_StartBlackOutFromBattle(task);
+            return FALSE;
+        }
+        break;
     }
 
     Heap_Free(battle);

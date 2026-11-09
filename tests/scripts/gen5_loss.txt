@@ -1,0 +1,22 @@
+# Gen 5 battles: losing a battle in Black 2 and White 2's engine. From the turtwig fixture, a wild level 100
+# Charizard, whose moves at that level all do damage, knocks Turtwig out in one turn; B through the messages (the
+# money lost, the blackout) until the player is free on the overworld again. A loss read the money from a trainer
+# card the port didn't have (NULL), and crashed after "... is out of usable Pokémon".
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_loss.txt --from turtwig
+
+gen5-import
+mash A until free
+gen5-battle 6 100
+until battle
+until command
+wait 60
+# FIGHT, then Tackle
+touch 128 95
+wait 30
+touch 64 54
+wait 120
+shot gen5-loss-hit
+mash B until free timeout 3600
+shot gen5-loss-back
+exit 0

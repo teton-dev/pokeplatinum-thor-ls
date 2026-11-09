@@ -18,6 +18,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `gen5_rom.txt` | nothing | imports the Black 2 or White 2 ROM as the settings do, and BW2's code reads it (Gen 5 builds) | ~10 s |
 | `turtwig.txt` | `before-starter` | Turtwig and Barry's battle, then home: keep it as the fixture `turtwig` | ~1 min |
 | `gen5_battle.txt` | `turtwig` | a wild battle in BW2's engine, as the debug entry starts it: Tackle, run away, back on the overworld (Gen 5 builds) | ~1 min |
+| `gen5_loss.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig loses (a level 100 Charizard): the blackout, back home (Gen 5 builds) | ~1 min |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
 engine, and the test passes once that asks for a command (BW2's battle raises the same `command` event as Platinum's).
