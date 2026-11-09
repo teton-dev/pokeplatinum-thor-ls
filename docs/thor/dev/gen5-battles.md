@@ -445,3 +445,10 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
   libntr's `SIM_SetWidescreenObjWrap` (`subprojects/packagefiles/libntr_wide_obj.patch`) and its BG2 picture through
   the wide BG layers libntr already had; only Flash's darkness stays 4:3 (`tests/scripts/widescreen_weather.txt`).
 
+## Particles (2026-11-09)
+
+The Poké Ball's throw and opening and the moves' particles weren't drawn. They were lost in libntr's renderer: it keeps
+translucent polygons (alpha under 31, A3I5 and A5I3 textures: every particle) for the end of the frame and drew them
+with the culling and depth test that the frame's last polygon attributes left in GL, so particle quads drawn without
+culling were culled. Fixed in libntr (`subprojects/packagefiles/libntr_g3_translucent_state.patch`, in the wrap's
+`diff_files`): each deferred polygon gets its own culling and depth test.

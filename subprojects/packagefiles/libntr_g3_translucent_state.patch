@@ -1,0 +1,58 @@
+diff --git a/libraries/sim/src/g3_draw.cpp b/libraries/sim/src/g3_draw.cpp
+index 94342cc..258539e 100644
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -472,6 +472,30 @@ static void G3SIM_FlushArrayInner()
+ 	#endif
+ }
+ 
++// A polygon's culling and depth test in GL, as G3SIM_PolygonAttr sets them when the polygon
++// attributes come
++static void G3SIM_ApplyCullAndDepth(const G3SIM_PolygonAttr_t *attr)
++{
++	switch(attr->cullMode) {
++		case GX_CULL_ALL:
++			glEnable(GL_CULL_FACE);
++			glCullFace(GL_FRONT_AND_BACK);
++			break;
++		case GX_CULL_FRONT:
++			glEnable(GL_CULL_FACE);
++			glCullFace(GL_BACK);
++			break;
++		case GX_CULL_BACK:
++			glEnable(GL_CULL_FACE);
++			glCullFace(GL_FRONT);
++			break;
++		case GX_CULL_NONE:
++			glDisable(GL_CULL_FACE);
++			break;
++	}
++	glDepthFunc(attr->depthTest ? GL_LEQUAL : GL_LESS);
++}
++
+ void G3SIM_DrawItems()
+ {
+ 	//TODO sort the items by Z coordinate
+@@ -480,6 +504,10 @@ void G3SIM_DrawItems()
+ 	//Draws all the translucent objects that were deferred to the end of the frame.
+ 	for(int i=0; i<s_G3DrawItemListCount; i++) {
+ 		g3_draw_item_t * item = &s_G3DrawItemList[i];
++		// Each with its own culling and depth test: GL has those of the last polygon attributes
++		// the frame set, which culled polygons drawn without culling (Black 2 and White 2's
++		// battle particles)
++		G3SIM_ApplyCullAndDepth(&item->polygonAttr);
+ 		if(item->textureId != 0){
+ 			glActiveTexture(GL_TEXTURE0);
+ 			glBindTexture(GL_TEXTURE_2D, item->textureId);
+@@ -518,6 +546,11 @@ void G3SIM_DrawItems()
+ 
+ 		free(item->verts);
+ 	}
++	if (s_G3DrawItemListCount != 0) {
++		// Back to the current polygon attributes' (G3SIM_PolygonAttr sets the depth test only
++		// when it changes)
++		G3SIM_ApplyCullAndDepth(&s_curPolygonAttr);
++	}
+ 	s_G3DrawItemListCount = 0;
+ 
+ 	// Texture packs reloaded or switched: textures are made again from here on (nothing
