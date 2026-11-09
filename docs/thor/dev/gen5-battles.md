@@ -187,10 +187,19 @@ game is back on the overworld afterwards. `tests/scripts/gen5_battle.txt` plays 
   script didn't ask for, and, when the harness stops a run at its time limit, three samples of where the game thread
   is. `desktop.sh test` turns them into functions and lines.
 - **Not done yet:**
-  - The arena's distant background: libntr's renderer has no polygon clipping (its clipper's segment code is
-    commented out) and drops polygons that come out far off screen, so BW2's large sky and ground meshes, which reach
-    behind the camera, leave black patches when the camera is close. Platinum's scenes don't have such polygons. The
-    fix is in libntr's renderer (clipping, or letting OpenGL clip).
+  - ~~The arena's distant background~~ (fixed): libntr's renderer had no polygon clipping (its clipper's segment code
+    was commented out) and dropped polygons that came out far off screen, so BW2's large sky and ground meshes, which
+    reach behind the camera, left black patches when the camera was close. Platinum's scenes don't have such
+    polygons. `subprojects/packagefiles/libntr_g3_clip.patch` clips each polygon in clip space before the divide by
+    W, as the DS's geometry engine does (and melonDS): against -w <= x, y, z <= w, adding the points where its edges
+    cross a plane with the texture coordinates and colours interpolated there, then draws the result as a fan of
+    triangles. The ±50 off-screen hack and the truncation of W to 24 bits before the divide are gone; the box test
+    uses the same clipper. `gen5_battle.txt` now shows the whole sky and ground; in Platinum's tests the only
+    visible change is the starter briefcase's lid, which reaches past the top of the screen and is now drawn in a
+    consistent perspective (its texture's lines no longer bend), and stray edge pixels on the overworld. A checkout
+    that already has `subprojects/libntr` needs it fetched again for the patch (delete it, or
+    `meson subprojects update --reset libntr`). Not yet: the far plane's "draw or drop" bit of the polygon attributes (the DS drops a
+    polygon that crosses the far plane unless bit 12 is set; libntr clips it).
   - Sound (above). A block of 0 bytes is left in one of BW2's heaps at the end (listed, harmless).
   - The Android build, as for milestones 1 and 2.
 

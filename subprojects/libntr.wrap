@@ -7,7 +7,9 @@ depth = 1
 directory = libntr
 # teton-dev fork, Gen 5 battles: G3_MultMtx33/44, G3_MultTransMtx33 and G3_Shininess through the simulator (BW2's
 # models call them; Platinum doesn't, and the register writes overran into GXSTAT). For libntr itself, later
-diff_files = libntr_g3_mult.patch
+# libntr_g3_clip.patch: polygons clipped in clip space before the divide by W, as on the DS (BW2's sky and ground
+# meshes reach behind the camera; they were dropped)
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch
 
 [provide]
 dependency_names = NitroSDK
