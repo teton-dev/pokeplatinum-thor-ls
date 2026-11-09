@@ -135,8 +135,8 @@ Done on the desktop build; the Android build is checked by compiling for arm64, 
 - **Tests:** `tests/scripts/gen5_rom.txt` imports `~/thor-dev/PKMNB2.nds` (`GEN5_ROM=...` for another) with the
   test command `gen5-import`, as the settings do, and passes on the self-check. A Platinum ROM is refused (game code
   `CPUE`). The settings import was also tried on the desktop, with the ImGui file picker.
-- **Not checked yet:** the Android build (no NDK on the Mac; `std::filesystem` and `std::thread` need nothing the
-  NDK lacks) and the import on the Thor, where 270 MB more goes into the app's folder.
+- **Checked on the Thor** (milestone 3's "On the Thor"): the Android build and the import, where 270 MB more goes
+  into the app's folder.
 
 ## Milestone 3: the first battle (2026-11-08)
 
@@ -198,10 +198,22 @@ game is back on the overworld afterwards. `tests/scripts/gen5_battle.txt` plays 
     visible change is the starter briefcase's lid, which reaches past the top of the screen and is now drawn in a
     consistent perspective (its texture's lines no longer bend), and stray edge pixels on the overworld. A checkout
     that already has `subprojects/libntr` needs it fetched again for the patch (delete it, or
-    `meson subprojects update --reset libntr`). Not yet: the far plane's "draw or drop" bit of the polygon attributes (the DS drops a
-    polygon that crosses the far plane unless bit 12 is set; libntr clips it).
+    `meson subprojects update --reset libntr`). Not yet: the far plane's "draw or drop" bit of the polygon attributes
+    (the DS drops a polygon that crosses the far plane unless bit 12 is set; libntr clips it).
   - Sound (above). A block of 0 bytes is left in one of BW2's heaps at the end (listed, harmless).
-  - The Android build, as for milestones 1 and 2.
+  - ~~The Android build~~ (done, below).
+  - The player's name in BW2's messages: the stand-in `PlayerInfo` has none ("??????????? is out of usable
+    Pokémon"). Milestone 4.
+- **On the Thor (2026-11-08):** the first Android build with the Gen 5 code (NDK r27c, `-Dpokebw2`; one fix: the
+  library is compiled with `SDL_MAIN_HANDLED`, since Android's SDL_main.h renames `main`, which `system/main.h`
+  declares). On the device: a new game to the starter, Barry's battle in Platinum's engine, the ROM import in the
+  settings, and a wild battle in BW2's engine all work. Losing it crashed:
+  - `CalcLossMoney` reads the money from the trainer card, which the port's `getTrainerCardDataBlkAddress` returned
+    as NULL. It is the trainer info block of the port's save now, as in BW2 (0 money until milestone 4).
+  - Then the screen stayed black: the debug battle starts a scripted encounter (`Encounter_NewVsSpeciesAtLevel`),
+    which leaves the map closed after a loss for its script to black out, and the debug battle has no script. It
+    blacks out itself now (`src/port/gui_createmon_utils.c`; Platinum's debug battles had the same problem).
+  - `tests/scripts/gen5_loss.txt` loses to a level 100 Charizard and checks the player is back home.
 
 ## Risks
 

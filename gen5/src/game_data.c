@@ -121,9 +121,11 @@ PlayerInfo *GetGameDataPlayerInfo(GameData *gameData) {
     return sGameData.info;
 }
 
+// The trainer info block of the port's save, as in BW2. A lost battle reads the money from it (CalcLossMoney): 0
+// until milestone 4 brings Platinum's over
 TrainerCardSave *getTrainerCardDataBlkAddress(GameData *gameData) {
     (void)gameData;
-    return NULL;
+    return getTrainerGameInfoAddress(SaveControl_GetInstance());
 }
 
 // Platinum has no C-Gear
