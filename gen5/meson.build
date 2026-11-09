@@ -253,6 +253,7 @@ gen5_patched = [
 # The port's own code in place of pokebw2's: where BW2's battle meets what the port has instead of BW2's field,
 # save, network and DSi systems
 gen5_port_sources = files(
+    'src/bridge.c',      # Pokémon between the port's Gen5Mon and BW2's
     'src/field.c',       # Beacons, Festival Missions, network devices... (none)
     'src/pointers.c',    # Pointers through 32-bit values as handles (64 bits)
     'src/g2d.c',         # NitroSystem 2D files libntrsystem doesn't convert for 64 bits

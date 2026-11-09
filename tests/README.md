@@ -18,6 +18,9 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `gen5_rom.txt` | nothing | imports the Black 2 or White 2 ROM as the settings do, and BW2's code reads it (Gen 5 builds) | ~10 s |
 | `turtwig.txt` | `before-starter` | Turtwig and Barry's battle, then home: keep it as the fixture `turtwig` | ~1 min |
 | `gen5_battle.txt` | `turtwig` | a wild battle in BW2's engine, as the debug entry starts it: Tackle, run away, back on the overworld (Gen 5 builds) | ~1 min |
+| `gen5_catch.txt` | `turtwig` | with the setting on, a wild Bidoof caught with a Master Ball and named B: in the party, ball used (Gen 5 builds) | ~1 min |
+| `gen5_win.txt` | `turtwig` | a level 14 Bidoof beats a Chansey in BW2's engine, reaches level 15 and evolves into Bibarel (Gen 5 builds) | ~2 min |
+| `gen5_lose.txt` | `turtwig` | Turtwig loses to a level 40 Bidoof in BW2's engine: blackout, home, healed, money taken (Gen 5 builds) | ~1 min |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
 engine, and the test passes once that asks for a command (BW2's battle raises the same `command` event as Platinum's).
@@ -58,7 +61,13 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `mash KEYS [touch X Y] until EVENT [timeout N]` | presses (and touches) 2 frames out of 8 until the event |
 | `mash KEYS [touch X Y] for N` | the same for N frames |
 | `save` | saves the game, as the menu does, once the player is free |
+| `wild SPECIES LEVEL` | a wild battle against SPECIES (its number) at LEVEL, started as one in grass is (a loss blacks out), once the player is free |
+| `gen5-battles on`/`off` | the setting that runs wild battles in BW2's engine, for this run |
+| `lead SPECIES LEVEL` | a new Pokémon first in the party |
+| `give ITEM COUNT`, `item ITEM` | puts items (by number) in the bag; logs how many there are |
+| `party` | logs the party (name, species, level, HP, experience, status, item, ball), the money and the PC's count |
 | `gen5-import` | imports the Black 2 or White 2 ROM in `POKEPLATINUM_GEN5_ROM` (the harness passes `GEN5_ROM`, or `~/thor-dev/PKMNB2.nds`) and waits; fails if it is refused or the self-check fails |
+| `gen5-battle SPECIES LEVEL` | the debug entry's wild battle in BW2's engine (whatever the setting), once the player is free; no blackout after a loss |
 | `shot NAME` | a screenshot, `NAME.png` |
 | `log TEXT` | prints the text |
 | `exit [code]` | ends the run: 0 passes |

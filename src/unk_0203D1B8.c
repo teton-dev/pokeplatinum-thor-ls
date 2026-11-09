@@ -254,7 +254,9 @@ void FieldSystem_StartBattleProcess(FieldSystem *fieldSystem, FieldBattleDTO *dt
     TestScript_OnEvent(TEST_EVENT_BATTLE);
 #endif
 #ifdef GEN5_BATTLES
-    if (Gen5Battle_TakeRequest()) {
+    if (Gen5Battle_TakeRequest()
+        || Gen5Battle_Handles(dto->battleType, dto->battleStatusMask,
+            Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_1]))) {
         FieldSystem_StartChildProcess(fieldSystem, &gGen5BattleApplicationTemplate, dto);
         return;
     }

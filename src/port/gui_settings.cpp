@@ -141,7 +141,9 @@ void DrawGen5Rom()
     if (game != nullptr && Button("Remove it", "Deletes the extracted files.", false, !busy)) {
         Gen5Rom_Remove();
     }
-    Note("Black 2 and White 2's battles, run on this game's battles, are being built: this only imports the ROM.");
+    ConfigToggle("Battles in Black 2 and White 2's engine", "Wild battles against one Pokemon play in the Gen 5 "
+        "engine, with your party, bag and money; the rest stay Platinum's for now. No sound yet.",
+        &SIM_Config_prj_GetConfig()->gen5Battles, game != nullptr);
 }
 #endif
 

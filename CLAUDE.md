@@ -35,7 +35,7 @@ The plan is `docs/thor/dev/gen5-battles.md`: read it before working on this, and
 done, record decisions and findings).
 
 In short: compile the battle engine and battle view of [pokebw2](https://github.com/fuddlesworth/pokebw2) (the
-Black 2/White 2 decompilation, GPLv3) into the app, and with *Settings > Gameplay > Gen 5 battles* on, run each
+Black 2/White 2 decompilation, GPLv3) into the app, and with *Settings > Games > Gen 5 battles* on, run each
 battle Platinum sets up (`FieldSystem_StartBattleProcess`, `src/unk_0203D1B8.c`) in BW2's engine, converting the
 `FieldBattleDTO` to BW2's `BtlSetup` and the results back.
 
@@ -46,14 +46,14 @@ Decisions made with the owner:
 - **Fork-only** because of the GPL; ask upstream's developer before proposing any of it there.
 - Out of scope: following Pokémon, visible wild Pokémon, BW2 Phenomena, name capitalisation.
 
-Status: **milestones 1, 2 and 3 are done on the desktop build** (the plan's "Milestone 1" to "Milestone 3"): `gen5/`
+Status: **milestones 1 to 4 are done on the desktop build** (the plan's "Milestone 1" to "Milestone 4"): `gen5/`
 builds 207 of pokebw2's files, renamed `bw2_...`, into one object the game links whole (`-Dpokebw2=../pokebw2`);
 *Settings > Games > Gen 5 battles* imports a Black 2 / White 2 ROM into the data folder's `gen5/`, and BW2's code reads
-it; *Settings > Advanced > Gen 5 battles* runs a wild battle in BW2's engine (moves, running away, back to the
-overworld), still silent and with black patches in the arena's distant background (libntr's renderer doesn't clip
-polygons). Next is milestone 4, the bridge. An NDK build of the APK with the option is still to do. pokebw2 is never
-changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this
-repository, not inside it.
+it; with the switch next to the import on, wild single battles run in BW2's engine with the player's party, bag and
+money, and the results (experience, levels, catches, evolutions, blackouts) come back. Still silent, and with black
+patches in the arena's distant background until libntr's renderer clips polygons. Next is milestone 5, trainers.
+An NDK build of the APK with the option is still to do. pokebw2 is never changed: the port's shims, patches and
+boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this repository, not inside it.
 
 ## Testing locally on the Mac
 

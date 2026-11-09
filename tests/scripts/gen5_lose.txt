@@ -1,0 +1,16 @@
+# Gen 5 battles, milestone 4: with the setting on, Turtwig loses to a level 40 Bidoof (as one in grass) in Black 2
+# and White 2's engine; the player blacks out and is back home, healed and short of the money BW2 takes. Its log shows
+# the party and money before and after.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_lose.txt --from turtwig
+
+gen5-import
+mash A until free
+gen5-battles on
+party
+wild 399 40
+until command
+mash A until free timeout 12000
+party
+shot gen5-blacked-out
+exit 0
