@@ -1,15 +1,20 @@
 #ifndef POKEPLATINUM_PORT_WIDESCREEN_H
 #define POKEPLATINUM_PORT_WIDESCREEN_H
 
-// Widescreen overworld (experimental: Settings > Display > Widescreen, libntr's setting).
-// While the field map is shown in clear weather, libntr draws the 3D scene as wide as the
-// top display and the field camera's projection is widened to match, so more of the map
-// shows on the sides. The 2D layers (text boxes, menus, the location banner) stay 4:3 in
-// the middle. Weather and Flash's darkness are 2D overlays that would only cover the
-// middle, so those scenes stay 4:3, as do menus and other screens off the field map.
+// Widescreen (experimental: Settings > Display > Widescreen, libntr's setting).
+// While the field map is shown, libntr draws the 3D scene as wide as the top display and the
+// field camera's projection is widened to match, so more of the map shows on the sides. The
+// 2D layers (text boxes, menus, the location banner) stay 4:3 in the middle, except the
+// weather's: its sprites (rain, snow, sand, ash) repeat across the sides, the 4:3 picture
+// wrapping around (not while the start menu's sprite icons are up), and its BG2 picture (fog,
+// sand, clouds, the forests' light) is drawn across the whole width from its tilemap. Flash's
+// darkness (a circle of windows drawn line by line) stays 4:3, as do menus and other screens
+// off the field map.
 //
-// Battles stay 4:3 (black bars at the sides): their backdrop is a 256-pixel picture and the
-// bases and HP boxes are placed for 256 pixels, so there's nothing real to show at the sides.
+// Battles in Black 2 and White 2's engine (Gen 5 battles) go wide too: their arena is 3D and
+// their camera is widened the same way (Gen5_SetWidescreen). Platinum's own battles stay 4:3
+// (black bars at the sides): their backdrop is a 256-pixel picture and the bases and HP boxes
+// are placed for 256 pixels, so there's nothing real to show at the sides.
 
 #include <nitro/types.h>
 

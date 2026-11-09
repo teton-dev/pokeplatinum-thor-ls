@@ -136,6 +136,10 @@ test)
     # The 3D at the DS's own size: the default (10 times as large) is far too slow in software, at a few frames a
     # second on the overworld
     printf '[General]\nInternalResolutionScale=1\n' > "$RUN/sim_config.ini"
+    # TEST_CONFIG='Key=value ...': more of libntr's [General] settings for the run (Widescreen=true...)
+    for setting in ${TEST_CONFIG:-}; do
+        echo "$setting" >> "$RUN/sim_config.ini"
+    done
     if [ -n "$FROM" ]; then
         [ -f "$FIXTURES/$FROM/save.bin" ] || { echo "No fixture $FIXTURES/$FROM"; exit 1; }
         cp "$FIXTURES/$FROM/save.bin" "$RUN/save.bin"

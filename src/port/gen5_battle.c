@@ -2,6 +2,7 @@
 #include "port/gen5_battle.h"
 
 #include <nitro.h>
+#include <simulator/sim.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -46,6 +47,13 @@ int GUI_CreateMon_StartBattle(int speciesNo, int level, int trainerID, int doubl
 
 static BOOL sRequested;
 static BOOL sFailed;
+// Gen5_BattleBegin ran and Gen5_BattleEnd hasn't yet
+static BOOL sShown;
+
+BOOL Gen5Battle_IsShown(void)
+{
+    return sShown;
+}
 
 void Gen5Battle_RequestNext(void)
 {
@@ -355,6 +363,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         printf("Gen 5: the battle couldn't start\n");
     } else {
         SetVBlankCallback(VBlank, NULL);
+        sShown = TRUE;
     }
     return TRUE;
 }
@@ -363,6 +372,8 @@ static BOOL Init(ApplicationManager *appMan, int *state)
 static void Finish(FieldBattleDTO *dto)
 {
     SetVBlankCallback(NULL, NULL);
+    sShown = FALSE;
+    Gen5_SetWidescreen(1.0f);
     const enum Gen5BattleResult result = sFailed ? GEN5_BATTLE_FAILED : Gen5_BattleEnd(&sBattle);
 
     if (!sFailed) {
@@ -482,6 +493,8 @@ static BOOL Main(ApplicationManager *appMan, int *state)
             // The keys and touch the game read this frame (the test scripts' among them), unchanged by the button
             // mode
             Gen5_SetInput(gSystem.heldKeysRaw, gSystem.touchHeld, gSystem.touchX, gSystem.touchY);
+            // Widescreen: BW2's camera as wide as libntr draws the 3D this frame (port/widescreen.c asks for it)
+            Gen5_SetWidescreen(SIM_IsWidescreenActive() ? SIM_WidescreenRatio() : 1.0f);
             const BOOL running = Gen5_BattleFrame();
             if (Gen5_TakeEvents() & GEN5_EVENT_COMMAND) {
                 TestScript_OnEvent(TEST_EVENT_BATTLE_COMMAND);

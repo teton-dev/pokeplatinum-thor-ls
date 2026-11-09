@@ -10,8 +10,9 @@ directory = libntr
 # libntr_g3_clip.patch: polygons clipped in clip space before the divide by W, as on the DS (BW2's sky and ground
 # meshes reach behind the camera; they were dropped). libntr_g3_clear.patch: the 3D buffer is cleared for a new frame
 # only by a command that draws, and in the 3D buffer (Platinum's PC boxes showed a black screen: their vblank handler's
-# matrix commands cleared the finished frame)
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch
+# matrix commands cleared the finished frame). libntr_wide_obj.patch: widescreen OBJ layers repeated across the sides
+# (SIM_SetWidescreenObjWrap: the overworld's weather sprites fill a wide screen)
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch
 
 [provide]
 dependency_names = NitroSDK

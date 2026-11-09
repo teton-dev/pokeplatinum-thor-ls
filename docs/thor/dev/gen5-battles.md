@@ -74,12 +74,14 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
    single trainer battle runs in BW2's engine with Platinum's AI level, the trainer's name, class and defeat line,
    and the prize money (see "Milestone 5"); still to come: evolutions, new moves and items after it, and the scripted
    trainers' own texts.
-6. **Widescreen:** with *Settings > Display > Widescreen* on, BW2's battle fills the Thor's 16:9 top panel (it is
-   4:3 now, seen on the Thor). Unlike Platinum's battles, whose backdrop is a 256-pixel picture (they stay 4:3), BW2's
-   arena is 3D: its camera can be widened as the field camera is (`src/port/widescreen.c`), and the sky and ground
+6. **Widescreen:** with *Settings > Display > Widescreen* on, BW2's battle fills the Thor's 16:9 top panel (it was
+   4:3, seen on the Thor). Unlike Platinum's battles, whose backdrop is a 256-pixel picture (they stay 4:3), BW2's
+   arena is 3D: its camera is widened as the field camera is (`src/port/widescreen.c`), and the sky and ground
    meshes reach past the sides (whole since libntr clips polygons). The Pokémon and trainer sprites, gauges, message
-   window and effects stay where they are, centered in the 4:3 middle.
-7. **The rest:** doubles, tag battles (Cheryl, Riley...), multi battles, the catching tutorial, the Safari Zone,
+   window and effects stay where they are, centered in the 4:3 middle. *Done on the desktop* (see "Milestone 6"); the
+   overworld's weather went wide with it.
+7. **The rest:** doubles, tag battles (Cheryl, Riley, Buck, Barry...: the partner's back sprite is Platinum's
+   sprite of that trainer for now; the owner will supply Gen 5 style back sprites for them later), multi battles, the catching tutorial, the Safari Zone,
    Pal Park, legendaries and roamers, the Battle Frontier; items from the bag; weather and terrain arenas.
 8. **Renegade Platinum:** the game's own Pokémon, move and item data in the Gen 5 engine, and Fairy.
 9. **HeartGold and SoulSilver:** the same app for the owner's HGSS ROM (from the HGSS decompilation, as this port
@@ -377,3 +379,22 @@ owner's permission (`licenses/player-back-sprites.txt`, `THIRD_PARTY_LICENSES.md
   3D engine, sound and interrupts. The battle must leave them as Platinum expects.
 - **The DSi SDK:** BW2 is a DSi-enhanced game; anything it uses from the TWL SDK that libntr lacks needs adding.
 - **Data mapping:** Platinum's trainer classes, terrains and battle types onto BW2's.
+
+## Milestone 6: widescreen (2026-11-09)
+
+- **The camera:** `Gen5_SetWidescreen(ratio)` (`api/gen5.h`), called by `src/port/gen5_battle.c` before each frame with
+  libntr's `SIM_WidescreenRatio()` while its wide scene is on, makes `Gen5_Widen` scale the horizontal extent of BW2's
+  projections: the camera's aspect ratio in `GFL_G3DSysMtxSetProjection` (`patches/src/gfl/g3d_system.c`; BW2's battle
+  camera is 1.35, `btlv_camera.c`) and the left and right of the orthographic projection MCSS draws some sprites with
+  (`patches/src/system/mcss.c`). When the ratio changes, `Gen5_G3DReproject` sets the camera's projection again (BW2
+  sets it only when the camera moves). The Pokémon sprites are drawn in 3D with the camera's projection, so they stay
+  unstretched and in place.
+- **The scene:** `Widescreen_Update` asks libntr for a wide scene while `Gen5Battle_IsShown()` (from
+  `Gen5_BattleBegin` to `Gen5_BattleEnd`; the naming screen and evolutions after it are Platinum's, 4:3).
+- **Checked on the desktop** (`tests/scripts/gen5_widescreen.txt`, with `TEST_CONFIG` turning widescreen on and the
+  top window 16:9): a wild and a trainer battle fill the window, the arena's sky and ground reaching the edges; the
+  sprites, gauges and text box are as in 4:3; Tackle's effect is in place.
+- **The overworld's weather** went wide at the same time (`src/port/widescreen.c`): the weather's sprites through
+  libntr's `SIM_SetWidescreenObjWrap` (`subprojects/packagefiles/libntr_wide_obj.patch`) and its BG2 picture through
+  the wide BG layers libntr already had; only Flash's darkness stays 4:3 (`tests/scripts/widescreen_weather.txt`).
+

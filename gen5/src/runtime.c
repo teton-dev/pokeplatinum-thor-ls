@@ -368,6 +368,25 @@ unsigned Gen5_TakeEvents(void)
     return events;
 }
 
+// Widescreen: how many times as wide as the DS's the 3D is drawn
+static float sWideRatio = 1.0f;
+
+fx32 Gen5_Widen(fx32 width)
+{
+    return sWideRatio == 1.0f ? width : (fx32)((float)width * sWideRatio);
+}
+
+void Gen5_SetWidescreen(float ratio)
+{
+    if (ratio == sWideRatio) {
+        return;
+    }
+    sWideRatio = ratio;
+    // The camera's projection again, widened or not (BW2 sets it only when the camera moves). The MCSS sprites'
+    // own projection is set each time they are drawn
+    Gen5_G3DReproject();
+}
+
 int Gen5_BattleFrame(void)
 {
     if (!sRunning) {

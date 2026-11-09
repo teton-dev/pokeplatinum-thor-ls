@@ -796,6 +796,20 @@ static UnkStruct_ov5_021D69B8 Unk_ov5_02201D78[31] = {
     { 0xffff, 0xffff, sizeof(UnkStruct_ov5_021D84D4), NULL, NULL, 0x0, 0x0, NULL, ov5_021DB48C }
 };
 
+#ifdef SDK_PORT
+void ov5_PortWeatherLayers(u32 weather, BOOL *sprites, BOOL *bg2)
+{
+    // Each weather's sprite and BG resources, 0xffff for none (Unk_ov5_02201D78)
+    if (weather >= NELEMS(Unk_ov5_02201D78)) {
+        *sprites = FALSE;
+        *bg2 = FALSE;
+        return;
+    }
+    *sprites = Unk_ov5_02201D78[weather].unk_00 != 0xffff;
+    *bg2 = Unk_ov5_02201D78[weather].unk_02 != 0xffff;
+}
+#endif
+
 static void ov5_021D61D0(UnkStruct_ov5_021D61D0 *param0)
 {
     NNSG2dViewRect v0;
