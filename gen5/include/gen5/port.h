@@ -97,4 +97,10 @@ void *Gen5_U32ToPtr(u32 handle);
 struct NNSG2dMultiCellDataBank;
 BOOL Gen5_UnpackMultiCellBank(void **file, struct NNSG2dMultiCellDataBank **bank, u32 heapId);
 
+// Widescreen (gen5/src/runtime.c, from Gen5_SetWidescreen): a horizontal extent of a projection (an aspect ratio, a
+// left or right edge) as wide as the screen is, for g3d_system.c's and mcss.c's patches
+fx32 Gen5_Widen(fx32 width);
+// The 3D system's projection set again, as Gen5_Widen has it now, if the 3D system is up (g3d_system.c's patch)
+void Gen5_G3DReproject(void);
+
 #endif // GEN5_PORT_H

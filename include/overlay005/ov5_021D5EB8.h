@@ -15,4 +15,10 @@ void ov5_021D63A4(UnkStruct_ov5_021D6594 **param0);
 BOOL ov5_021D6418(UnkStruct_ov5_021D6594 *param0, int param1, int param2);
 int ov5_021D64D0(UnkStruct_ov5_021D6594 *param0, int param1);
 
+#ifdef SDK_PORT
+// Widescreen (port/widescreen.c): whether a weather draws sprites (rain, snow, sand, ash...)
+// and a BG2 picture (fog, sand, clouds, the forests' light). FALSE for both when it's unknown
+void ov5_PortWeatherLayers(u32 weather, BOOL *sprites, BOOL *bg2);
+#endif
+
 #endif // POKEPLATINUM_OV5_021D5EB8_H

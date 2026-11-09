@@ -1,0 +1,42 @@
+# Widescreen on the overworld in weather: rain (Route 215), a blizzard (Route 217), a sandstorm (Route 228), fog
+# (Route 210 north), ash (outside Stark Mountain) and Snowpoint City (its weather for the day). With Settings > Display
+# > Widescreen on, the bottom screen in its own window and the top window 16:9, each fills the window: the weather's
+# sprites repeat across the sides and its picture (fog, sand) spans the width. The check is the shots. From the turtwig
+# fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_weather.txt --from turtwig
+
+mash A until free
+wait 30
+shot twinleaf
+jump 382 669 598
+until free timeout 3000
+wait 90
+shot rain
+jump 385 293 312
+until free timeout 3000
+wait 90
+shot blizzard
+press START
+wait 30
+shot blizzard-menu
+press B
+until free timeout 3000
+jump 406 776 331
+until free timeout 3000
+wait 90
+shot sandstorm
+jump 363 564 517
+until free timeout 3000
+wait 90
+shot fog
+jump 262 750 232
+until free timeout 3000
+wait 90
+shot ash
+jump 165 353 209
+until free timeout 3000
+wait 90
+shot snowpoint
+exit 0

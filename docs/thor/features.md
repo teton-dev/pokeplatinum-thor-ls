@@ -129,12 +129,19 @@ on the second display (not swapped):
 * **Overworld**: the field camera sees more of the map on the left and right,
   unstretched. Text boxes, menus and the location banner stay 4:3 in the middle. The
   next map blocks load in one frame, so running or cycling sideways doesn't show
-  unloaded ground at the edges. Rain, snow, sand, fog and dark caves stay 4:3: their
-  weather and darkness are 2D overlays that would only cover the middle. The Poke Radar
-  keeps its patches while they are anywhere on the wider screen.
-* **Battles** stay 4:3 with black bars at the sides: the battle backdrop is a
-  256-pixel picture and the bases and HP boxes are placed for 256 pixels, so there's
-  nothing real to show beside them.
+  unloaded ground at the edges. The Poke Radar keeps its patches while they are anywhere
+  on the wider screen.
+* **Weather** fills the wide screen too: rain, snow, hail, sand and ash fall across the
+  sides (the 4:3 screen's particles repeat there), and fog, sandstorms, clouds and the
+  forests' light span the whole width. While the start menu is open, the falling
+  particles show only in the middle (its icons would repeat at the left otherwise).
+  Dark caves before Flash stay 4:3: the darkness is a circle drawn for the 4:3 screen.
+* **Gen 5 battles** (*Settings > Gameplay > Gen 5 battles*) fill the wide screen: the
+  arena is 3D, so its camera sees more of it on the left and right, unstretched. The
+  Pokemon, trainers, HP boxes and text stay where they are, in the 4:3 middle.
+* **Platinum's own battles** stay 4:3 with black bars at the sides: the battle backdrop
+  is a 256-pixel picture and the bases and HP boxes are placed for 256 pixels, so
+  there's nothing real to show beside them.
 
 Menus and other screens stay 4:3.
 
