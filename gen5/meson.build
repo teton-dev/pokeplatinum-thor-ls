@@ -262,7 +262,7 @@ gen5_port_sources = files(
     'src/net.c',         # src/system/net_err.c: no network errors
     'src/runtime.c',     # BW2's systems run in the port, and a battle on them (api/gen5.h)
     'src/sdk.c',         # What pokebw2's own SDK copies have and libntr lacks
-    'src/sound.c',       # src/system/snd_sys.c: silent for now (Platinum holds the sound library)
+    'src/sound.c',       # src/system/snd_sys.c: BW2's sound effects and cries from its own archive, Platinum's music
     'src/trainers.c',    # Platinum's trainer classes as BW2's (milestone 5)
 )
 
