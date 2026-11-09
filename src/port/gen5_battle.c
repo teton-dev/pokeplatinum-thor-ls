@@ -11,12 +11,17 @@
 #include "constants/species.h"
 #include "constants/string.h"
 
+#include "battle/battle_system.h"
+#include "constants/heap.h"
+#include "evolution.h"
 #include "field_battle_data_transfer.h"
+#include "heap.h"
 #include "gen5.h"
 #include "party.h"
 #include "pokemon.h"
 #include "charcode_convert.h"
 #include "port/gen5_rom.h"
+#include "port/sim_config_prj.h"
 #include "port/test_script.h"
 #include "system.h"
 #include "trainer_info.h"
@@ -32,11 +37,17 @@ void Gen5Battle_RequestNext(void)
     sRequested = TRUE;
 }
 
-BOOL Gen5Battle_TakeRequest(void)
+BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
 {
-    const BOOL requested = sRequested;
-    sRequested = FALSE;
-    return requested;
+    if (sRequested) {
+        sRequested = FALSE;
+        return TRUE;
+    }
+    if (!SIM_Config_prj_GetConfig()->gen5Battles || Gen5Rom_GameName() == NULL) {
+        return FALSE;
+    }
+    // A single wild battle, with nothing special about it but a honey tree
+    return dto->battleType == BATTLE_TYPE_WILD_MON && (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
 }
 
 BOOL Gen5Battle_StartDebug(int species, int level)
@@ -221,26 +232,9 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     return TRUE;
 }
 
-static BOOL Main(ApplicationManager *appMan, int *state)
+// What the battle left, into the DTO, as Platinum's battle leaves it (BattleMain_CopyBattleSysToDTOAndFree)
+static void Finish(FieldBattleDTO *dto)
 {
-    (void)appMan;
-    (void)state;
-    if (sFailed) {
-        return TRUE;
-    }
-    // The keys and touch the game read this frame (the test scripts' among them), unchanged by the button mode
-    Gen5_SetInput(gSystem.heldKeysRaw, gSystem.touchHeld, gSystem.touchX, gSystem.touchY);
-    const BOOL done = !Gen5_BattleFrame();
-    if (Gen5_TakeEvents() & GEN5_EVENT_COMMAND) {
-        TestScript_OnEvent(TEST_EVENT_BATTLE_COMMAND);
-    }
-    return done;
-}
-
-static BOOL Exit(ApplicationManager *appMan, int *state)
-{
-    (void)state;
-    FieldBattleDTO *dto = ApplicationManager_Args(appMan);
     SetVBlankCallback(NULL, NULL);
     const enum Gen5BattleResult result = sFailed ? GEN5_BATTLE_FAILED : Gen5_BattleEnd(&sBattle);
 
@@ -279,6 +273,67 @@ static BOOL Exit(ApplicationManager *appMan, int *state)
         dto->resultMask = BATTLE_RESULT_PLAYER_FLED;
         break;
     }
+}
+
+enum {
+    STATE_BATTLE,
+    STATE_CHECK_EVOLUTION,
+    STATE_WAIT_FOR_EVOLUTION,
+};
+
+static BOOL Main(ApplicationManager *appMan, int *state)
+{
+    FieldBattleDTO *dto = ApplicationManager_Args(appMan);
+
+    switch (*state) {
+    case STATE_BATTLE:
+        if (!sFailed) {
+            // The keys and touch the game read this frame (the test scripts' among them), unchanged by the button
+            // mode
+            Gen5_SetInput(gSystem.heldKeysRaw, gSystem.touchHeld, gSystem.touchX, gSystem.touchY);
+            const BOOL running = Gen5_BattleFrame();
+            if (Gen5_TakeEvents() & GEN5_EVENT_COMMAND) {
+                TestScript_OnEvent(TEST_EVENT_BATTLE_COMMAND);
+            }
+            if (running) {
+                return FALSE;
+            }
+        }
+        Finish(dto);
+        *state = STATE_CHECK_EVOLUTION;
+        return FALSE;
+    // The Pokémon that gained a level and evolve now, as after Platinum's battles (battle_main.c)
+    case STATE_CHECK_EVOLUTION: {
+        int slot;
+        int evoType;
+        const int targetSpecies = Battle_FindEvolvingPartyMember(dto, &slot, &evoType);
+        if (targetSpecies == SPECIES_NONE) {
+            return TRUE;
+        }
+        Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_EVOLUTION, HEAP_SIZE_EVOLUTION);
+        Pokemon *mon = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_PLAYER_1], slot);
+        dto->postBattleData = Evolution_Begin(dto->parties[BATTLER_PLAYER_1], mon, targetSpecies, dto->options,
+            dto->visitedContestHall, dto->pokedex, dto->bag, dto->records, dto->poketch, evoType, 0x1 | 0x2,
+            HEAP_ID_EVOLUTION);
+        *state = STATE_WAIT_FOR_EVOLUTION;
+        return FALSE;
+    }
+    case STATE_WAIT_FOR_EVOLUTION:
+        if (Evolution_IsDone(dto->postBattleData)) {
+            Evolution_Free(dto->postBattleData);
+            dto->postBattleData = NULL;
+            Heap_Destroy(HEAP_ID_EVOLUTION);
+            *state = STATE_CHECK_EVOLUTION;
+        }
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static BOOL Exit(ApplicationManager *appMan, int *state)
+{
+    (void)appMan;
+    (void)state;
     return TRUE;
 }
 

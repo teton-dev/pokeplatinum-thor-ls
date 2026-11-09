@@ -14,6 +14,8 @@
 #include "port/debug_field.h"
 #include "port/frame_rate.h"
 #include "port/port_game.h"
+#include "gui_createmon_utils.h"
+#include "port/sim_config_prj.h"
 #ifdef GEN5_BATTLES
 #include "port/gen5_battle.h"
 #include "port/gen5_rom.h"
@@ -33,9 +35,12 @@ enum TestOp {
     OP_WALK,
     OP_UNTIL,
     OP_MASH,
+    OP_PACE,
     OP_SAVE,
     OP_GEN5_IMPORT,
     OP_GEN5_BATTLE,
+    OP_GEN5_SETTING,
+    OP_WILD,
     OP_SHOT,
     OP_LOG,
     OP_EXIT,
@@ -56,6 +61,7 @@ typedef struct TestCommand {
     int x, y;
     int condition;
     BOOL touch; // mash touches (x, y) rather than pressing keys
+    u16 keys2; // pace: the way back
     int map;
     int timeout;
     char text[96];
@@ -250,6 +256,25 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
             return TRUE;
         }
         return strcmp(words[next], "until") == 0 && ParseCondition(words + next + 1, count - next - 1, command);
+    } else if (strcmp(words[0], "pace") == 0 && count >= 5) {
+        // pace DIR DIR until CONDITION [timeout N]: walks one way and back (two tiles each) while the player is free,
+        // as in tall grass until a wild Pokémon appears
+        command->op = OP_PACE;
+        return ParseKeys(words[1], &command->keys) && ParseKeys(words[2], &command->keys2)
+            && strcmp(words[3], "until") == 0 && ParseCondition(words + 4, count - 4, command);
+    } else if (strcmp(words[0], "wild") == 0 && count >= 3) {
+        // A wild SPECIES at LEVEL, met as in tall grass (the field's own wild encounter), once the player is free
+        command->op = OP_WILD;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if (strcmp(words[0], "gen5-battles") == 0 && count >= 2) {
+        // gen5-battles on|off: Settings > Gameplay > Gen 5 battles
+        command->op = OP_GEN5_SETTING;
+        command->frames = strcmp(words[1], "on") == 0;
+        return strcmp(words[1], "on") == 0 || strcmp(words[1], "off") == 0;
     } else if (strcmp(words[0], "gen5-import") == 0) {
         // Imports the Black 2 / White 2 ROM in POKEPLATINUM_GEN5_ROM, as the settings do, and waits for it
         command->op = OP_GEN5_IMPORT;
@@ -491,6 +516,7 @@ static u16 Step(void)
         }
         case OP_UNTIL:
         case OP_MASH:
+        case OP_PACE:
             if (command->condition == COND_NONE && elapsed >= command->timeout) {
                 Next();
                 continue;
@@ -506,6 +532,10 @@ static u16 Step(void)
                 snprintf(why, sizeof(why), "no %s in %d frames", sConditionNames[command->condition], elapsed);
                 Fail(command, why);
                 return 0;
+            }
+            if (command->op == OP_PACE) {
+                // About two tiles each way (a step takes 8 frames)
+                return FrameRate_PlayerIsFreeOnOverworld() ? ((elapsed / 16) % 2 ? command->keys2 : command->keys) : 0;
             }
             // Mashing: pressed (or touched) for 2 frames out of 8. Waiting for the player to be free, only while
             // not: pressed on a free frame, A would talk to whatever is in front and start it all over again
@@ -586,6 +616,25 @@ static u16 Step(void)
             Fail(command, "built without the Gen 5 code (-Dpokebw2)");
             return 0;
 #endif
+        case OP_WILD:
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the encounter");
+                }
+                return 0;
+            }
+            if (!GUI_CreateMon_StartWildEncounter(command->x, command->y)) {
+                Fail(command, "the wild encounter couldn't start");
+                return 0;
+            }
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
+        case OP_GEN5_SETTING:
+            SIM_Config_prj_GetConfig()->gen5Battles = command->frames;
+            printf("[test] Gen 5 battles %s\n", command->frames ? "on" : "off");
+            Next();
+            continue;
         case OP_SHOT:
             // The harness takes the screenshot while the game runs on without input
             printf("[test] shot %s\n", command->text);

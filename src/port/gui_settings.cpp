@@ -551,6 +551,13 @@ void DrawGameplay()
     ConfigToggle("Following Pokemon", "As in HeartGold and SoulSilver: your first Pokemon that can battle walks "
         "behind you. It goes back in its ball on a bike, surfing and with a partner. Talk to it to hear its cry. "
         "Species without an overworld sprite in Platinum walk as their party icon.", &config->followerPokemon);
+#ifdef GEN5_BATTLES
+    Section("Gen 5 battles");
+    ConfigToggle("Gen 5 battles", "Wild battles in Black 2 and White 2's engine: their 3D arenas, moving camera, "
+        "animated Pokemon and Gen 5 rules, with your party and the results kept. Experimental: catching, the bag and "
+        "trainer battles aren't there yet (Pokemon you meet in tall grass, caves and water only). Needs the ROM in "
+        "Settings > Games > Gen 5 battles.", &config->gen5Battles, Gen5Rom_GameName() != nullptr);
+#endif
     Section("Field moves");
     ConfigToggle("Field moves without HMs", "With the HM in your bag (and its badge), Cut, Fly, Surf, Strength, "
         "Rock Smash, Waterfall, Rock Climb and Defog work without teaching the move: a Pokemon that could learn "

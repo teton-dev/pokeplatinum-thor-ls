@@ -19,6 +19,9 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `turtwig.txt` | `before-starter` | Turtwig and Barry's battle, then home: keep it as the fixture `turtwig` | ~1 min |
 | `gen5_battle.txt` | `turtwig` | a wild battle in BW2's engine, as the debug entry starts it: Tackle, run away, back on the overworld (Gen 5 builds) | ~1 min |
 | `gen5_win.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig wins (a level 1 Pichu); its experience in the log goes up (Gen 5 builds) | ~1 min |
+| `gen5_wild.txt` | `turtwig` | with *Gen 5 battles* on, a wild Bidoof met as in tall grass (the test command `wild`) runs in BW2's engine; run away (Gen 5 builds) | ~1 min |
+| `lake_grass.txt` | `turtwig` | to the tall grass at Lake Verity, through Cyrus's scene: keep it as the fixture `verity-grass` | ~2 min |
+| `gen5_grass.txt` | `verity-grass` | with *Gen 5 battles* on, back and forth in the tall grass until a wild Pokémon appears, in BW2's engine; run away (Gen 5 builds) | ~1 min |
 | `gen5_loss.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig loses (a level 100 Charizard): the blackout, back home (Gen 5 builds) | ~1 min |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
@@ -59,8 +62,11 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `until EVENT [timeout N]` | waits for an event |
 | `mash KEYS [touch X Y] until EVENT [timeout N]` | presses (and touches) 2 frames out of 8 until the event |
 | `mash KEYS [touch X Y] for N` | the same for N frames |
+| `pace DIR DIR until EVENT [timeout N]` | walks one way and back, about two tiles each, while the player is free: tall grass until `battle` |
 | `save` | saves the game, as the menu does, once the player is free |
 | `gen5-import` | imports the Black 2 or White 2 ROM in `POKEPLATINUM_GEN5_ROM` (the harness passes `GEN5_ROM`, or `~/thor-dev/PKMNB2.nds`) and waits; fails if it is refused or the self-check fails |
+| `gen5-battles on\|off` | *Settings > Gameplay > Gen 5 battles* |
+| `wild SPECIES LEVEL` | once the player is free, a wild SPECIES at LEVEL met as in tall grass (the field's own wild encounter, which the setting sends to the Gen 5 engine) |
 | `shot NAME` | a screenshot, `NAME.png` |
 | `log TEXT` | prints the text |
 | `exit [code]` | ends the run: 0 passes |

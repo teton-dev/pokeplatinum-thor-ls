@@ -11,6 +11,9 @@ int GUI_CreateMon_GenPokemon(int speciesNo, int level);
 // Starts a battle from the overworld: against a wild speciesNo at level, or against
 // trainerID (0: wild) when it is set, as a double battle if doubles is set
 int GUI_CreateMon_StartBattle(int speciesNo, int level, int trainerID, int doubles);
+// A wild speciesNo at level met as in tall grass: the field's own wild encounter (its blackout, Poke Radar and the
+// rest), which Settings > Gameplay > Gen 5 battles sends to the Gen 5 engine. FALSE if the player isn't free
+int GUI_CreateMon_StartWildEncounter(int speciesNo, int level);
 
 #ifdef __cplusplus
 }

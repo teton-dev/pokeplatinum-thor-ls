@@ -254,7 +254,7 @@ void FieldSystem_StartBattleProcess(FieldSystem *fieldSystem, FieldBattleDTO *dt
     TestScript_OnEvent(TEST_EVENT_BATTLE);
 #endif
 #ifdef GEN5_BATTLES
-    if (Gen5Battle_TakeRequest()) {
+    if (Gen5Battle_Wants(dto)) {
         FieldSystem_StartChildProcess(fieldSystem, &gGen5BattleApplicationTemplate, dto);
         return;
     }
