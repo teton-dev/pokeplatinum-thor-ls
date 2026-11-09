@@ -54,6 +54,8 @@ static void *sMemory;
 static BOOL sStarted;
 static NNSGfdVramTransferTask sVramTransferTasks[VRAM_TRANSFER_TASKS];
 static BtlSetup *sSetup;
+static BagSave *sBag;
+static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
 
 void Gen5_MemInit(void)
@@ -187,6 +189,7 @@ static PartyPkm *NewPkm(const Gen5Pokemon *src)
 // What a battle changes in a Pokémon, back into the Gen5Pokemon it was made from
 static void ReadPkm(PartyPkm *pkm, Gen5Pokemon *dest)
 {
+    dest->ball = PokeParty_GetParam(pkm, PKM_PARAM_POKEBALL, NULL);
     dest->form = PokeParty_GetParam(pkm, PKM_PARAM_FORM, NULL);
     dest->exp = PokeParty_GetParam(pkm, PKM_PARAM_EXP, NULL);
     dest->level = PokeParty_GetParam(pkm, PKM_PARAM_LEVEL, NULL);
@@ -236,6 +239,11 @@ int Gen5_BattleBegin(const Gen5WildBattle *battle, const char *gen5Dir)
     Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
     BagSave *bag = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, BagSave_GetBlockSize(), TRUE, __FILE__, __LINE__));
     BagSave_Init(bag);
+    // The player's items the battle can use; one BW2 doesn't have stays out (and comes back as it was)
+    for (int i = 0; i < battle->itemCount; i++) {
+        sItemInBag[i] = BagSave_AddItem(bag, battle->items[i].item, battle->items[i].count, HEAPID_PORT_BATTLE);
+    }
+    sBag = bag;
     BagCursor *bagCursor = Keep(BagCursor_Create(HEAPID_PORT_BATTLE));
     PokeDexSave *pokedex =
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, getSizeofPokedexData(), TRUE, __FILE__, __LINE__));
@@ -363,6 +371,18 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5WildBattle *battle)
         ReadPkm(PokeParty_GetPkm(party, i), &battle->party[i]);
     }
     battle->moneyChange = (s32)sSetup->moneyChange;
+    for (int i = 0; i < battle->itemCount; i++) {
+        // Items BW2 doesn't have were never in its bag: they keep their count
+        if (sItemInBag[i]) {
+            battle->items[i].count = BagSave_GetItemCountByID(sBag, battle->items[i].item, HEAPID_PORT_BATTLE);
+        }
+    }
+    // A caught Pokémon is in the wild party (BtlMain_StorePartiesToSetup), with the ball it was caught in
+    battle->caught = result == BTL_RESULT_CAPTURE && sSetup->capturedSlot < PokeParty_GetPkmCount(sSetup->party[1]);
+    if (battle->caught) {
+        battle->caughtMon = battle->wild;
+        ReadPkm(PokeParty_GetPkm(sSetup->party[1], sSetup->capturedSlot), &battle->caughtMon);
+    }
     printf("Gen 5: the battle ended (BW2's result %lu, money %+d)\n", (unsigned long)result, battle->moneyChange);
     sSetup = NULL;
     while (sBattleBlockCount > 0) {

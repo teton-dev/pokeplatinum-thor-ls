@@ -25,8 +25,9 @@ next page.
   with the Gen 5 battles (this fork's `gen5-battles` branch, experimental): *Gen 5
   battles* (off by default) runs wild battles against Pokemon you meet in tall grass, caves
   and water in Black 2 and White 2's engine, with your party and the results (HP, EXP,
-  levels, moves, money) kept. It needs your Black 2 or White 2 ROM, added in *Games >
-  Gen 5 battles*. Catching, the bag and trainer battles don't work in it yet.
+  levels, moves, money, items used) kept, and Pokemon you catch go to your party or the PC.
+  It needs your Black 2 or White 2 ROM, added in *Games > Gen 5 battles*. Trainer battles
+  don't use it yet.
 * **Display**: 3D sharpness and edge smoothing, the DS's outlines around 3D models (see
   [Features](features.md#screens)), second display, layout, swap screens, widescreen
   (experimental), texture packs, vsync. On Windows and Linux: *Bottom screen

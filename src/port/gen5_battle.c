@@ -11,11 +11,20 @@
 #include "constants/species.h"
 #include "constants/string.h"
 
+#include "applications/naming_screen.h"
+#include "bag.h"
 #include "battle/battle_system.h"
 #include "constants/heap.h"
 #include "evolution.h"
 #include "field_battle_data_transfer.h"
+#include "game_records.h"
+#include "generated/game_records.h"
 #include "heap.h"
+#include "pc_boxes.h"
+#include "pokedex.h"
+#include "poketch.h"
+#include "string_gf.h"
+#include "tv_segment.h"
 #include "gen5.h"
 #include "party.h"
 #include "pokemon.h"
@@ -71,6 +80,12 @@ static void VBlank(void *data)
 
 // The battle as handed to the Gen 5 code, and as it comes back
 static Gen5WildBattle sBattle;
+// The bag's counts before the battle
+static Gen5Item sItemCountsBefore[GEN5_ITEMS_MAX];
+static int sItemsBefore;
+// After a catch: the naming screen
+static NamingScreenArgs *sNamingArgs;
+static ApplicationManager *sNamingApp;
 
 // Platinum's text to Unicode, for BW2: the letters, digits and punctuation the ASCII table knows, and the accented e
 // of Pokémon. Other characters (Japanese, symbols) are left out for now
@@ -221,7 +236,32 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     for (int i = 0; i < sBattle.partyCount; i++) {
         PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &sBattle.party[i]);
     }
-    PokemonToGen5(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), &sBattle.wild);
+    Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
+    PokemonToGen5(wild, &sBattle.wild);
+    // The pockets with what a battle can use. The DTO's bag goes back into the save after the battle
+    const struct {
+        BagItem *items;
+        int size;
+    } pockets[] = {
+        { dto->bag->items, ITEM_POCKET_SIZE },
+        { dto->bag->medicine, MEDICINE_POCKET_SIZE },
+        { dto->bag->pokeballs, POKEBALL_POCKET_SIZE },
+        { dto->bag->berries, BERRY_POCKET_SIZE },
+        { dto->bag->battleItems, BATTLE_ITEM_POCKET_SIZE },
+    };
+    for (int p = 0; p < (int)NELEMS(pockets); p++) {
+        for (int i = 0; i < pockets[p].size && sBattle.itemCount < GEN5_ITEMS_MAX; i++) {
+            if (pockets[p].items[i].item != ITEM_NONE && pockets[p].items[i].quantity != 0) {
+                sBattle.items[sBattle.itemCount].item = pockets[p].items[i].item;
+                sBattle.items[sBattle.itemCount].count = pockets[p].items[i].quantity;
+                sBattle.itemCount++;
+            }
+        }
+    }
+    sItemsBefore = sBattle.itemCount;
+    memcpy(sItemCountsBefore, sBattle.items, sizeof(sBattle.items));
+    // Seen, as Platinum's battle registers a wild Pokémon when it appears (BattleSystem_DexFlagSeen)
+    Pokedex_Encounter(dto->pokedex, wild);
 
     sFailed = !Gen5_BattleBegin(&sBattle, Gen5Rom_Dir());
     if (sFailed) {
@@ -251,6 +291,16 @@ static void Finish(FieldBattleDTO *dto)
                 (unsigned)Pokemon_GetValue(mon, MON_DATA_EXPERIENCE, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_HP, NULL),
                 (unsigned)Pokemon_GetValue(mon, MON_DATA_MAX_HP, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_STATUS, NULL));
         }
+        // What the battle used up, out of the bag
+        for (int i = 0; i < sItemsBefore; i++) {
+            const int before = sItemCountsBefore[i].count;
+            const int after = sBattle.items[i].count;
+            if (after < before) {
+                Bag_TryRemoveItem(dto->bag, sBattle.items[i].item, before - after, HEAP_ID_APPLICATION);
+            } else if (after > before) {
+                Bag_TryAddItem(dto->bag, sBattle.items[i].item, after - before, HEAP_ID_APPLICATION);
+            }
+        }
         TrainerInfo *trainerInfo = dto->trainerInfo[BATTLER_PLAYER_1];
         if (sBattle.moneyChange > 0) {
             TrainerInfo_GiveMoney(trainerInfo, sBattle.moneyChange);
@@ -277,9 +327,63 @@ static void Finish(FieldBattleDTO *dto)
 
 enum {
     STATE_BATTLE,
+    STATE_CATCH,
+    STATE_NAMING,
     STATE_CHECK_EVOLUTION,
     STATE_WAIT_FOR_EVOLUTION,
 };
+
+// A caught Pokémon, as Platinum's battle takes it (battle_script.c's catch sequence, BattleSystem_DexFlagCaught,
+// BattleSystem_SetPokemonCatchData): the wild Pokémon with what the battle changed, the player's catch data, the
+// Pokédex, the Pokétch's history, the TV's capture record and the game records
+static Pokemon *CaughtPokemon(FieldBattleDTO *dto)
+{
+    return Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
+}
+
+static void TakeCaught(FieldBattleDTO *dto)
+{
+    Pokemon *mon = CaughtPokemon(dto);
+
+    PokemonFromGen5(mon, &sBattle.caughtMon);
+    Pokedex_Capture(dto->pokedex, mon);
+    Pokemon_SetCatchData(mon, dto->trainerInfo[BATTLER_PLAYER_1], sBattle.caughtMon.ball, dto->mapLabelTextID,
+        dto->terrain, HEAP_ID_BATTLE);
+    if (dto->poketch != NULL) {
+        Poketch_PokemonHistoryEnqueue(dto->poketch, Pokemon_GetBoxPokemon(mon));
+    }
+    if (dto->captureAttempt != NULL) {
+        CaptureAttempt_Init(dto->captureAttempt, mon, dto->resultMask, 1, HEAP_ID_BATTLE);
+    }
+    GameRecords_IncrementRecordValue(dto->records, RECORD_CAUGHT_POKEMON);
+    dto->caughtBattlerIdx = BATTLER_ENEMY_1;
+}
+
+// Into the party, or the first box with room as Platinum's battle does (its PP restored, as a boxed Pokémon's is)
+static void StoreCaught(FieldBattleDTO *dto)
+{
+    Pokemon *mon = CaughtPokemon(dto);
+
+    if (Party_AddPokemon(dto->parties[BATTLER_PLAYER_1], mon)) {
+        printf("Gen 5: caught species %u, into the party\n", (unsigned)Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL));
+        return;
+    }
+    const u32 box = PCBoxes_FirstEmptyBox(dto->pcBoxes);
+    if (box >= MAX_PC_BOXES) {
+        // Platinum doesn't let a ball be thrown then; BW2's battle doesn't know Platinum's boxes
+        printf("Gen 5: caught species %u, but every box is full\n", (unsigned)Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL));
+        return;
+    }
+    PCBoxes_SetCurrentBox(dto->pcBoxes, box);
+    for (int i = 0; i < LEARNED_MOVES_MAX; i++) {
+        int pp = Pokemon_GetValue(mon, MON_DATA_MOVE1_MAX_PP + i, NULL);
+        Pokemon_SetValue(mon, MON_DATA_MOVE1_PP + i, &pp);
+    }
+    Pokemon_SetGiratinaFormByHeldItem(mon);
+    PCBoxes_TryStoreBoxMonInBox(dto->pcBoxes, box, Pokemon_GetBoxPokemon(mon));
+    printf("Gen 5: caught species %u, into box %u\n", (unsigned)Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL),
+        (unsigned)box + 1);
+}
 
 static BOOL Main(ApplicationManager *appMan, int *state)
 {
@@ -300,6 +404,37 @@ static BOOL Main(ApplicationManager *appMan, int *state)
             }
         }
         Finish(dto);
+        *state = sBattle.caught ? STATE_CATCH : STATE_CHECK_EVOLUTION;
+        return FALSE;
+    // The caught Pokémon: Platinum's catch data, then its naming screen (left empty, it keeps its species' name)
+    case STATE_CATCH: {
+        Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_BATTLE, 0x30000);
+        TakeCaught(dto);
+        Pokemon *mon = CaughtPokemon(dto);
+        sNamingArgs = NamingScreenArgs_Init(HEAP_ID_BATTLE, NAMING_SCREEN_TYPE_POKEMON,
+            Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL), MON_NAME_LEN, dto->options);
+        sNamingArgs->battleMsgID = 0;
+        sNamingArgs->monForm = Pokemon_GetValue(mon, MON_DATA_FORM, NULL);
+        sNamingArgs->pcBoxes = dto->pcBoxes;
+        sNamingArgs->monGender = Pokemon_GetValue(mon, MON_DATA_GENDER, NULL);
+        sNamingApp = ApplicationManager_New(&gNamingScreenAppTemplate, sNamingArgs, HEAP_ID_BATTLE);
+        *state = STATE_NAMING;
+        return FALSE;
+    }
+    case STATE_NAMING:
+        if (!ApplicationManager_Exec(sNamingApp)) {
+            return FALSE;
+        }
+        if (sNamingArgs->returnCode == NAMING_SCREEN_CODE_OK) {
+            Pokemon_SetValue(CaughtPokemon(dto), MON_DATA_NICKNAME_STRING_AND_FLAG, sNamingArgs->textInputStr);
+            GameRecords_IncrementRecordValue(dto->records, RECORD_POKEMON_NICKNAMED);
+        }
+        NamingScreenArgs_Free(sNamingArgs);
+        ApplicationManager_Free(sNamingApp);
+        sNamingArgs = NULL;
+        sNamingApp = NULL;
+        StoreCaught(dto);
+        Heap_Destroy(HEAP_ID_BATTLE);
         *state = STATE_CHECK_EVOLUTION;
         return FALSE;
     // The Pokémon that gained a level and evolve now, as after Platinum's battles (battle_main.c)

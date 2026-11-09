@@ -554,7 +554,7 @@ void DrawGameplay()
 #ifdef GEN5_BATTLES
     Section("Gen 5 battles");
     ConfigToggle("Gen 5 battles", "Wild battles in Black 2 and White 2's engine: their 3D arenas, moving camera, "
-        "animated Pokemon and Gen 5 rules, with your party and the results kept. Experimental: catching, the bag and "
+        "animated Pokemon and Gen 5 rules, with your party, your bag and the results kept, and catching. Experimental: "
         "trainer battles aren't there yet (Pokemon you meet in tall grass, caves and water only). Needs the ROM in "
         "Settings > Games > Gen 5 battles.", &config->gen5Battles, Gen5Rom_GameName() != nullptr);
 #endif
