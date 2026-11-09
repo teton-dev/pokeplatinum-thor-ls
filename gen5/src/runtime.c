@@ -91,29 +91,6 @@ void Gen5_MemInit(void)
 }
 
 // BW2's main and GameInit, as far as the battle needs them
-// Pokémon cries, silent for now: no wave, which PokeVoice never plays. BW2's sound (its sound data, music, sound
-// effects and cries) isn't run yet: Platinum's sound system has NitroSystem's sound library (sound.c)
-static void VoiceResID(u32 species, u32 form, u32 *waveArc)
-{
-    (void)species;
-    (void)form;
-    *waveArc = 0;
-}
-
-static BOOL VoiceWaveInfo(u32 species, u32 form, const PokeVoiceChatterInfo *chatterInfo, void **samples, u32 *size,
-    u32 *sampleRate, u32 *speed, s8 *volume)
-{
-    (void)species;
-    (void)form;
-    (void)chatterInfo;
-    (void)samples;
-    (void)sampleRate;
-    (void)speed;
-    (void)volume;
-    *size = 0;
-    return TRUE;
-}
-
 static BOOL Start(const char *gen5Dir)
 {
     if (sStarted) {
@@ -132,7 +109,10 @@ static BOOL Start(const char *gen5Dir)
     PML_PersonalInit(HEAPID_SYSTEM);
     // The zones' tables: the battle's lights and seasons look the zone up
     InitZoneDataSystem(HEAPID_SYSTEM);
-    PokeVoice_Init(1, VoiceResID, VoiceWaveInfo);
+    // BW2's sound effects and cries (sound.c). Without its sound archive the battle is silent but runs
+    if (!Gen5_SoundInit()) {
+        printf("Gen 5: no sound: BW2's sound data didn't open\n");
+    }
     // No Pass Power on. Its "none" isn't 0: left zeroed, every power is on at 0 %, and a battle gives no experience
     // or prize money and no Poké Ball catches
     PassPower_Init();
@@ -320,6 +300,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
             battle->wild.level);
     }
     NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);
+    Gen5_SoundBattleBegin();
     GCTX_ProcMgrQueueProc(OVERLAY_NONE, &BATTLE_PROC_FUNCTIONS, sSetup);
     sRunning = TRUE;
     return TRUE;
@@ -373,7 +354,8 @@ int Gen5_BattleFrame(void)
     if (!sRunning) {
         return FALSE;
     }
-    // BW2's main loop: GFLAppUpdate and GameUpdate, then the 3D's swap
+    // BW2's main loop: GFLAppUpdate and GameUpdate, then the 3D's swap. Its sound calls use its own sound archive
+    Gen5_SoundEnter();
     GCTX_HIDUpdate();
     const u32 state = GCTX_ProcMgrUpdate();
     BrightnessController_Update();
@@ -381,6 +363,7 @@ int Gen5_BattleFrame(void)
     Gen5_SoundUpdate();
     PokeVoice_Update();
     GFL_G3DSysCheckSwapBuffers();
+    Gen5_SoundLeave();
     if (state == PROCMGR_DONE) {
         sRunning = FALSE;
     }
@@ -406,6 +389,7 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
         return GEN5_BATTLE_FAILED;
     }
     const u32 result = sSetup->result;
+    Gen5_SoundBattleEnd();
     // The party as the battle left it, in its original order
     PokeParty *party = sSetup->party[0];
     for (int i = 0; i < battle->partyCount && i < PokeParty_GetPkmCount(party); i++) {

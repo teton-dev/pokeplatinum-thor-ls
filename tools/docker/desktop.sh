@@ -45,6 +45,9 @@ image() {
 
 mounts() {
     echo "--mount type=bind,src=$ROOT,target=$ROOT"
+    # A git worktree: its .git file points into the main checkout's .git
+    GIT_COMMON=$(cd "$ROOT" && cd "$(git rev-parse --git-common-dir)" && pwd)
+    case "$GIT_COMMON" in "$ROOT"/*) ;; *) echo "--mount type=bind,src=$GIT_COMMON,target=$GIT_COMMON" ;; esac
     [ -d "$POKEBW2" ] && echo "--mount type=bind,src=$POKEBW2,target=$POKEBW2"
     mkdir -p "$DATA"
     echo "--mount type=bind,src=$THOR_DEV,target=$THOR_DEV"
