@@ -69,7 +69,7 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
    desktop, but for the arena's distant background and sound* (see "Milestone 3").
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
    (Pokédex entry, nickname, box), fainting and whiting out. *In progress:* 4a (the Pokémon and the player, in and
-   out) is done on the desktop; see "Milestone 4".
+   out) and 4b (the setting, real wild encounters) are done on the desktop; see "Milestone 4".
 5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages.
 6. **Widescreen:** with *Settings > Display > Widescreen* on, BW2's battle fills the Thor's 16:9 top panel (it is
    4:3 now, seen on the Thor). Unlike Platinum's battles, whose backdrop is a 256-pixel picture (they stay 4:3), BW2's
@@ -248,8 +248,23 @@ In slices, each tested on the desktop:
     power was on at 0 %: no experience, no prize money, and the capture rate times 0. `Start` calls it now.
   - Tests: `gen5_win.txt` (a level 1 Pichu: Turtwig's experience goes from 204 to 208), `gen5_loss.txt` (the
     money a loss costs, 48), `gen5_battle.txt` (running away). Their logs have a line per Pokémon after the battle.
-- **Next:** 4b, the setting (*Settings > Gameplay > Gen 5 battles*) sending real wild encounters to BW2;
-  4c, catching (the Pokémon into the party or a box, its nickname, the Pokédex); 4d, the bag, Pokédex, records and
+- **4b, the setting (2026-11-08, done on the desktop):** *Settings > Gameplay > Gen 5 battles* (off by default,
+  `Gen5Battles` in the game's config, offered once a ROM is imported) sends single wild battles to BW2:
+  `Gen5Battle_Wants` (`FieldSystem_StartBattleProcess`) takes a `BATTLE_TYPE_WILD_MON` battle with no status flag but
+  a honey tree's, so grass, caves, water and honey trees; not the scripted ones (legendaries, the first battle, the
+  catching tutorial, Giratina) nor roamers, doubles, partners, the Safari Zone or Pal Park, which stay in Platinum's
+  engine until milestone 7. The debug entry's request still works without the setting.
+  - After the battle, the Gen 5 application does what Platinum's does at its end (`battle_main.c`): the Pokémon that
+    gained a level evolve (`Battle_FindEvolvingPartyMember`, `Evolution_Begin`). Not seen yet: no test levels a
+    Pokémon to its evolution.
+  - Tests: `gen5_grass.txt` walks the tall grass at Lake Verity (`pace UP DOWN until battle`) until a wild Pokémon
+    appears, from the fixture `verity-grass` that `lake_grass.txt` makes (from `turtwig`: Route 201 west to Verity
+    Lakefront, the gap right of the sign, Cyrus's scene; Barry keeps the player out of the grass east of Twinleaf
+    for now). `gen5_wild.txt` starts the field's own wild encounter with the test command `wild SPECIES LEVEL`, so
+    it doesn't depend on the map. The test command `gen5-battles on|off` sets the setting.
+  - Until 4c and 4d, the bag in BW2's battle is empty (no Poké Balls to throw, no items), and nothing is registered
+    in the Pokédex.
+- **Next:** 4c, catching (the Pokémon into the party or a box, its nickname, the Pokédex); 4d, the bag, Pokédex, records and
   options in BW2's stand-ins, and the rest of the player's name characters.
 
 ## Risks

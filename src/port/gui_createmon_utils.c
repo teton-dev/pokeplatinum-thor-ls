@@ -17,6 +17,7 @@
 #include "field/field_system.h"
 #include "field_task.h"
 #include "heap.h"
+#include "overlay006/wild_encounters.h"
 #include "port/debug_field.h"
 #include "unk_020528D0.h"
 
@@ -111,5 +112,21 @@ int GUI_CreateMon_StartBattle(int speciesNo, int level, int trainerID, int doubl
     battle->trainerID = trainerID;
     battle->doubles = doubles;
     FieldSystem_CreateTask(fieldSystem, FieldTask_DebugBattle, battle);
+    return TRUE;
+}
+
+int GUI_CreateMon_StartWildEncounter(int speciesNo, int level)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)
+        || Party_GetCurrentCount(SaveData_GetParty(fieldSystem->saveData)) == 0
+        || speciesNo <= 0 || speciesNo > MAX_SPECIES) {
+        return FALSE;
+    }
+
+    FieldBattleDTO *dto = FieldBattleDTO_New(HEAP_ID_FIELD2, BATTLE_TYPE_WILD_MON);
+    FieldBattleDTO_Init(dto, fieldSystem);
+    CreateWildMon_Scripted(fieldSystem, speciesNo, level, dto);
+    Encounter_NewVsWild(fieldSystem, dto);
     return TRUE;
 }
