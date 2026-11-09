@@ -68,7 +68,8 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
    Pokémon) in BW2's engine and returns to the overworld. Arena, camera, sprites, moves, running away. *Done on the
    desktop, but for the arena's distant background and sound* (see "Milestone 3").
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
-   (Pokédex entry, nickname, box), fainting and whiting out.
+   (Pokédex entry, nickname, box), fainting and whiting out. *In progress:* 4a (the Pokémon and the player, in and
+   out) is done on the desktop; see "Milestone 4".
 5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages.
 6. **Widescreen:** with *Settings > Display > Widescreen* on, BW2's battle fills the Thor's 16:9 top panel (it is
    4:3 now, seen on the Thor). Unlike Platinum's battles, whose backdrop is a 256-pixel picture (they stay 4:3), BW2's
@@ -219,6 +220,37 @@ game is back on the overworld afterwards. `tests/scripts/gen5_battle.txt` plays 
     which leaves the map closed after a loss for its script to black out, and the debug battle has no script. It
     blacks out itself now (`src/port/gui_createmon_utils.c`; Platinum's debug battles had the same problem).
   - `tests/scripts/gen5_loss.txt` loses to a level 100 Charizard and checks the player is back home.
+
+## Milestone 4: the bridge (in progress)
+
+In slices, each tested on the desktop:
+
+- **4a, the Pokémon and the player (2026-11-08, done on the desktop):** the debug battle hands BW2 the whole party
+  and the wild Pokémon as they are in Platinum, and writes back what the battle changed.
+  - `gen5/api/gen5.h`'s `Gen5Pokemon` and `Gen5Player` carry what both games keep, in neither game's format (their
+    headers can't meet): species, form, level, experience, PID, OT ID and name, item, ability, friendship, gender,
+    moves, PP and PP Ups, HP, status, IVs, EVs, ball, Pokérus, nickname. `src/port/gen5_battle.c` fills them from
+    the battle's `FieldBattleDTO`; `gen5/src/runtime.c` makes BW2's `PartyPkm`s from them (the PID first, as it is
+    the encryption key; the nature from the PID, the origin game Platinum, so the ability slot is the PID's), and BW2
+    computes the stats.
+  - After the battle: experience and levels, moves and PP, EVs, HP, status, friendship, held item and Pokérus go back
+    into the DTO's party, which Platinum copies into the save; `leveledUpMonsMask` gets the Pokémon that gained a
+    level (Platinum evolves them after the battle), and the money a loss costs or a win gives
+    (`BtlSetup.moneyChange`) goes to the player's trainer info.
+  - Status: BW2 numbers the major conditions (1 paralysis to 5 poison) where Platinum has bits. A sleeping Pokémon
+    keeps its sleep turns, and a badly poisoned one stays so while poisoned.
+  - The player's name, ID and gender go into BW2's `PlayerInfo`: BW2 gives 1.5 times the experience to a Pokémon
+    whose OT isn't the player, which every Pokémon was with an empty one. The money is in the trainer info save
+    block (a loss can't cost more than the player has), the badges in `BtlSetup.badgeCount`.
+  - Names: Platinum's characters to Unicode through the port's ASCII table, and é; other characters (Japanese,
+    ♂ and ♀) are left out for now. A Pokémon without a nickname shows BW2's name for its species.
+  - **Pass Powers:** BW2's `main.c` calls `PassPower_Init`, which the port didn't. Its "no power" isn't 0, so every
+    power was on at 0 %: no experience, no prize money, and the capture rate times 0. `Start` calls it now.
+  - Tests: `gen5_win.txt` (a level 1 Pichu: Turtwig's experience goes from 204 to 208), `gen5_loss.txt` (the
+    money a loss costs, 48), `gen5_battle.txt` (running away). Their logs have a line per Pokémon after the battle.
+- **Next:** 4b, the setting (*Settings > Gameplay > Gen 5 battles*) sending real wild encounters to BW2;
+  4c, catching (the Pokémon into the party or a box, its nickname, the Pokédex); 4d, the bag, Pokédex, records and
+  options in BW2's stand-ins, and the rest of the player's name characters.
 
 ## Risks
 

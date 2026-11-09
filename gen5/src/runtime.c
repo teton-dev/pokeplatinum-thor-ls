@@ -10,7 +10,9 @@
 #include "battle/battle_proc.h"
 #include "battle/btl_result.h"
 #include "battle/btl_setup.h"
+#include "constants/pokemon.h"
 #include "constants/sound.h"
+#include "constants/version.h"
 #include "field/zone.h"
 #include "gfl/g3d.h"
 #include "gfl/heap.h"
@@ -22,9 +24,12 @@
 #include "pml/species_names.h"
 #include "save/bag.h"
 #include "save/config.h"
+#include "save/high_link.h"
 #include "save/player_info.h"
 #include "save/pokedex_savedata.h"
 #include "save/records.h"
+#include "save/save_control.h"
+#include "save/trainer_game_info.h"
 #include "system/brightness.h"
 #include "system/gfl_use.h"
 #include "system/printsys.h"
@@ -115,6 +120,9 @@ static BOOL Start(const char *gen5Dir)
     // The zones' tables: the battle's lights and seasons look the zone up
     InitZoneDataSystem(HEAPID_SYSTEM);
     PokeVoice_Init(1, VoiceResID, VoiceWaveInfo);
+    // No Pass Power on. Its "none" isn't 0: left zeroed, every power is on at 0 %, and a battle gives no experience
+    // or prize money and no Poké Ball catches
+    PassPower_Init();
     sStarted = TRUE;
     printf("Gen 5: BW2's systems are up\n");
     return TRUE;
@@ -134,12 +142,77 @@ static void *Keep(void *block)
     return block;
 }
 
-static PokeParty *Party(int species, int level)
+// A Platinum Pokémon in BW2's format (Gen5Pokemon has what both keep). The PID is the encryption key, so it is
+// given at creation; the rest is set field by field, then the stats are computed from it
+static PartyPkm *NewPkm(const Gen5Pokemon *src)
+{
+    PartyPkm *pkm = PokeParty_NewPkm(src->species, src->level, src->otId, 0, src->personality, HEAPID_PORT_BATTLE);
+
+    PokeParty_SetParam(pkm, PKM_PARAM_FORM, src->form);
+    PokeParty_SetParam(pkm, PKM_PARAM_EXP, src->exp);
+    PokeParty_SetParam(pkm, PKM_PARAM_ITEM, src->heldItem);
+    PokeParty_SetParam(pkm, PKM_PARAM_ABILITY, src->ability);
+    PokeParty_SetParam(pkm, PKM_PARAM_HIDDEN_ABILITY, 0);
+    PokeParty_SetParam(pkm, PKM_PARAM_HAPPINESS, src->friendship);
+    PokeParty_SetParam(pkm, PKM_PARAM_SEX, src->gender);
+    // Before Gen 5 the nature is the PID's; Gen 5 keeps it in a field of its own
+    PokeParty_SetParam(pkm, PKM_PARAM_NATURE, src->personality % 25);
+    // Pokémon from Platinum: their ability slot comes from the PID's lowest bit, as for any Gen 4 Pokémon
+    PokeParty_SetParam(pkm, PKM_PARAM_ORIGIN_GAME, VERSION_PLATINUM);
+    for (int i = 0; i < 4; i++) {
+        PokeParty_SetParam(pkm, PKM_PARAM_MOVE1 + i, src->moves[i]);
+        PokeParty_SetParam(pkm, PKM_PARAM_MOVE1_PP_UP + i, src->ppUps[i]);
+        PokeParty_SetParam(pkm, PKM_PARAM_MOVE1_PP + i, src->pp[i]);
+    }
+    for (int i = 0; i < 6; i++) {
+        PokeParty_SetParam(pkm, PKM_PARAM_IV_HP + i, src->ivs[i]);
+        PokeParty_SetParam(pkm, PKM_PARAM_EV_HP + i, src->evs[i]);
+    }
+    PokeParty_SetParam(pkm, PKM_PARAM_POKEBALL, src->ball);
+    PokeParty_SetParam(pkm, PKM_PARAM_POKERUS, src->pokerus);
+    PokeParty_SetParam(pkm, PKM_PARAM_MET_LEVEL, src->metLevel);
+    PokeParty_SetParam(pkm, PKM_PARAM_OT_GENDER, src->otGender);
+    PokeParty_SetParam(pkm, PKM_PARAM_IS_EGG, src->isEgg);
+    PokeParty_SetParam(pkm, PKM_PARAM_OT_NAME_RAW, (uptr)src->otName);
+    // A Pokémon without a nickname keeps BW2's name for its species
+    if (src->hasNickname) {
+        PokeParty_SetParam(pkm, PKM_PARAM_NICKNAME_RAW, (uptr)src->nickname);
+    }
+    PokeParty_RecalcStats(pkm);
+    PokeParty_SetParam(pkm, PKM_PARAM_HP, src->hp);
+    PokeParty_SetStatusCond(pkm, src->status);
+    return pkm;
+}
+
+// What a battle changes in a Pokémon, back into the Gen5Pokemon it was made from
+static void ReadPkm(PartyPkm *pkm, Gen5Pokemon *dest)
+{
+    dest->form = PokeParty_GetParam(pkm, PKM_PARAM_FORM, NULL);
+    dest->exp = PokeParty_GetParam(pkm, PKM_PARAM_EXP, NULL);
+    dest->level = PokeParty_GetParam(pkm, PKM_PARAM_LEVEL, NULL);
+    dest->heldItem = PokeParty_GetParam(pkm, PKM_PARAM_ITEM, NULL);
+    dest->friendship = PokeParty_GetParam(pkm, PKM_PARAM_HAPPINESS, NULL);
+    for (int i = 0; i < 4; i++) {
+        dest->moves[i] = PokeParty_GetParam(pkm, PKM_PARAM_MOVE1 + i, NULL);
+        dest->pp[i] = PokeParty_GetParam(pkm, PKM_PARAM_MOVE1_PP + i, NULL);
+        dest->ppUps[i] = PokeParty_GetParam(pkm, PKM_PARAM_MOVE1_PP_UP + i, NULL);
+    }
+    for (int i = 0; i < 6; i++) {
+        dest->evs[i] = PokeParty_GetParam(pkm, PKM_PARAM_EV_HP + i, NULL);
+    }
+    dest->pokerus = PokeParty_GetParam(pkm, PKM_PARAM_POKERUS, NULL);
+    dest->hp = PokeParty_GetParam(pkm, PKM_PARAM_HP, NULL);
+    dest->status = GetStatusCond(pkm);
+}
+
+static PokeParty *NewParty(const Gen5Pokemon *mons, int count)
 {
     PokeParty *party = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));
-    PartyPkm *pkm = PokeParty_NewTempPkm(species, level, 0, HEAPID_PORT_BATTLE);
-    PokeParty_AddPkm(party, pkm);
-    GFL_HeapFree(pkm);
+    for (int i = 0; i < count; i++) {
+        PartyPkm *pkm = NewPkm(&mons[i]);
+        PokeParty_AddPkm(party, pkm);
+        GFL_HeapFree(pkm);
+    }
     return party;
 }
 
@@ -151,9 +224,15 @@ int Gen5_BattleBegin(const Gen5WildBattle *battle, const char *gen5Dir)
     GFL_HeapCreateChild(HEAPID_USER, HEAPID_PORT_BATTLE, HEAP_PORT_BATTLE_SIZE);
     sBattleBlockCount = 0;
 
-    // What BW2's field would take from its game data (BtlSetup_LoadGameData); empty for now: the bridge
-    // (milestone 4) fills them from Platinum's save
+    // What BW2's field would take from its game data (BtlSetup_LoadGameData). The player is Platinum's; the bag,
+    // Pokédex and records are empty for now (milestone 4)
     PlayerInfo *info = Keep(PlayerInfo_Create(HEAPID_PORT_BATTLE));
+    copyTrainerName(info, battle->player.name);
+    setIDAsUInt(info, battle->player.id);
+    setTrainerGender(info, battle->player.gender);
+    PlayerInfo_SetVersion(info, VERSION_PLATINUM);
+    // The money a loss takes is checked against what the player has (CalcLossMoney)
+    getTrainerGameInfoAddress(SaveControl_GetInstance())->cash = battle->player.money;
     Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
     BagSave *bag = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, BagSave_GetBlockSize(), TRUE, __FILE__, __LINE__));
     BagSave_Init(bag);
@@ -163,7 +242,7 @@ int Gen5_BattleBegin(const Gen5WildBattle *battle, const char *gen5Dir)
     initPokedex(pokedex);
     GameRecords *records =
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, GameRecords_GetSize(), TRUE, __FILE__, __LINE__));
-    PokeParty *party = Party(battle->playerSpecies, battle->playerLevel);
+    PokeParty *party = NewParty(battle->party, battle->partyCount);
     Gen5_SetBattleGameData(party, info, config, bag, bagCursor, pokedex, records);
 
     sSetup = Keep(BtlSetup_Create(HEAPID_PORT_BATTLE));
@@ -182,13 +261,15 @@ int Gen5_BattleBegin(const Gen5WildBattle *battle, const char *gen5Dir)
     sSetup->fieldSituation.bgm = SEQ_BGM_VS_NORAPOKE;
     sSetup->fieldSituation.winBgm = SEQ_BGM_WIN1;
     sSetup->fieldSituation.env.hour = 12;
+    sSetup->badgeCount = battle->player.badges;
     sSetup->result = BTL_RESULT_VICTORY;
     sSetup->party[0] = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));
     PokeParty_Copy(party, sSetup->party[0]);
-    sSetup->party[1] = Party(battle->wildSpecies, battle->wildLevel);
+    sSetup->party[1] = NewParty(&battle->wild, 1);
 
-    printf("Gen 5: a wild battle, species %d (level %d) against species %d (level %d)\n", battle->playerSpecies,
-        battle->playerLevel, battle->wildSpecies, battle->wildLevel);
+    printf("Gen 5: a wild battle, %d Pokémon (species %u, level %u first) against species %u (level %u)\n",
+        battle->partyCount, battle->party[0].species, battle->party[0].level, battle->wild.species,
+        battle->wild.level);
     NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);
     GCTX_ProcMgrQueueProc(OVERLAY_NONE, &BATTLE_PROC_FUNCTIONS, sSetup);
     sRunning = TRUE;
@@ -270,13 +351,19 @@ void Gen5_BattleVBlank(void)
     reg_GX_VCOUNT = vcount;
 }
 
-enum Gen5BattleResult Gen5_BattleEnd(void)
+enum Gen5BattleResult Gen5_BattleEnd(Gen5WildBattle *battle)
 {
     if (sSetup == NULL) {
         return GEN5_BATTLE_FAILED;
     }
     const u32 result = sSetup->result;
-    printf("Gen 5: the battle ended (BW2's result %lu)\n", (unsigned long)result);
+    // The party as the battle left it, in its original order
+    PokeParty *party = sSetup->party[0];
+    for (int i = 0; i < battle->partyCount && i < PokeParty_GetPkmCount(party); i++) {
+        ReadPkm(PokeParty_GetPkm(party, i), &battle->party[i]);
+    }
+    battle->moneyChange = (s32)sSetup->moneyChange;
+    printf("Gen 5: the battle ended (BW2's result %lu, money %+d)\n", (unsigned long)result, battle->moneyChange);
     sSetup = NULL;
     while (sBattleBlockCount > 0) {
         GFL_HeapFree(sBattleBlocks[--sBattleBlockCount]);
