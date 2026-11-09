@@ -18,6 +18,8 @@
 static char sPaths[ARC_COUNT][PATH_MAX_LENGTH];
 static const char *sPathTable[ARC_COUNT];
 static BOOL sPathsReady;
+// The extracted ROM's folder from the game's folder (Gen5_FilesInit)
+static char sBase[PATH_MAX_LENGTH];
 
 const char *Gen5_ArcPath(u32 arcId, const char *romPath)
 {
@@ -55,8 +57,8 @@ static BOOL RelativePath(const char *dir, char *out, size_t size)
 
 int Gen5_FilesInit(const char *gen5Dir)
 {
-    char base[PATH_MAX_LENGTH];
-    if (!RelativePath(gen5Dir, base, sizeof(base))) {
+    char *base = sBase;
+    if (!RelativePath(gen5Dir, base, sizeof(sBase))) {
         printf("Gen 5: can't reach %s from the game's folder\n", gen5Dir);
         return FALSE;
     }
@@ -68,6 +70,11 @@ int Gen5_FilesInit(const char *gen5Dir)
     sPathsReady = TRUE;
     GFL_ArcSysInit(sPathTable, ARC_COUNT);
     return TRUE;
+}
+
+const char *Gen5_FilesBase(void)
+{
+    return sBase;
 }
 
 int Gen5_SelfCheck(char *message, int size)

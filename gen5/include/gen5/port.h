@@ -83,7 +83,19 @@ const char *Gen5_ArcPath(u32 arcId, const char *romPath);
 u16 Gen5_PadRead(void);
 void Gen5_TouchRead(TPData *touch);
 
-// BW2's silent sound's frame (gen5/src/sound.c): its music fades take their time
+// The extracted ROM's folder as a path from the game's folder, once Gen5_FilesInit has run (gen5/src/files.c)
+const char *Gen5_FilesBase(void);
+
+// BW2's sound effects and cries from its own sound archive, next to Platinum's (gen5/src/sound.c, runtime.c). Init
+// opens the archive once; a battle's Begin and End set up and give back the sound players it borrows from Platinum;
+// Enter and Leave make BW2's archive NitroSystem's current one while BW2's code runs, and Platinum's again after.
+// Init also starts the cries (PokeVoice_Init)
+BOOL Gen5_SoundInit(void);
+void Gen5_SoundBattleBegin(void);
+void Gen5_SoundBattleEnd(void);
+void Gen5_SoundEnter(void);
+void Gen5_SoundLeave(void);
+// Each frame of a battle, as GFL_SndUpdate: the music fades' timing
 void Gen5_SoundUpdate(void);
 
 // What happened in the battle, for Gen5_TakeEvents (gen5/src/runtime.c; the events are in api/gen5.h)
