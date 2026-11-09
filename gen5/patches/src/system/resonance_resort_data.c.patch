@@ -1,0 +1,13 @@
+--- a/src/system/resonance_resort_data.c
++++ b/src/system/resonance_resort_data.c
+@@ -2280,6 +2280,10 @@
+     int i;
+     int j;
+ 
++    // The port: no Join Avenue (its occupants aren't loaded), so nothing to record (a catch in battle records one)
++    if (sJoinAvenue.occupants == NULL) {
++        return;
++    }
+     RTC_GetCachedDate(&today);
+     todayPacked = getYearMonthDay(&today);
+     todayDays = RTC_ConvertDateToDay(&today);

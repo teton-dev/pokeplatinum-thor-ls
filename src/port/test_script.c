@@ -15,6 +15,14 @@
 #include "port/frame_rate.h"
 #include "port/port_game.h"
 #include "gui_createmon_utils.h"
+#include "bag.h"
+#include "constants/heap.h"
+#include "savedata.h"
+#include "party.h"
+#include "pc_boxes.h"
+#include "pokemon.h"
+#include "savedata/save_table.h"
+#include "pokedex.h"
 #include "port/sim_config_prj.h"
 #ifdef GEN5_BATTLES
 #include "port/gen5_battle.h"
@@ -41,6 +49,9 @@ enum TestOp {
     OP_GEN5_BATTLE,
     OP_GEN5_SETTING,
     OP_WILD,
+    OP_ITEM,
+    OP_GIVE,
+    OP_PARTY,
     OP_SHOT,
     OP_LOG,
     OP_EXIT,
@@ -262,6 +273,16 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_PACE;
         return ParseKeys(words[1], &command->keys) && ParseKeys(words[2], &command->keys2)
             && strcmp(words[3], "until") == 0 && ParseCondition(words + 4, count - 4, command);
+    } else if ((strcmp(words[0], "item") == 0 || strcmp(words[0], "give") == 0) && count >= 3) {
+        // item ITEM COUNT: into the bag; give SPECIES LEVEL: a new Pokémon into the party (port/gui_createmon_utils)
+        command->op = strcmp(words[0], "item") == 0 ? OP_ITEM : OP_GIVE;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "party") == 0) {
+        // Logs the party (species, level, ball, OT ID, HP) and the Pokémon in the PC, for the checks
+        command->op = OP_PARTY;
+        return TRUE;
     } else if (strcmp(words[0], "wild") == 0 && count >= 3) {
         // A wild SPECIES at LEVEL, met as in tall grass (the field's own wild encounter), once the player is free
         command->op = OP_WILD;
@@ -630,6 +651,62 @@ static u16 Step(void)
             sTest.freeFrames = 0;
             Next();
             return 0;
+        case OP_ITEM:
+            if (!Bag_TryAddItem(SaveData_GetBag(SaveData_Ptr()), command->x, command->y, HEAP_ID_APPLICATION)) {
+                Fail(command, "no room in the bag");
+                return 0;
+            }
+            printf("[test] item %d x%d\n", command->x, command->y);
+            Next();
+            continue;
+        case OP_GIVE:
+            if (!GUI_CreateMon_GenPokemon(command->x, command->y)) {
+                Fail(command, "the party is full");
+                return 0;
+            }
+            printf("[test] gave species %d at level %d\n", command->x, command->y);
+            Next();
+            continue;
+        case OP_PARTY: {
+            SaveData *save = SaveData_Ptr();
+            Party *party = SaveData_GetParty(save);
+            for (int i = 0; i < Party_GetCurrentCount(party); i++) {
+                Pokemon *mon = Party_GetPokemonBySlotIndex(party, i);
+                printf("[test] party %d: species %u level %u ball %u OT %u HP %u/%u nickname %u\n", i,
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_LEVEL, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_POKEBALL, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_OT_ID, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_HP, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MAX_HP, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_HAS_NICKNAME, NULL));
+            }
+            Bag *bag = SaveData_GetBag(save);
+            printf("[test] bag: %u Master Balls, %u Poke Balls\n",
+                (unsigned)Bag_GetItemQuantity(bag, 1, HEAP_ID_APPLICATION), (unsigned)Bag_GetItemQuantity(bag, 4,
+                HEAP_ID_APPLICATION));
+            PCBoxes *boxes = SaveData_GetPCBoxes(save);
+            for (u32 box = 0; box < MAX_PC_BOXES; box++) {
+                for (u32 slot = 0; slot < MAX_MONS_PER_BOX; slot++) {
+                    BoxPokemon *boxMon = PCBoxes_GetBoxMonAt(boxes, box, slot);
+                    if (BoxPokemon_GetValue(boxMon, MON_DATA_SPECIES_EXISTS, NULL)) {
+                        printf("[test] box %u slot %u: species %u ball %u OT %u\n", box + 1, slot,
+                            (unsigned)BoxPokemon_GetValue(boxMon, MON_DATA_SPECIES, NULL),
+                            (unsigned)BoxPokemon_GetValue(boxMon, MON_DATA_POKEBALL, NULL),
+                            (unsigned)BoxPokemon_GetValue(boxMon, MON_DATA_OT_ID, NULL));
+                    }
+                }
+            }
+            // Caught in the Pokédex, for each species in the party and boxes (logged above)
+            Pokedex *pokedex = SaveData_GetPokedex(save);
+            for (int i = 0; i < Party_GetCurrentCount(party); i++) {
+                const u16 species = Pokemon_GetValue(Party_GetPokemonBySlotIndex(party, i), MON_DATA_SPECIES, NULL);
+                printf("[test] Pokedex: species %u %s\n", species,
+                    Pokedex_HasCaughtSpecies(pokedex, species) ? "caught" : "not caught");
+            }
+            Next();
+            continue;
+        }
         case OP_GEN5_SETTING:
             SIM_Config_prj_GetConfig()->gen5Battles = command->frames;
             printf("[test] Gen 5 battles %s\n", command->frames ? "on" : "off");

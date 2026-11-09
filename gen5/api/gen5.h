@@ -69,14 +69,26 @@ typedef struct Gen5Player {
     unsigned badges;
 } Gen5Player;
 
-// A wild single battle: the player's party against one wild Pokémon. Gen5_BattleEnd writes back the party as the
-// battle left it (HP, status, PP, experience, levels, moves, held items) and the money won or lost.
+// An item of the player's bag and how many there are (item numbers are the same in both games)
+#define GEN5_ITEMS_MAX 512
+typedef struct Gen5Item {
+    unsigned short item;
+    unsigned short count;
+} Gen5Item;
+
+// A wild single battle: the player's party and bag against one wild Pokémon. Gen5_BattleEnd writes back the party as
+// the battle left it (HP, status, PP, experience, levels, moves, held items), what is left of each item, the money
+// won or lost, and a caught Pokémon as the battle left it (with the ball it was caught in).
 typedef struct Gen5WildBattle {
     Gen5Player player;
     Gen5Pokemon party[GEN5_PARTY_MAX];
     int partyCount;
+    Gen5Item items[GEN5_ITEMS_MAX];
+    int itemCount;
     Gen5Pokemon wild;
     int moneyChange;
+    int caught; // The wild Pokémon was caught: caughtMon has it
+    Gen5Pokemon caughtMon;
 } Gen5WildBattle;
 
 // How a battle ended, for Platinum

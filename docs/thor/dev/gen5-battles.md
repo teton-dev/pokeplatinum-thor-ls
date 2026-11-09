@@ -69,7 +69,7 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
    desktop, but for the arena's distant background and sound* (see "Milestone 3").
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
    (Pokédex entry, nickname, box), fainting and whiting out. *In progress:* 4a (the Pokémon and the player, in and
-   out) and 4b (the setting, real wild encounters) are done on the desktop; see "Milestone 4".
+   out), 4b (the setting, real wild encounters) and 4c (catching, the bag) are done on the desktop; see "Milestone 4".
 5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages.
 6. **Widescreen:** with *Settings > Display > Widescreen* on, BW2's battle fills the Thor's 16:9 top panel (it is
    4:3 now, seen on the Thor). Unlike Platinum's battles, whose backdrop is a 256-pixel picture (they stay 4:3), BW2's
@@ -262,10 +262,28 @@ In slices, each tested on the desktop:
     Lakefront, the gap right of the sign, Cyrus's scene; Barry keeps the player out of the grass east of Twinleaf
     for now). `gen5_wild.txt` starts the field's own wild encounter with the test command `wild SPECIES LEVEL`, so
     it doesn't depend on the map. The test command `gen5-battles on|off` sets the setting.
-  - Until 4c and 4d, the bag in BW2's battle is empty (no Poké Balls to throw, no items), and nothing is registered
-    in the Pokédex.
-- **Next:** 4c, catching (the Pokémon into the party or a box, its nickname, the Pokédex); 4d, the bag, Pokédex, records and
-  options in BW2's stand-ins, and the rest of the player's name characters.
+- **4c, catching and the bag (2026-11-08, done on the desktop):**
+  - The bag: the player's Items, Medicine, Poké Balls, Berries and Battle Items pockets go into BW2's bag
+    (`Gen5WildBattle.items`, `BagSave_AddItem`; the same item numbers), and what the battle used comes out of the
+    DTO's bag, which Platinum saves. Items BW2 doesn't have stay out of its bag and keep their count.
+  - A caught Pokémon (`BTL_RESULT_CAPTURE`, `BtlSetup.capturedSlot` in the wild party) comes back as the DTO's wild
+    Pokémon (Platinum's own data, intact) with what the battle changed and the ball it was caught in. Then, as
+    Platinum's battle does after a catch: `Pokemon_SetCatchData` (the player as its trainer, the place, the ball,
+    the date and level), the Pokédex (caught; a wild Pokémon is also registered as seen when the battle starts), the
+    Pokétch's history, the TV's capture record, the game records, Platinum's naming screen (left empty, it keeps its
+    species' name), then the party, or the first box with room (its PP restored). BW2 does the same in its field
+    after the battle (`event_battle_return.c`), which the port doesn't build.
+  - BW2 records a catch in Join Avenue, which the port has none of: `resonance_resort_data.c`'s patch returns when
+    Join Avenue isn't loaded (it crashed).
+  - Not yet: Platinum's "Give a nickname?" question before the naming screen and its message that a Pokémon went
+    to the PC; the Pokédex entry screen for a new species; a catch with every box full (Platinum doesn't let a ball
+    be thrown then; BW2 doesn't know Platinum's boxes, and the Pokémon isn't kept).
+  - Tests: `gen5_catch.txt` throws Master Balls (the test command `item`): a Bidoof into the party, then, with the
+    party filled to six (`give`), a Starly into box 1; saved as the fixture `gen5-caught`. `gen5_caught.txt` loads it
+    and logs (`party`) the party, the boxes, the bag and the Pokédex: both in Master Balls with the player's trainer
+    ID, both caught in the Pokédex, no Master Balls left.
+- **Next:** 4d, the Pokédex, records and options in BW2's stand-ins, the rest of the player's name characters, and
+  the naming question; then trainer battles (milestone 5).
 
 ## Risks
 

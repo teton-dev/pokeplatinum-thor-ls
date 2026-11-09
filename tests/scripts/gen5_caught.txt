@@ -1,0 +1,9 @@
+# Gen 5 battles, milestone 4c: what gen5_catch.txt saved, read back from the save it kept (the fixture gen5-caught):
+# Bidoof in the party, Starly in the PC's first box, both in Master Balls with the player as their trainer, both
+# caught in the Pokédex, no Master Balls left. The log's "party", "box", "bag" and "Pokedex" lines are the check.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_caught.txt --from gen5-caught
+
+mash A until free
+party
+exit 0

@@ -1,0 +1,60 @@
+# Gen 5 battles, milestone 4c: catching in Black 2 and White 2's engine. From the turtwig fixture, with two Master
+# Balls in the bag: a wild Bidoof caught into the party (the naming screen left empty), then, with the party filled
+# to six, a wild Starly caught into the PC. Saved, and kept as the fixture gen5-caught, which gen5_caught.txt loads to
+# check what the save has. The log's "party", "box" and "Pokedex" lines are the check.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_catch.txt --from turtwig --keep gen5-caught
+
+gen5-import
+gen5-battles on
+mash A until free
+item 1 2
+item 4 5
+party
+# A Bidoof, into the party: BAG, POKE BALLS, the Master Ball, USE
+wild 399 2
+until battle
+until command
+wait 60
+touch 40 180
+wait 60
+touch 192 48
+wait 60
+touch 64 33
+wait 60
+touch 108 175
+mash B until naming timeout 6000
+wait 90
+shot gen5-catch-naming
+# OK with no name: it keeps its species' name
+press START
+wait 30
+press A
+mash B until free
+party
+# Four more in the party (six), then a Starly, into the PC
+give 403 3
+give 396 3
+give 399 3
+give 401 3
+wild 396 2
+until battle
+until command
+wait 60
+touch 40 180
+wait 60
+touch 192 48
+wait 60
+touch 64 33
+wait 60
+touch 108 175
+mash B until naming timeout 6000
+wait 90
+press START
+wait 30
+press A
+mash B until free
+shot gen5-catch-back
+party
+save
+exit 0

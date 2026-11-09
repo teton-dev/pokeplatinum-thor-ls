@@ -188,7 +188,6 @@ gen5_sources = [
     'src/system/printsys.c',
     'src/system/record.c',
     'src/system/regulation.c',
-    'src/system/resonance_resort_data.c',
     'src/system/resort_binary.c',
     'src/system/resort_work.c',
     'src/system/ringtone_sys.c',
@@ -248,6 +247,7 @@ gen5_patched = [
     'src/system/vm.c',                # Return addresses on the VM's stack
     'src/system/poke_tool.c',         # PokeParty_SetParam, PML_PkmSetParam (nicknames, OT names, mail)
     'src/system/pml_met_data.c',
+    'src/system/resonance_resort_data.c', # No Join Avenue: a catch records nothing there
 ]
 
 # The port's own code in place of pokebw2's: where BW2's battle meets what the port has instead of BW2's field,
