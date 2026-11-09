@@ -36,6 +36,15 @@
  
  MCSSSystem *MCSSSys_Create(u32 capacity, HeapID heapId) {
      MCSSSystem *system = GFL_HeapAllocate(heapId, sizeof(MCSSSystem), TRUE, "mcss.c", 122);
+@@ -378,7 +386,7 @@
+             MTX_Copy43To44_(&NNS_G3dGlb.cameraMtx, &viewProj);
+             MTX_Concat44(&viewProj, &NNS_G3dGlb.projMtx, &viewProj);
+             MCSS_MulVecMtx44(&pos, &viewProj, &pos, &w);
+-            pos.x = FX_Mul(FX_Div(pos.x, w), 128 * FX32_ONE);
++            pos.x = FX_Mul(FX_Div(pos.x, w), Gen5_Widen(128 * FX32_ONE)); // The port: the projection is as wide as the screen
+             pos.y = FX_Mul(FX_Div(pos.y, w), 96 * FX32_ONE);
+             pos.z = -pos.z;
+             offsetX = FX32_CONST(mcSrt.px);
 @@ -420,6 +428,11 @@
                           GX_TEXREPEAT_ST, GX_TEXFLIP_ST, imageProxy->attr.plttUse,
                           imageProxy->vramLocation.baseAddrOfVram[NNS_G2D_VRAM_TYPE_3DMAIN]);
@@ -61,14 +70,13 @@
      G3_RestoreMtx(MCSS_MTX_SPRITE);
      G3_TexPlttBase(mcss->plttProxy.vramLocation.baseAddrOfVram[NNS_G2D_VRAM_TYPE_3DMAIN], mcss->plttProxy.fmt);
      G3_PolygonAttr(GX_LIGHTMASK_NONE, GX_POLYGONMODE_MODULATE, GX_CULL_NONE, polygonId, mcss->alpha, 0);
--    nodeX =
--        (cellSrt->px + mcss->mcAnim.pMultiCellDataBank->pMultiCellDataArray[mcSrt->index].pHierDataArray[node].pos.x)
 +    if (mcss->backSprite != NULL) {
 +        // The port: the art's quads aren't the multi-cell's nodes (MCSS_DrawBackSprite)
 +        nodeX = cellSrt->px << 8;
 +        nodeY = -cellSrt->py << 8;
 +    } else {
-+    nodeX =
+     nodeX =
+-        (cellSrt->px + mcss->mcAnim.pMultiCellDataBank->pMultiCellDataArray[mcSrt->index].pHierDataArray[node].pos.x)
 +        (cellSrt->px + mcss->mcAnim.pMultiCellDataBank->pMultiCellDataArray[mcSrt->index].pHierDataArray[node].posX) // The port: NitroSystem's names
          << 8;
      nodeY =

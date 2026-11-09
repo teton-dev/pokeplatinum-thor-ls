@@ -28,3 +28,12 @@
      }
      if (param->from != EFFVM_EMIT_EXPLICIT && param->to != EFFVM_EMIT_EXPLICIT && param->from != param->to) {
          spinAxis = 2;
+@@ -4128,7 +4130,7 @@
+         pos->z += offset->z;
+     }
+     BtlvEffvm_MulVec44(pos, &mtx, pos, &w);
+-    pos->x = FX_Mul(FX_Div(pos->x, w), FX32_CONST(4));
++    pos->x = FX_Mul(FX_Div(pos->x, w), Gen5_Widen(FX32_CONST(4))); // The port: the projection is as wide as the screen
+     pos->y = FX_Mul(FX_Div(pos->y, w), FX32_CONST(3));
+     pos->z = -pos->z;
+ }
