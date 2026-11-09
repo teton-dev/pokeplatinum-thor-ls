@@ -70,9 +70,14 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
    (Pokédex entry, nickname, box), fainting and whiting out.
 5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages.
-6. **The rest:** doubles, tag battles (Cheryl, Riley...), multi battles, the catching tutorial, the Safari Zone,
+6. **Widescreen:** with *Settings > Display > Widescreen* on, BW2's battle fills the Thor's 16:9 top panel (it is
+   4:3 now, seen on the Thor). Unlike Platinum's battles, whose backdrop is a 256-pixel picture (they stay 4:3), BW2's
+   arena is 3D: its camera can be widened as the field camera is (`src/port/widescreen.c`), and the sky and ground
+   meshes reach past the sides (whole since libntr clips polygons). The Pokémon and trainer sprites, gauges, message
+   window and effects stay where they are, centered in the 4:3 middle.
+7. **The rest:** doubles, tag battles (Cheryl, Riley...), multi battles, the catching tutorial, the Safari Zone,
    Pal Park, legendaries and roamers, the Battle Frontier; items from the bag; weather and terrain arenas.
-7. **Renegade Platinum:** the game's own Pokémon, move and item data in the Gen 5 engine, and Fairy.
+8. **Renegade Platinum:** the game's own Pokémon, move and item data in the Gen 5 engine, and Fairy.
 
 ## Milestone 1: where it stands (2026-11-08)
 
