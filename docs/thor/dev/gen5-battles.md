@@ -66,7 +66,7 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
 2. **ROM:** the import screen extracts a BW2 ROM; the Gen 5 code reads files from it. *Done on the desktop.*
 3. **First battle:** a debug menu entry starts one wild single battle (a fixed Pokémon against the first party
    Pokémon) in BW2's engine and returns to the overworld. Arena, camera, sprites, moves, running away. *Done on the
-   desktop, but for the arena's distant background and sound* (see "Milestone 3").
+   desktop, but for the arena's distant background* (see "Milestone 3"; the sound came later, see "Sound").
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
    (Pokédex entry, nickname, box), fainting and whiting out. *In progress:* 4a (the Pokémon and the player, in and
    out), 4b (the setting, real wild encounters) and 4c (catching, the bag) are done on the desktop; see "Milestone 4".
@@ -184,10 +184,8 @@ game is back on the overworld afterwards. `tests/scripts/gen5_battle.txt` plays 
 - **Input:** the keys and touch Platinum read each frame (with the test scripts' own) go to BW2 through
   `Gen5_SetInput`: `key.c` and `touchpanel.c` read them instead of the hardware. The command selection raises
   `GEN5_EVENT_COMMAND` (`Gen5_TakeEvents`), which the test scripts' `command` event waits for.
-- **Sound is silent for now:** NitroSystem's sound library holds one sound archive, Platinum's. `gen5/src/sound.c`
-  stands in for `snd_sys.c` with the 22 functions the battle calls, keeping only the music fades' timing (the battle
-  waits for them); cries get no wave, which `PokeVoice` never plays. Playing BW2's music and cries needs its own
-  archive loaded next to Platinum's, later.
+- **Sound** was silent at first (`gen5/src/sound.c` kept only the music fades' timing); BW2's sound effects and cries
+  play since 2026-11-09, see "Sound".
 - **What 64 bits and libntr needed** (each found by running the battle):
   - libntr: `G3_MultMtx33`/`44`, `G3_MultTransMtx33` and `G3_Shininess` had no simulator path and wrote the
     matrices into the registers, over `GXSTAT` (the geometry engine then looked busy forever). Fixed in libntr
@@ -224,7 +222,7 @@ game is back on the overworld afterwards. `tests/scripts/gen5_battle.txt` plays 
     that already has `subprojects/libntr` needs it fetched again for the patch (delete it, or
     `meson subprojects update --reset libntr`). Not yet: the far plane's "draw or drop" bit of the polygon attributes
     (the DS drops a polygon that crosses the far plane unless bit 12 is set; libntr clips it).
-  - Sound (above). A block of 0 bytes is left in one of BW2's heaps at the end (listed, harmless).
+  - ~~Sound~~ (done, see "Sound"). A block of 0 bytes is left in one of BW2's heaps at the end (listed, harmless).
   - ~~The Android build~~ (done, below).
   - The player's name in BW2's messages: the stand-in `PlayerInfo` has none ("??????????? is out of usable
     Pokémon"). Milestone 4.
@@ -371,6 +369,55 @@ owner's permission (`licenses/player-back-sprites.txt`, `THIRD_PARTY_LICENSES.md
   compiles the library for Android. Not yet seen on the Thor.
 - Not done: the art is drawn at its own size (103 to 117 pixels tall where BW2's sprites fill 128), and MCSS's
   mosaic effect (no trainer uses it) leaves the art alone.
+
+## Sound (2026-11-09)
+
+The owner's decision: the Gen 5 battles use BW2's sound effects and cries entirely, from the BW2 ROM the player
+imported, and Platinum's music is left alone (the battle music Platinum starts plays on). On the Thor the gen5-m5-pc
+build's battles were silent: no move sounds, no cries, no menu sounds. Done on the desktop:
+
+- **BW2's sound archive next to Platinum's** (`gen5/src/sound.c`): the import already extracts
+  `gen5/swan_sound_data.sdat` (89 MB, most of it music and streams). `Gen5_SoundInit` opens it with
+  `NNS_SndArcInit` and a 2 MB sound heap of its own, then makes Platinum's archive the current one again. NitroSystem
+  answers every question about sound data from its *current* archive, so `Gen5_SoundEnter`/`Leave` make BW2's the
+  current one around each battle frame (`Gen5_BattleFrame`): what BW2's code asks (a sequence's player, a cry's wave
+  archive) comes from BW2's data, and Platinum's sound system, which runs outside that, still sees its own.
+- **Sound effects:** `GFL_SndSEPlay` and `GFL_SEPlayKeepVol` load the sequence with its bank and wave archives into
+  that heap the first time (`NNS_SndArcLoadSeq`; it stays there, and a battle's start empties the heap when less than
+  512 KB is left) and start it with `NNS_SndArcPlayerStartSeqEx` on one of Platinum's players: NitroSystem's players
+  were set up once from Platinum's archive, and its music plays on them. BW2's sound effect players 1 to 5 go to
+  Platinum's `PLAYER_SE_1` to `PLAYER_SE_4` (3 to 6) and `PLAYER_PV` (0), which get BW2's channel masks (12 to 15)
+  for the battle and Platinum's back at its end (`Gen5_SoundBattleBegin`/`End`; libntr ignores the masks for now,
+  see the gaps below, and the cries' locked channels are what keeps the sound effects off them). Platinum's music players (1, 2, 7)
+  are left alone. Handles, `GFL_SndIsPlaying` (by handle: Platinum's music has sequence numbers of its own), pitch,
+  pan, tempo and the mute calls work as `snd_sys.c`'s. The music calls (`GFL_SndBGM...`) still keep only the fades'
+  timing: BW2's battle music, the victory music, the level-up and catch fanfares aren't played.
+- **Cries:** `pm_voice.c` (BW2's own) reads a cry's wave archive from the current archive and plays it through
+  NitroSystem's wave output on channels 14 and 15 (10 to 13 for more at once). `gen5/src/sound.c` has main.c's
+  callbacks (the wave archive of each species and form, the volume from archive 191). Chatot's recording isn't
+  played. `pm_voice.c`'s patch also clears a channel handle once freed (a cry that failed to start freed it twice).
+- **libntr: wave output made no sound** (`subprojects/packagefiles/libntr_snd_waveout.patch`, for libntr itself
+  later). The simulated ARM7 (`libraries/sim7/src/pxi.c`) left the direct channel commands empty: locking a channel,
+  `SETUP_CHANNEL_PCM`, starting and stopping a channel (`START_TIMER`/`STOP_TIMER`), its volume, timer and pan. The
+  sequences don't use them (their channels are driven inside the simulator), and Platinum's cries are sequences, so
+  only NitroSystem's wave output (`NNS_SndWaveOut...`) was affected. And nothing kept the channels' status
+  (`SND_GetChannelStatus`, the ARM7's `SND_UpdateSharedWork`), so `NNS_SndWaveOutIsPlaying` said a cry had ended 3
+  frames in and `PokeVoice_Update` stopped it. The patch carries those commands out on the simulated channels
+  (`SND_SetupChannelPcm7`, `SND_StartChannel7`...) and updates the status after each batch of commands and after the
+  driver's work in the audio callback. Channels started together with a capture (Platinum's reverb on the title
+  screen and the ending) aren't started: the simulator doesn't capture, so they would play an unwritten buffer.
+  Platinum's own wave output (Chatot's recorded cry) plays too now.
+- **Checked** (the container has no audio; `SDL_AUDIODRIVER=dummy` still runs the mixer): each battle's end logs
+  what its sound did, e.g. `gen5_wild.txt`: "6 sound effects started, one playing on 404 of 1064 frames, a cry on
+  444, Platinum's music on 1064" (before the libntr patch: a cry on 6). `gen5_trainer.txt`: 52 sound effects. No
+  sequence failed to load or was a music sequence; the heap held under 100 KB. All the Gen 5 tests and
+  `first_battle.txt` pass. Not heard yet: on the Thor.
+- **libntr gaps found on the way** (not fixed here; they affect Platinum's sound as much): the simulated ARM7 also
+  ignores `PLAYER_PARAM`, `TRACK_PARAM`, `MUTE_TRACK`, `ALLOCATABLE_CHANNEL` and the master volume and pan, so a
+  player's or a sequence's volume, a track's pan and pitch (BW2's move effects pan their sounds), and channel masks
+  set at run time do nothing in the port.
+- **Next:** hear it on the Thor; perhaps the victory music and fanfares as Platinum's (`GFL_SndBGMPlay` with BW2's
+  win BGM).
 
 ## Risks
 

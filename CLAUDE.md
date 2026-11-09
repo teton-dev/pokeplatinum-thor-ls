@@ -51,7 +51,8 @@ Status (the plan has the details): milestones 1 to 3 are done (`gen5/` builds 20
 `bw2_...`, into one object the game links whole, `-Dpokebw2=../pokebw2`; a BW2 ROM is imported in *Settings > Games >
 Gen 5 battles*; libntr now clips polygons), milestone 4 (the bridge: party, player, bag, catching, real wild
 encounters through *Settings > Gameplay > Gen 5 battles*) is done to 4c, milestone 5 (trainers) has single
-trainer battles with Platinum's AI levels, and milestone 6 (widescreen) is done on the desktop. The APK builds with the option (the NDK in Docker). pokebw2 is never
+trainer battles with Platinum's AI levels, and milestone 6 (widescreen) is done on the desktop. The battles play BW2's
+sound effects and cries (from the imported ROM's sound data) over Platinum's music. The APK builds with the option (the NDK in Docker). pokebw2 is never
 changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this
 repository, not inside it.
 
