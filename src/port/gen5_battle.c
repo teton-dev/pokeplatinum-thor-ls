@@ -12,6 +12,12 @@
 #include "constants/string.h"
 
 #include "applications/naming_screen.h"
+#include "constants/narc.h"
+#include "data/trainer_class_prize_mul.h"
+#include "generated/text_banks.h"
+#include "generated/trainer_message_types.h"
+#include "message.h"
+#include "trainer_data.h"
 #include "bag.h"
 #include "battle/battle_system.h"
 #include "constants/heap.h"
@@ -55,8 +61,11 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     if (!SIM_Config_prj_GetConfig()->gen5Battles || Gen5Rom_GameName() == NULL) {
         return FALSE;
     }
-    // A single wild battle, with nothing special about it but a honey tree
-    return dto->battleType == BATTLE_TYPE_WILD_MON && (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
+    // A single wild battle, with nothing special about it but a honey tree, or a single trainer battle
+    if (dto->battleType == BATTLE_TYPE_WILD_MON) {
+        return (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
+    }
+    return dto->battleType == BATTLE_TYPE_TRAINER && dto->battleStatusMask == 0;
 }
 
 BOOL Gen5Battle_StartDebug(int species, int level)
@@ -79,7 +88,7 @@ static void VBlank(void *data)
 }
 
 // The battle as handed to the Gen 5 code, and as it comes back
-static Gen5WildBattle sBattle;
+static Gen5Battle sBattle;
 // The bag's counts before the battle
 static Gen5Item sItemCountsBefore[GEN5_ITEMS_MAX];
 static int sItemsBefore;
@@ -92,7 +101,30 @@ static ApplicationManager *sNamingApp;
 static void TextToGen5(const charcode_t *src, int srcLength, unsigned short *dest, int destLength)
 {
     int n = 0;
+    // Room for the terminator (0xFFFF), and for a page break's three where one goes
     for (int i = 0; i < srcLength && src[i] != CHAR_EOS && n < destLength - 1; i++) {
+        // A message's line and page breaks, as BW2 writes them (printsys.c: a new line, and the stream commands that
+        // scroll or clear the window); Platinum's other commands (colors, placeholders) are left out
+        if (src[i] == CHAR_CR) {
+            dest[n++] = 0xFFFE;
+            continue;
+        }
+        if (src[i] == CHAR_CONTROL_SCROLL || src[i] == CHAR_CONTROL_CLEAR) {
+            if (n + 3 > destLength - 1) {
+                break;
+            }
+            dest[n++] = 0xF000;
+            dest[n++] = 0xBE00 | (src[i] == CHAR_CONTROL_CLEAR);
+            dest[n++] = 0;
+            continue;
+        }
+        if (src[i] == CHAR_FORMAT_ARG) {
+            // The command, its parameter count, the parameters
+            if (i + 2 < srcLength) {
+                i += 2 + src[i + 2];
+            }
+            continue;
+        }
         if (src[i] == CHAR_e_ACUTE) {
             dest[n++] = 0xE9;
             continue;
@@ -216,6 +248,52 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
     return Pokemon_GetValue(mon, MON_DATA_LEVEL, NULL) > level;
 }
 
+// A Platinum trainer for BW2's battle (milestone 5): its party as Platinum made it (Trainer_Encounter), its class
+// name and the line it says when beaten from Platinum's messages, and its class's prize (battle_script.c's table)
+static void TrainerToGen5(FieldBattleDTO *dto, Gen5Trainer *dest)
+{
+    const Trainer *trainer = &dto->trainer[BATTLER_ENEMY_1];
+    const int id = dto->trainerIDs[BATTLER_ENEMY_1];
+    String *text = String_Init(GEN5_TEXT_LENGTH, HEAP_ID_APPLICATION);
+
+    dest->id = id;
+    dest->platinumClass = trainer->header.trainerType;
+    dest->aiFlags = trainer->header.aiMask;
+    for (int i = 0; i < MAX_TRAINER_ITEMS && i < 4; i++) {
+        dest->items[i] = trainer->header.items[i];
+    }
+    dest->prizeBase = dest->platinumClass < NELEMS(sTrainerClassPrizeMul) ? sTrainerClassPrizeMul[dest->platinumClass] : 0;
+    // A trainer's name is kept compressed (CHAR_COMPRESSED_MARK first)
+    String *packed = String_Init(TRAINER_NAME_LEN + 1, HEAP_ID_APPLICATION);
+    String_CopyChars(packed, trainer->name);
+    String_Clear(text);
+    String_ConcatTrainerName(text, packed);
+    String_Free(packed);
+    TextToGen5(String_GetData(text), String_Length(text) + 1, dest->name, 16);
+
+    MessageLoader *loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG,
+        TEXT_BANK_TRAINER_CLASS_NAMES, HEAP_ID_APPLICATION);
+    MessageLoader_GetString(loader, dest->platinumClass, text);
+    MessageLoader_Free(loader);
+    TextToGen5(String_GetData(text), String_Length(text) + 1, dest->className, 32);
+
+    dest->defeatText[0] = 0xFFFF;
+    if (Trainer_HasMessageType(id, TRMSG_DEFEAT, HEAP_ID_APPLICATION)) {
+        Trainer_LoadMessage(id, TRMSG_DEFEAT, text, HEAP_ID_APPLICATION);
+        TextToGen5(String_GetData(text), String_Length(text) + 1, dest->defeatText, GEN5_TEXT_LENGTH);
+    }
+    String_Free(text);
+
+    Party *party = dto->parties[BATTLER_ENEMY_1];
+    dest->partyCount = Party_GetCurrentCount(party);
+    if (dest->partyCount > GEN5_PARTY_MAX) {
+        dest->partyCount = GEN5_PARTY_MAX;
+    }
+    for (int i = 0; i < dest->partyCount; i++) {
+        PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &dest->party[i]);
+    }
+}
+
 static BOOL Init(ApplicationManager *appMan, int *state)
 {
     (void)state;
@@ -237,7 +315,12 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &sBattle.party[i]);
     }
     Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
-    PokemonToGen5(wild, &sBattle.wild);
+    sBattle.isTrainer = (dto->battleType & BATTLE_TYPE_TRAINER) != 0;
+    if (sBattle.isTrainer) {
+        TrainerToGen5(dto, &sBattle.trainer);
+    } else {
+        PokemonToGen5(wild, &sBattle.wild);
+    }
     // The pockets with what a battle can use. The DTO's bag goes back into the save after the battle
     const struct {
         BagItem *items;
@@ -260,8 +343,12 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     }
     sItemsBefore = sBattle.itemCount;
     memcpy(sItemCountsBefore, sBattle.items, sizeof(sBattle.items));
-    // Seen, as Platinum's battle registers a wild Pokémon when it appears (BattleSystem_DexFlagSeen)
-    Pokedex_Encounter(dto->pokedex, wild);
+    // Seen, as Platinum's battle registers a wild Pokémon when it appears (BattleSystem_DexFlagSeen); a trainer's,
+    // all of them for now (BW2 doesn't say which it sent out)
+    for (int i = 0; i < Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_1]); i++) {
+        Pokedex_Encounter(dto->pokedex, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], i));
+    }
+    (void)wild;
 
     sFailed = !Gen5_BattleBegin(&sBattle, Gen5Rom_Dir());
     if (sFailed) {

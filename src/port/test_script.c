@@ -52,6 +52,7 @@ enum TestOp {
     OP_ITEM,
     OP_GIVE,
     OP_PARTY,
+    OP_TRAINER,
     OP_SHOT,
     OP_LOG,
     OP_EXIT,
@@ -278,6 +279,13 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = strcmp(words[0], "item") == 0 ? OP_ITEM : OP_GIVE;
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "trainer") == 0 && count >= 2) {
+        // A battle against trainer ID (Platinum's trainer numbers), as its encounter starts it, once the player is free
+        command->op = OP_TRAINER;
+        command->x = atoi(words[1]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
     } else if (strcmp(words[0], "party") == 0) {
         // Logs the party (species, level, ball, OT ID, HP) and the Pokémon in the PC, for the checks
@@ -646,6 +654,20 @@ static u16 Step(void)
             }
             if (!GUI_CreateMon_StartWildEncounter(command->x, command->y)) {
                 Fail(command, "the wild encounter couldn't start");
+                return 0;
+            }
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
+        case OP_TRAINER:
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the battle");
+                }
+                return 0;
+            }
+            if (!GUI_CreateMon_StartBattle(0, 0, command->x, FALSE)) {
+                Fail(command, "the trainer battle couldn't start");
                 return 0;
             }
             sTest.freeFrames = 0;

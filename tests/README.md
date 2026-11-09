@@ -24,6 +24,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `gen5_grass.txt` | `verity-grass` | with *Gen 5 battles* on, back and forth in the tall grass until a wild Pokémon appears, in BW2's engine; run away (Gen 5 builds) | ~1 min |
 | `gen5_catch.txt` | `turtwig` | with *Gen 5 battles* on, a Bidoof caught into the party and, with the party full, a Starly into the PC (Master Balls); keep it as the fixture `gen5-caught` | ~2 min |
 | `gen5_caught.txt` | `gen5-caught` | logs what that save has: the party, the PC, the bag and the Pokédex (the check is the log's lines) | ~30 s |
+| `gen5_trainer.txt` | `turtwig` | with *Gen 5 battles* on, Youngster Tristan (trainer 1, the test command `trainer`) in BW2's engine with Platinum's AI: won, the prize money in the log (Gen 5 builds) | ~1 min |
 | `gen5_loss.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig loses (a level 100 Charizard): the blackout, back home (Gen 5 builds) | ~1 min |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
@@ -71,6 +72,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `wild SPECIES LEVEL` | once the player is free, a wild SPECIES at LEVEL met as in tall grass (the field's own wild encounter, which the setting sends to the Gen 5 engine) |
 | `item ITEM COUNT` | puts items into the bag (the item's number: 1 is the Master Ball, 4 the Poké Ball) |
 | `give SPECIES LEVEL` | a new Pokémon into the party |
+| `trainer ID` | once the player is free, a battle against Platinum's trainer ID, as its encounter starts it |
 | `party` | logs the party, the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
 | `shot NAME` | a screenshot, `NAME.png` |
 | `log TEXT` | prints the text |

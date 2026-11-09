@@ -76,20 +76,39 @@ typedef struct Gen5Item {
     unsigned short count;
 } Gen5Item;
 
-// A wild single battle: the player's party and bag against one wild Pokémon. Gen5_BattleEnd writes back the party as
+// A trainer the player battles (milestone 5): Platinum's trainer, whose party is made as Platinum makes it. Its class
+// name is Platinum's; BW2 shows the sprite of its nearest class (gen5/src/trainers.c).
+#define GEN5_TEXT_LENGTH 400
+typedef struct Gen5Trainer {
+    unsigned id; // Platinum's trainer ID
+    unsigned platinumClass;
+    unsigned aiFlags; // Platinum's AI flags (gen5/src/trainers.c makes them BW2's)
+    unsigned items[4];
+    unsigned prizeBase; // The class's prize: the money for winning is its last Pokémon's level times 4 times this
+    unsigned short name[16]; // Unicode, 0xFFFF after the last character
+    unsigned short className[32];
+    // What the trainer says when beaten, in BW2's text: 0xFFFE between lines, a page break as BW2's command
+    unsigned short defeatText[GEN5_TEXT_LENGTH];
+    Gen5Pokemon party[GEN5_PARTY_MAX];
+    int partyCount;
+} Gen5Trainer;
+
+// A single battle: the player's party and bag against one wild Pokémon, or a trainer (isTrainer). Gen5_BattleEnd writes back the party as
 // the battle left it (HP, status, PP, experience, levels, moves, held items), what is left of each item, the money
 // won or lost, and a caught Pokémon as the battle left it (with the ball it was caught in).
-typedef struct Gen5WildBattle {
+typedef struct Gen5Battle {
     Gen5Player player;
     Gen5Pokemon party[GEN5_PARTY_MAX];
     int partyCount;
     Gen5Item items[GEN5_ITEMS_MAX];
     int itemCount;
     Gen5Pokemon wild;
+    int isTrainer;
+    Gen5Trainer trainer;
     int moneyChange;
     int caught; // The wild Pokémon was caught: caughtMon has it
     Gen5Pokemon caughtMon;
-} Gen5WildBattle;
+} Gen5Battle;
 
 // How a battle ended, for Platinum
 enum Gen5BattleResult {
@@ -102,7 +121,7 @@ enum Gen5BattleResult {
 
 // Starts BW2's systems the first time (they stay up), then the battle. Its files are in gen5Dir (Gen5_FilesInit).
 // FALSE if it can't start.
-int Gen5_BattleBegin(const Gen5WildBattle *battle, const char *gen5Dir);
+int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir);
 
 // Once a frame, before the VBlank: TRUE while the battle runs
 // The keys held (PAD_Read's bits) and the touch screen this frame, as the game read them: BW2's code reads them
@@ -123,7 +142,7 @@ void Gen5_BattleVBlank(void);
 
 // After the last frame: frees the battle and gives its result. The party and money change go into battle, the one
 // Gen5_BattleBegin had (unchanged if the battle failed).
-enum Gen5BattleResult Gen5_BattleEnd(Gen5WildBattle *battle);
+enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle);
 
 #ifdef __cplusplus
 }

@@ -70,7 +70,10 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
 4. **Bridge:** real wild battles through the setting, with results written back: HP, experience, levels, catching
    (Pokédex entry, nickname, box), fainting and whiting out. *In progress:* 4a (the Pokémon and the player, in and
    out), 4b (the setting, real wild encounters) and 4c (catching, the bag) are done on the desktop; see "Milestone 4".
-5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages.
+5. **Trainers:** single trainer battles: trainer sprites, AI, prize money, win and lose messages. *In progress:* a
+   single trainer battle runs in BW2's engine with Platinum's AI level, the trainer's name, class and defeat line,
+   and the prize money (see "Milestone 5"); still to come: evolutions, new moves and items after it, and the scripted
+   trainers' own texts.
 6. **Widescreen:** with *Settings > Display > Widescreen* on, BW2's battle fills the Thor's 16:9 top panel (it is
    4:3 now, seen on the Thor). Unlike Platinum's battles, whose backdrop is a 256-pixel picture (they stay 4:3), BW2's
    arena is 3D: its camera can be widened as the field camera is (`src/port/widescreen.c`), and the sky and ground
@@ -79,6 +82,19 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
 7. **The rest:** doubles, tag battles (Cheryl, Riley...), multi battles, the catching tutorial, the Safari Zone,
    Pal Park, legendaries and roamers, the Battle Frontier; items from the bag; weather and terrain arenas.
 8. **Renegade Platinum:** the game's own Pokémon, move and item data in the Gen 5 engine, and Fairy.
+9. **HeartGold and SoulSilver:** the same app for the owner's HGSS ROM (from the HGSS decompilation, as this port
+   is from Platinum's), with the same Gen 5 battles: wild and trainer battles, catching, the AI and its levels,
+   widescreen. After milestone 8, and once widescreen works with every trainer and its dialogue.
+
+### The trainer AI
+
+Platinum gives each trainer an AI level: flags (`TrainerHeader.aiMask`) choosing which of the AI's scripts run,
+from the basic one (no useless moves) to the expert's (type matchups, setup, switching) and the special ones for
+weather, Baton Pass, double battles, harassment. BW2's AI (`src/ov170/tr_ai.c`) is Platinum's, reworked for Gen 5,
+with its scripts in the same order, so **a trainer keeps the level Platinum gave it**: the port passes Platinum's
+flags to BW2 (`Gen5_TrainerAIFlags`, `gen5/src/trainers.c`), and BW2's own trainers' flags are never used. The flags
+pass through a table per game, so Renegade Platinum (whose trainers are harder and may set more flags) and HGSS
+(Platinum's numbering) each get their own if theirs differ, and the AI's scripts stay BW2's.
 
 ## Milestone 1: where it stands (2026-11-08)
 
@@ -283,7 +299,38 @@ In slices, each tested on the desktop:
     and logs (`party`) the party, the boxes, the bag and the Pokédex: both in Master Balls with the player's trainer
     ID, both caught in the Pokédex, no Master Balls left.
 - **Next:** 4d, the Pokédex, records and options in BW2's stand-ins, the rest of the player's name characters, and
-  the naming question; then trainer battles (milestone 5).
+  the naming question.
+
+## Milestone 5: trainers (in progress)
+
+- **A single trainer battle (2026-11-08, done on the desktop):** `Gen5Battle_Wants` also takes a
+  `BATTLE_TYPE_TRAINER` battle with no status flag, so the trainers met on routes; doubles, tag battles, the scripted
+  ones with flags stay in Platinum's engine. `Gen5Trainer` (`gen5/api/gen5.h`) carries the trainer: its party, its
+  class, AI flags, items, name, class name and defeat line in Unicode, and its prize.
+  - **Class and sprite:** `gen5/src/trainers.c` gives each of Platinum's 105 classes BW2's class of the same name
+    (20 of them) or the nearest one, for the sprite: Sinnoh's Gym Leaders and Cynthia have their own in BW2 (its
+    Pokémon World Tournament), Team Galactic is shown as Team Plasma. The name shown is Platinum's
+    (`BtlSetup.trainerNames`), "Youngster Tristan".
+  - **Names:** Platinum keeps trainer names compressed (`CHAR_COMPRESSED_MARK`); `String_ConcatTrainerName` unpacks
+    them.
+  - **Text:** BW2 reads a trainer's lines from its own data by trainer ID, except for trainers from 0x800 on
+    (`BtlSetup.trainerWinMsg`/`trainerLoseMsg`, its Pokémon World Tournament's), so the port numbers Platinum's
+    trainers from 0x800 and passes Platinum's defeat line (`Trainer_LoadMessage`, `TRMSG_DEFEAT`). Platinum's
+    line breaks and scrolls become BW2's. BW2 shows that line after the battle from its trainer message files
+    whatever the ID, so `btlv_core.c`'s patch takes it from the setup for those trainers. The line before it,
+    "Player defeated Youngster Tristan!", is BW2's own English text.
+  - Names were cut to 4 characters ("Clau got $80"): the conversion kept room for a page break at the end of every
+    string; it does only where one goes now (the player's and OT names, nicknames).
+  - **Prize money:** Platinum's: the last Pokémon's level times 4 times the class's multiplier
+    (`sTrainerClassPrizeMul`); `btl_calc.c`'s patch takes the multiplier from the port for those trainers.
+  - **The AI:** Platinum's flags for the trainer (see "The trainer AI"). BW2's AI hung the battle at first: its
+    jump tables read their offset and the program counter in one expression (`vm->pc + VM_Read32(vm)`), whose order
+    C leaves open; the DS's compiler read the offset first, GCC and Clang read the counter first, and the jump landed
+    4 bytes early, in the middle of the table. `tr_ai.c`'s patch reads the offset first.
+  - Tests: `gen5_trainer.txt` battles Youngster Tristan (Platinum's trainer 1, the test command `trainer`): won with
+    Tackle, money +80 in the log.
+- **Next:** the trainer's items in battle (BW2's AI uses them: Potions), evolutions and new moves after the battle
+  (as for wild battles), the rival's and Gym Leaders' battles (scripted, with flags), double battles (milestone 7).
 
 ## Risks
 

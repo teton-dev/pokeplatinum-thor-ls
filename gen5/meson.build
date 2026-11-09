@@ -36,7 +36,6 @@ gen5_sources = [
     'src/ov167/battle_event.c',
     'src/ov167/battle_overlay.c',
     'src/ov167/btl_adapter.c',
-    'src/ov167/btl_calc.c',
     'src/ov167/btl_client.c',
     'src/ov167/btl_field.c',
     'src/ov167/btl_handler_work.c',
@@ -74,7 +73,6 @@ gen5_sources = [
     'src/ov169/condition_effects.c',
     'src/ov169/field_handlers.c',
     # The trainer AI (overlay 170)
-    'src/ov170/tr_ai.c',
     # The battle screens' shared cursor and windows (overlay 285)
     'src/ov285/b_app_tool.c',
     # The battle bag (overlay 286)
@@ -248,6 +246,8 @@ gen5_patched = [
     'src/system/poke_tool.c',         # PokeParty_SetParam, PML_PkmSetParam (nicknames, OT names, mail)
     'src/system/pml_met_data.c',
     'src/system/resonance_resort_data.c', # No Join Avenue: a catch records nothing there
+    'src/ov167/btl_calc.c',           # A Platinum trainer's prize money (runtime.c)
+    'src/ov170/tr_ai.c',              # Jump tables' offsets read in a defined order (the trainer AI)
 ]
 
 # The port's own code in place of pokebw2's: where BW2's battle meets what the port has instead of BW2's field,
@@ -263,6 +263,7 @@ gen5_port_sources = files(
     'src/runtime.c',     # BW2's systems run in the port, and a battle on them (api/gen5.h)
     'src/sdk.c',         # What pokebw2's own SDK copies have and libntr lacks
     'src/sound.c',       # src/system/snd_sys.c: silent for now (Platinum holds the sound library)
+    'src/trainers.c',    # Platinum's trainer classes as BW2's (milestone 5)
 )
 
 gen5_files = []

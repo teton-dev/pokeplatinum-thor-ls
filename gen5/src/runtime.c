@@ -10,12 +10,14 @@
 #include "battle/battle_proc.h"
 #include "battle/btl_result.h"
 #include "battle/btl_setup.h"
+#include "constants/battle.h"
 #include "constants/pokemon.h"
 #include "constants/sound.h"
 #include "constants/version.h"
 #include "field/zone.h"
 #include "gfl/g3d.h"
 #include "gfl/heap.h"
+#include "gfl/str.h"
 #include "gfl/proc.h"
 #include "gfl/sound.h"
 #include "gfl/ui.h"
@@ -34,6 +36,14 @@
 #include "system/gfl_use.h"
 #include "system/printsys.h"
 #include "system/wipe.h"
+
+// Platinum's trainer classes as BW2's (trainers.c)
+u32 Gen5_TrainerClass(u32 platinumClass);
+u32 Gen5_TrainerAIFlags(u32 platinumFlags);
+
+// Platinum's trainers go into BW2's battle with IDs from here: BW2 then takes their win and loss lines from the setup
+// (BtlString_LoadTrainerWinLoseMsg), and its data reads stay in the Battle Institute's range (TrainerData_GetParam)
+#define PORT_TRAINER_ID_START 0x800
 
 // The block GFL's heaps are made in: far more than a DS's 1.7 MB, as pointers and the structures holding them are
 // twice as large here
@@ -54,6 +64,7 @@ static void *sMemory;
 static BOOL sStarted;
 static NNSGfdVramTransferTask sVramTransferTasks[VRAM_TRANSFER_TASKS];
 static BtlSetup *sSetup;
+static u32 sPrizeBase;
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
@@ -219,7 +230,7 @@ static PokeParty *NewParty(const Gen5Pokemon *mons, int count)
     return party;
 }
 
-int Gen5_BattleBegin(const Gen5WildBattle *battle, const char *gen5Dir)
+int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
 {
     if (sRunning || !Start(gen5Dir)) {
         return FALSE;
@@ -273,11 +284,41 @@ int Gen5_BattleBegin(const Gen5WildBattle *battle, const char *gen5Dir)
     sSetup->result = BTL_RESULT_VICTORY;
     sSetup->party[0] = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));
     PokeParty_Copy(party, sSetup->party[0]);
-    sSetup->party[1] = NewParty(&battle->wild, 1);
+    if (battle->isTrainer) {
+        const Gen5Trainer *src = &battle->trainer;
+        BtlSetupTrainer *trainer = Keep(TrainerBattleSetup_Create(HEAPID_PORT_BATTLE));
+        Keep(trainer->name);
+        trainer->trainerId = PORT_TRAINER_ID_START + src->id;
+        trainer->trainerClass = Gen5_TrainerClass(src->platinumClass);
+        trainer->aiFlags = Gen5_TrainerAIFlags(src->aiFlags);
+        for (int i = 0; i < 4; i++) {
+            trainer->items[i] = src->items[i];
+        }
+        GFL_StrBufLoadString(trainer->name, src->name);
+        sSetup->trainers[1] = trainer;
+        // Platinum's class name in BW2's messages, in place of the class's
+        sSetup->trainerNames[1] = Keep(GFL_StrBufCreate(32, HEAPID_PORT_BATTLE));
+        GFL_StrBufLoadString(sSetup->trainerNames[1], src->className);
+        sSetup->trainerLoseMsg = Keep(GFL_StrBufCreate(GEN5_TEXT_LENGTH, HEAPID_PORT_BATTLE));
+        GFL_StrBufLoadString(sSetup->trainerLoseMsg, src->defeatText);
+        // Platinum's trainers say nothing when they win
+        sSetup->trainerWinMsg = Keep(GFL_StrBufCreate(4, HEAPID_PORT_BATTLE));
+        sPrizeBase = src->prizeBase;
+        sSetup->battleType = BTL_TYPE_TRAINER;
+        sSetup->fieldSituation.bgm = SEQ_BGM_VS_TRAINER;
+        sSetup->fieldSituation.winBgm = SEQ_BGM_WIN2;
+        sSetup->party[1] = NewParty(src->party, src->partyCount);
+        printf("Gen 5: a trainer battle against trainer %u (class %u, BW2's %lu), %d Pokémon\n", src->id,
+            src->platinumClass, (unsigned long)trainer->trainerClass, src->partyCount);
+    } else {
+        sSetup->party[1] = NewParty(&battle->wild, 1);
+    }
 
-    printf("Gen 5: a wild battle, %d Pokémon (species %u, level %u first) against species %u (level %u)\n",
-        battle->partyCount, battle->party[0].species, battle->party[0].level, battle->wild.species,
-        battle->wild.level);
+    if (!battle->isTrainer) {
+        printf("Gen 5: a wild battle, %d Pokémon (species %u, level %u first) against species %u (level %u)\n",
+            battle->partyCount, battle->party[0].species, battle->party[0].level, battle->wild.species,
+            battle->wild.level);
+    }
     NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);
     GCTX_ProcMgrQueueProc(OVERLAY_NONE, &BATTLE_PROC_FUNCTIONS, sSetup);
     sRunning = TRUE;
@@ -359,7 +400,7 @@ void Gen5_BattleVBlank(void)
     reg_GX_VCOUNT = vcount;
 }
 
-enum Gen5BattleResult Gen5_BattleEnd(Gen5WildBattle *battle)
+enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
 {
     if (sSetup == NULL) {
         return GEN5_BATTLE_FAILED;
@@ -400,4 +441,11 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5WildBattle *battle)
     default:
         return GEN5_BATTLE_LOST;
     }
+}
+
+// The prize money's base for a Platinum trainer (btl_calc.c's patch): Platinum's class multiplier
+u32 Gen5_PortTrainerPrizeBase(u32 trainerId)
+{
+    (void)trainerId;
+    return sPrizeBase;
 }
