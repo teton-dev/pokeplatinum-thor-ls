@@ -1,0 +1,108 @@
+# new_game.txt with a girl: a new game from the title screen to Prof. Rowan's briefcase on Route 201, saved just
+# before the starter is chosen. The player is a girl named Claude, the rival Barry.
+#
+#   tools/docker/desktop.sh test tests/scripts/new_game_girl.txt --keep before-starter-girl
+#   tools/docker/desktop.sh test tests/scripts/turtwig.txt --from before-starter-girl --keep turtwig-girl
+#
+# keeps the saves the girl's battle tests start from (gen5_player_back.txt). Takes a few seconds.
+
+# Prof. Rowan's introduction: no information needed, then the Poké Ball on the touch screen
+mash A until menu
+press DOWN
+press DOWN
+press A
+mash A touch 128 106 until menu
+
+# A girl: the boy is offered first ("so you're a boy?"): No, then the girl, on the left, and Yes. Named Claude: C on
+# the upper-case page, the rest on the lower-case one (keys are 16 apart from x 35, rows 18 apart from y 100; the page
+# buttons and OK are on row 71)
+press DOWN
+press A
+wait 60
+press A
+wait 30
+press LEFT
+wait 30
+shot gender-choice
+mash A until menu
+shot gender
+press A
+mash A until naming
+wait 60
+touch 67 100
+touch 72 71
+wait 20
+touch 51 118
+touch 35 100
+touch 35 136
+touch 83 100
+touch 99 100
+shot name
+touch 215 71
+mash A until menu
+press A
+
+# The rival, Barry
+mash A until naming
+wait 60
+touch 51 100
+touch 72 71
+wait 20
+touch 35 100
+touch 147 118
+touch 147 118
+touch 99 136
+shot rival-name
+touch 215 71
+mash A until menu
+press A
+
+# The bedroom (map 415): a step makes Barry run in. Along row 6 to the stairs at (8, 4), away from the sign at (7, 3)
+mash A until free
+walk RIGHT 1
+mash A until free
+walk RIGHT 3
+walk UP 2
+walk RIGHT 1
+
+# Downstairs (414): Mom, then the door at (6, 10)
+mash A until free
+walk DOWN 6
+walk LEFT 4
+walk DOWN 2
+
+# Twinleaf Town (411): around the houses to Barry's door at (105, 875); he bumps into the player and goes back in
+mash A until free
+walk DOWN 1
+walk LEFT 6
+walk UP 11
+walk LEFT 5
+mash A until free
+walk UP 3
+
+# Barry's house (412): along row 7, below the TV, to the stairs at (2, 3); in his room (413) he runs out
+mash A until free
+walk UP 3
+walk LEFT 4
+walk UP 4
+walk RIGHT 1
+mash A until free
+walk UP 1
+walk LEFT 1
+
+# Out again, north to Route 201 (342), and into the tall grass at row 857: Barry, Prof. Rowan, his assistant and
+# the briefcase
+mash A until free
+walk DOWN 4
+walk RIGHT 4
+walk DOWN 4
+mash A until free
+walk RIGHT 5
+walk UP 30
+mash A until free
+walk UP 6
+mash A until free
+until map 342
+shot briefcase
+save
+exit 0

@@ -59,7 +59,6 @@ gen5_sources = [
     'src/ov168/btlv_clact.c',
     'src/ov168/btlv_effect.c',
     'src/ov168/btlv_field.c',
-    'src/ov168/btlv_mcss.c',
     'src/ov168/btlv_stage.c',
     'src/ov168/btlv_timer.c',
     # The battle's tables and field, side and position handlers (overlay 169)
@@ -229,7 +228,9 @@ gen5_patched = [
     'src/gfl/key.c',                  # The keys the game read (runtime.c)
     'src/gfl/touchpanel.c',           # The touch the game read (runtime.c)
     'src/ov168/btlv_effvm.c',         # The SDK's names of a matrix's translation; particle work for 64 bits
-    'src/system/mcss.c',              # NitroSystem's names of a node's position; texture coordinates as commands
+    'src/system/mcss.c',              # NitroSystem's names of a node's position; texture coordinates as commands;
+                                      # the player's own back sprite (src/player_back.c)
+    'src/ov168/btlv_mcss.c',          # The player's back sprite: the owner's art (src/player_back.c)
     'src/system/gfl_use.c',           # GFLAppInit takes the port's heaps (runtime.c)
     'src/system/pm_voice.c',          # No NULL sound channel handles (a cry that never started)
     # 64 bits: values that can be pointers, as uptr
@@ -264,6 +265,14 @@ gen5_port_sources = files(
     'src/sdk.c',         # What pokebw2's own SDK copies have and libntr lacks
     'src/sound.c',       # src/system/snd_sys.c: silent for now (Platinum holds the sound library)
     'src/trainers.c',    # Platinum's trainer classes as BW2's (milestone 5)
+    'src/player_back.c', # The player's back sprite: the owner's art of Lucas and Dawn (art/)
+)
+
+# The owner's art of the player's back (art/, converted from art/sheets by tools/player_back.py convert), as C data
+gen5_player_back_data = custom_target('gen5_player_back_data',
+    input: files('art/lucas_back.png', 'art/lucas_back.json', 'art/dawn_back.png', 'art/dawn_back.json'),
+    output: 'gen5_player_back_data.h',
+    command: [gen5_python, files('tools/player_back.py'), 'header', '@OUTPUT@'],
 )
 
 gen5_files = []
@@ -321,6 +330,7 @@ gen5_battle = static_library('gen5_battle',
         gen5_port_sources,
         gen5_headers,
         gen5_header_patches,
+        gen5_player_back_data,
     ],
     c_args: gen5_args,
     dependencies: [

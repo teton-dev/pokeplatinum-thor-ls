@@ -332,6 +332,44 @@ In slices, each tested on the desktop:
 - **Next:** the trainer's items in battle (BW2's AI uses them: Potions), evolutions and new moves after the battle
   (as for wild battles), the rival's and Gym Leaders' battles (scripted, with flags), double battles (milestone 7).
 
+## The player's back sprite (2026-11-09)
+
+In BW2's engine the player was BW2's own trainer from the back (Hilbert or Hilda: a battle in a game other than BW2
+gives the player BW2's classes 182 and 183, `TrainerData_SetFromPlayer`). It is now the owner's own art of Lucas or
+Dawn, by the player's gender, commissioned for this fork: Dawn by PokemonBrendan, Lucas by tebited15, included with the
+owner's permission (`licenses/player-back-sprites.txt`, `THIRD_PARTY_LICENSES.md`).
+
+- **The art:** the sheets as delivered are in `gen5/art/sheets`. Lucas's has two rows, Diamond and Pearl's outfit
+  (not used) and Platinum's (used): four frames, standing, the ball up, winding up, thrown. Dawn's has three poses
+  (standing without her near arm, the arm over her head, leaning into the throw) and five arm pieces, worked out as:
+  the near arm with the ball in her fist (standing), the near arm bringing the ball up and then to her head (both on
+  the standing pose, in front), and her far arm swung back (behind the leaning pose). The fifth, an arm reaching
+  behind her, isn't used.
+- **The conversion** (`gen5/tools/player_back.py convert`, plain Python): keys out each sheet's backing colour (its
+  top-left pixel), reduces the colours of the parts used to 15 plus transparency in the DS's 15-bit colour (a median
+  cut refined by k-means; Lucas has 45, Dawn 24), packs the parts into one 256x128 4-bit texture (the size MCSS gives
+  each sprite) and writes `gen5/art/<name>_back.png` (the texture, indexed) and `<name>_back.json` (each pose's quads).
+  Where the arm pieces go and each pose's anchor (under the feet) are in the script. `player_back.py preview DIR`
+  draws the poses as the game does. The build turns the converted files into C data (`player_back.py header`).
+- **How BW2 draws it:** the battle view adds the player's back as an MCSS sprite (`BtlvMcss_AddTrainer`, position 8)
+  from `ARCID_TRSPRITE_BACK`: a 256x128 image, a palette, cells, a multi-cell animation (its sequence 1 is the throw)
+  and MCSS's bin file of each cell's quads. All of BW2's player back sprites have the same five multi-cells:
+  standing, ball up, ball higher, winding up, thrown. `btlv_mcss.c`'s patch asks MCSS to draw the next sprite with the
+  art (`PlayerBack_ForTrainerClass`, `gen5/src/player_back.c`: BW2's male player classes Lucas, the female Dawn).
+  `mcss.c`'s patch then still reads and animates BW2's sprite, but puts the art's image and palette in its place when
+  it loads (so fades and colour blends use the art's colours) and, each frame, draws the art's pose for the multi-cell
+  the animation shows, moved, turned and scaled as the multi-cell is, with its shadow. So the throw keeps BW2's own
+  timing and motion: for Hilbert and Hilda, 2 frames standing, 4 with the ball up, 24 with it higher (sliding back
+  7 pixels), 8 winding up, then thrown (turning, sliding forward), held for 50.
+- Platinum's battles don't change: this is all in the Gen 5 library.
+- Tests: `tests/scripts/gen5_player_back.txt` (from `turtwig`, and from `turtwig-girl`, made by
+  `new_game_girl.txt` and `turtwig.txt`) shoots a wild and a trainer battle's send-out a frame apart. On the desktop
+  both show Lucas and Dawn standing, with the ball up, winding up and thrown (a run catches some of the poses: BW2
+  moves several frames between shots). The other Gen 5 tests and `first_battle.txt` still pass, and the arm64 check
+  compiles the library for Android. Not yet seen on the Thor.
+- Not done: the art is drawn at its own size (103 to 117 pixels tall where BW2's sprites fill 128), and MCSS's
+  mosaic effect (no trainer uses it) leaves the art alone.
+
 ## Risks
 
 - **64-bit layouts** in BW2 data loaded from files or shared with the SDK: found case by case at runtime.

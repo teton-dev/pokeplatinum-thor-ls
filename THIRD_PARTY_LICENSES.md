@@ -38,3 +38,11 @@ this repository and its subprojects, so the build can be redone with a modified 
   used only to build the matching DS ROM. They are not part of any release.
 - `tools/msgenc/` includes pugixml (MIT, `tools/msgenc/LICENSE.pugixml.md`).
 - Tracy (BSD-3-Clause) is an optional profiler, off by default.
+
+## Artwork
+
+| Art | Artist | Terms | Text |
+|---|---|---|---|
+| The player's back sprites in Gen 5 battles, Dawn (`gen5/art/sheets/trainer_dawn_fullspritesheet.png`) and Lucas (`gen5/art/sheets/trainer_lucas_fullspritesheet.png`), and the textures converted from them (`gen5/art/*_back.png`) | Dawn by PokemonBrendan, Lucas by tebited15 | Commissioned by this fork's owner and included with the owner's permission; not under the repository's license | [licenses/player-back-sprites.txt](licenses/player-back-sprites.txt) |
+
+The art shows Nintendo, Game Freak and Creatures' characters (see above).

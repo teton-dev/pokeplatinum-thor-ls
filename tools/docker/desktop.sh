@@ -45,6 +45,9 @@ image() {
 
 mounts() {
     echo "--mount type=bind,src=$ROOT,target=$ROOT"
+    # A git worktree: its .git file points into the main checkout's .git
+    GIT_COMMON=$(cd "$ROOT" && cd "$(git rev-parse --git-common-dir)" && pwd)
+    case "$GIT_COMMON" in "$ROOT"/*) ;; *) echo "--mount type=bind,src=$GIT_COMMON,target=$GIT_COMMON" ;; esac
     [ -d "$POKEBW2" ] && echo "--mount type=bind,src=$POKEBW2,target=$POKEBW2"
     mkdir -p "$DATA"
     echo "--mount type=bind,src=$THOR_DEV,target=$THOR_DEV"
@@ -113,7 +116,8 @@ test)
     [ -x "$BIN/main" ] || { echo "No build: run $0 build first"; exit 1; }
     [ -f "$DATA/arm9.bin" ] || { echo "No extracted ROM in $DATA: start the game once ($0 start)"; exit 1; }
     TEST_NAME=$(basename "$SCRIPT" .txt)
-    RUN=$THOR_DEV/test-run
+    # TEST_ID=name: a container and a data folder of its own, for runs side by side (sessions in other worktrees)
+    RUN=$THOR_DEV/test-run${TEST_ID:+-$TEST_ID}
     SHOTS=$THOR_DEV/test-shots/$TEST_NAME
     FIXTURES=$THOR_DEV/fixtures
     # A fresh data folder: the extracted ROM linked, no saves but the fixture's, and the default settings, so
@@ -136,7 +140,7 @@ test)
         [ -f "$FIXTURES/$FROM/save.bin" ] || { echo "No fixture $FIXTURES/$FROM"; exit 1; }
         cp "$FIXTURES/$FROM/save.bin" "$RUN/save.bin"
     fi
-    TEST=pokeplatinum-test
+    TEST=pokeplatinum-test${TEST_ID:+-$TEST_ID}
     docker rm -f $TEST >/dev/null 2>&1 || true
     # The Black 2 or White 2 ROM a script's gen5-import imports
     GEN5_ROM=${GEN5_ROM:-$(ls "$THOR_DEV"/PKMNB2.nds "$THOR_DEV"/PKMNW2.nds 2>/dev/null | head -n 1)}
