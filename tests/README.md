@@ -1,7 +1,7 @@
 # Scripted tests (teton-dev fork)
 
 The desktop build plays a script of keys and touches and checks that the game gets where it should: through the
-new game's introduction, around Twinleaf Town, to a battle. They run in Docker on the Mac
+new game's introduction, around Twinleaf Town, to a battle. They run in Docker
 (`tools/docker/desktop.sh`, [docs/thor/dev/desktop-docker.md](../docs/thor/dev/desktop-docker.md)), as fast as the game
 goes (libntr's test mode), in a data folder of their own, and need the Platinum ROM extracted once
 (`desktop.sh start`).

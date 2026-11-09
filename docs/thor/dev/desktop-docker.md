@@ -1,11 +1,12 @@
-# The desktop build on a Mac (Docker)
+# The desktop build in Docker
 
-The Linux desktop build, built and played in Docker on an Apple Silicon Mac, with `tools/docker/desktop.sh`. The
-Linux target is x86-64 (`SDK_X86`), so the container is x86-64 and runs under Rosetta.
+The Linux desktop build, built and played in Docker with `tools/docker/desktop.sh` (written for macOS). The Linux
+target is x86-64 (`SDK_X86`), so the container is x86-64; on an Apple Silicon Mac it runs under Rosetta.
 
 ## Setup
 
-1. Docker Desktop, with *Settings > General > Use Rosetta for x86_64/amd64 emulation on Apple Silicon* on.
+1. Docker Desktop; on Apple Silicon, with *Settings > General > Use Rosetta for x86_64/amd64 emulation on Apple
+   Silicon* on.
 2. A folder for the ROMs and the game's data, `~/thor-dev` by default (`THOR_DEV=...` for another). The game keeps
    its extracted ROM, saves and settings in `~/thor-dev/desktop`.
 3. `tools/docker/desktop.sh build`. The first build makes the images (`pokeplatinum-build` from
@@ -18,7 +19,7 @@ Linux target is x86-64 (`SDK_X86`), so the container is x86-64 and runs under Ro
 
 `tools/docker/desktop.sh start` runs the game on a virtual display (1280x800, `SCREEN=WxH` for another). Watch and
 play it in macOS's Screen Sharing: *Finder > Go > Connect to Server*, `vnc://localhost:5900`, no password (the port
-only listens on the Mac itself).
+only listens on this computer).
 
 The first start asks for the Platinum ROM in a small file picker that opens in `~/thor-dev/desktop`. A link to the
 ROM there puts it first in the list: `ln -s ../PKMNPLAT.nds ~/thor-dev/desktop/`. Double-click it; the files are

@@ -17,7 +17,7 @@ project for now (see Licensing).
   Renegade Platinum support (its data and Fairy) is a later phase.
 - **Licensing: pokebw2 is GPLv3, this repository MIT.** Built with pokebw2's code, the app is GPLv3. Fine in this
   fork (its source is public); the main repository's developer would have to agree before anything goes upstream.
-- **Testing: a local Linux desktop build on the Mac** (Docker), not only cloud builds and the Thor.
+- **Testing: a local Linux desktop build** (Docker), not only cloud builds and the Thor.
 - **Out of scope:** following Pokémon, visible wild Pokémon, BW2 Phenomena, name capitalisation.
 - **Setting:** *Settings > Gameplay > Gen 5 battles*, off by default, only offered once a BW2 ROM is added.
 
@@ -124,7 +124,7 @@ Done on the desktop build; the Android build is checked by compiling for arm64, 
   own, checks the game code and the SHA1 against pokebw2's two dumps (Black 2 `e51e6dfb...`, White 2 `b5d7490b...`;
   anything else, patched ones included, is refused with the reason), then reads the ROM's file system (FNT and FAT)
   and extracts its archives (`a/`, 308 files) and sound data (`swan_sound_data.sdat`): 270 MB of the 512 MB ROM, in
-  about 3 s on the Mac. Download Play's and Wi-Fi's files are left out. They go into `gen5.tmp/`, which becomes the
+  about 3 s on a desktop computer. Download Play's and Wi-Fi's files are left out. They go into `gen5.tmp/`, which becomes the
   data folder's `gen5/` once complete, with `rom.txt` (the game and the self-check's result). The ROM isn't kept.
 - **Shared by every game:** `gen5/` is in the data folder, while a game added through *Add a game* runs in
   `carts/<id>/`, and libntr opens files by paths relative to the current game's folder. `Gen5_FilesInit`
