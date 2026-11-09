@@ -15,6 +15,8 @@
 #include "port/frame_rate.h"
 #include "port/port_game.h"
 #include "gui_createmon_utils.h"
+#include "gui_mapjump_utils.h"
+#include "script_manager.h"
 #include "bag.h"
 #include "constants/heap.h"
 #include "savedata.h"
@@ -49,6 +51,8 @@ enum TestOp {
     OP_GEN5_BATTLE,
     OP_GEN5_SETTING,
     OP_WILD,
+    OP_JUMP,
+    OP_SCRIPT,
     OP_ITEM,
     OP_GIVE,
     OP_PARTY,
@@ -290,6 +294,22 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
     } else if (strcmp(words[0], "party") == 0) {
         // Logs the party (species, level, ball, OT ID, HP) and the Pokémon in the PC, for the checks
         command->op = OP_PARTY;
+        return TRUE;
+    } else if (strcmp(words[0], "script") == 0 && count >= 2) {
+        // script ID: runs the field script ID (2018: a Pokemon Center's PC), once the player is free
+        command->op = OP_SCRIPT;
+        command->x = atoi(words[1]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if (strcmp(words[0], "jump") == 0 && count >= 4) {
+        // jump MAP X Z: to map header MAP at (X, Z), as Settings' map jump does, once the player is free
+        command->op = OP_JUMP;
+        command->map = atoi(words[1]);
+        command->x = atoi(words[2]);
+        command->y = atoi(words[3]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
     } else if (strcmp(words[0], "wild") == 0 && count >= 3) {
         // A wild SPECIES at LEVEL, met as in tall grass (the field's own wild encounter), once the player is free
@@ -645,6 +665,28 @@ static u16 Step(void)
             Fail(command, "built without the Gen 5 code (-Dpokebw2)");
             return 0;
 #endif
+        case OP_SCRIPT:
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the script");
+                }
+                return 0;
+            }
+            ScriptManager_Set(DEBUG_GetFieldSystem(), command->x, NULL);
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
+        case OP_JUMP:
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the jump");
+                }
+                return 0;
+            }
+            GUI_MapJump_JumpToMap(command->map, command->x, command->y);
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
         case OP_WILD:
             if (!ConditionMet(command)) {
                 if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
