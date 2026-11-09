@@ -1,0 +1,20 @@
+# A Pokémon Center's PC: its box screen shows (it was black on both screens: libntr cleared the finished frame when
+# the boxes' vblank handler sent matrix commands; libntr_g3_clear.patch). From the turtwig fixture, to Sandgem Town's
+# Pokémon Center (the test command jump), the PC's script as facing it starts it (script 2018), Someone's PC and
+# Deposit Pokémon, Turtwig picked; the shot shows the boxes and Turtwig's picture. Then back out to the overworld.
+#
+#   tools/docker/desktop.sh test tests/scripts/pc.txt --from turtwig
+
+mash A until free
+jump 420 9 6
+until free timeout 3000
+script 2018
+mash A for 300
+wait 200
+press RIGHT 8
+wait 60
+shot pc-boxes
+mash B for 300
+mash B until free timeout 3000
+shot pc-back
+exit 0
