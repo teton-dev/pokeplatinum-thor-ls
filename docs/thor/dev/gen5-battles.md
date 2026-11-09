@@ -230,6 +230,13 @@ back to Platinum's save.
   Chansey, reaches level 15 and evolves into Bibarel), `gen5_lose.txt` (blackout, home, money taken). New script
   commands: `wild SPECIES LEVEL` (a wild battle as in grass), `gen5-battles on|off`, `lead SPECIES LEVEL`,
   `give ITEM COUNT`, `item ITEM`, `party`.
+- **Particles (2026-11-09):** the Poké Ball's throw and opening and the moves' particles weren't drawn. BW2's
+  particles were fine up to the GE (SPL's emitters, the ortho camera, textures and palettes in VRAM). They were lost in
+  libntr's renderer: it keeps translucent polygons (alpha under 31, A3I5 and A5I3 textures: every particle) for the end
+  of the frame and drew them with the culling and depth test that the frame's last polygon attributes left in GL. On
+  frames with particles, culling was on by then, so the particle quads, drawn without culling, were culled. Fixed in
+  libntr (`subprojects/packagefiles/libntr_g3_translucent_state.patch`, a second `diff_files` of the wrap): each
+  deferred polygon gets its own culling and depth test. Platinum's translucent polygons draw the same way.
 - **Not done yet:** Platinum's "Give it a nickname?" question and Pokédex entry screen on a first catch; sound;
   trainer battles (milestone 5); the Android build.
 
