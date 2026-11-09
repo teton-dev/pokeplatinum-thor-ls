@@ -94,7 +94,7 @@ INI
 # 4. libmain.so
 if [ ! -f "$BUILD/meson/build.ninja" ]; then
     # The PC builds compile without optimization; a handheld CPU can't absorb that
-    $MESON setup -Dbuild_target=android -Doptimization=2 \
+    $MESON setup -Dbuild_target=android -Doptimization=2 ${POKEBW2:+-Dpokebw2=$POKEBW2} \
         --native-file="$ROOT/meson/native.ini" \
         --cross-file="$BUILD/android.ini" \
         -- "$BUILD/meson"
