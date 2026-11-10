@@ -10,6 +10,10 @@
 #include "field/field_system.h"
 #include "field/field_system_sub2_t.h"
 #include "overlay005/ov5_021D5EB8.h"
+#include "overlay006/hm_cut_in.h"
+#include "applications/bag/application.h"
+#include "applications/journal_display/journal_controller.h"
+#include "applications/town_map/main.h"
 #include "port/debug_field.h"
 #include "port/gear_data.h"
 #ifdef GEN5_BATTLES
@@ -58,6 +62,10 @@ static BOOL WeatherLayers(FieldSystem *fieldSystem, u8 *objWrap, u8 *wideBgs)
     if (bg2) {
         *wideBgs = 1 << 2;
     }
+    // An HM's cut-in: its band is BG3 behind a window, across the whole width
+    if (HMCutIn_PortIsPlaying()) {
+        *wideBgs |= 1 << 3;
+    }
     return TRUE;
 }
 
@@ -72,6 +80,21 @@ static BOOL Gen5BattleShown(void)
 #endif
 }
 
+// A full-screen 2D application that fills the wide screen is running over the overworld: the Bag, the Journal (also
+// the page that opens on loading a save) and the Town Map (and the Fly map). They are drawn for 256 pixels; their
+// layers' edge columns continue across the sides, so the backgrounds reach the edges of the window and the
+// contents (text, lists, the map) stay in the 4:3 middle
+static BOOL WideApplication(void)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (fieldSystem == NULL || fieldSystem->processManager == NULL || fieldSystem->processManager->child == NULL) {
+        return FALSE;
+    }
+    const OverlayFunc init = fieldSystem->processManager->child->template.init;
+    return init == gBagApplicationTemplate.init || init == (OverlayFunc)JournalController_Init
+        || init == TownMap_Init;
+}
+
 void Widescreen_Update(void)
 {
     // Platinum's battles stay 4:3 with black bars: the backdrop is a 256-pixel picture and the
@@ -84,10 +107,15 @@ void Widescreen_Update(void)
     if (!wide && Gear_ActiveBattleSystem() == NULL && fieldSystem != NULL) {
         wide = WeatherLayers(fieldSystem, &objWrap, &wideBgs);
     }
+    u8 edgeBgs = Gen5BattleShown() ? (1 << 1) : 0;
+    if (!wide && WideApplication()) {
+        wide = TRUE;
+        edgeBgs = 0x0F;
+    }
     SIM_SetWidescreenSceneOptions(FALSE, wideBgs);
     SIM_SetWidescreenObjWrap(objWrap);
     // BW2's text box (BG1) reaches the edges of the wide screen; its text stays in the middle
-    SIM_SetWidescreenBgEdgeExtend(Gen5BattleShown() ? (1 << 1) : 0);
+    SIM_SetWidescreenBgEdgeExtend(edgeBgs);
     SIM_SetWidescreenScene(wide);
 }
 

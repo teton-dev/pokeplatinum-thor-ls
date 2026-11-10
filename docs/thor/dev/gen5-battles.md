@@ -445,6 +445,22 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
   libntr's `SIM_SetWidescreenObjWrap` (`subprojects/packagefiles/libntr_wide_obj.patch`) and its BG2 picture through
   the wide BG layers libntr already had; only Flash's darkness stays 4:3 (`tests/scripts/widescreen_weather.txt`).
 
+## Widescreen: field moves, Bag, maps, Journal (2026-11-09)
+
+- **Child applications** (`WideApplication` in `src/port/widescreen.c`): while the process manager's child is the Bag,
+  the Town Map (item, wall and Fly modes) or the Journal (recognised by the child's `init`), the scene is wide and all
+  four BG layers' edge columns continue across the sides (`SIM_SetWidescreenBgEdgeExtend`, 0x0F). The apps draw for 256
+  pixels, so the lists, text and map stay in the middle; their backgrounds (the Bag's blue and green, the Town Map's blue
+  frame, the Journal's page) fill the sides. The Journal's load-time page opens before the field map exists, which is why
+  this doesn't depend on `ShownFieldSystem`.
+- **The HM cut-in** is a band: BG3 (the rings) behind hardware window WIN0, whose X range grows from the middle to 0..255.
+  While `HMCutIn_PortIsPlaying()` BG3 is drawn wide (`G2SIM_DrawBGWide`) and libntr's window test treats a window that
+  starts at 0 or reaches 255 as continuing across the wide layer's sides (`libntr_wide_window.patch`). The rings' tile
+  pattern repeats (it isn't periodic over 256 pixels, so a seam shows at the 4:3 edge).
+- **Tests**: `tests/scripts/widescreen_screens.txt` (Surf's cut-in, the wall map), `widescreen_bag.txt`,
+  `widescreen_journal.txt`, `widescreen_flymap.txt`: the test command `app bag|journal|townmap|flymap` opens the app over
+  the overworld; it has no field task to return to, so each such script ends in the app.
+
 ## Particles (2026-11-09)
 
 The Poké Ball's throw and opening and the moves' particles weren't drawn. They were lost in libntr's renderer: it keeps

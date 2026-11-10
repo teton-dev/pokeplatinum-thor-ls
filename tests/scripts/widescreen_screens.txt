@@ -1,0 +1,51 @@
+# Widescreen on the Town Map and a field move's cut-in. With Settings > Display > Widescreen on, the bottom screen in its own window and the top window
+# 16:9, it should fill the window (or sit centred in it). The check is the shots. From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_screens.txt --from turtwig
+#
+mash A until free
+wait 30
+jump 165 353 209
+until free timeout 3000
+wait 60
+# Surf's cut-in (press START
+wait 30
+press B
+wait 30
+mash B until free timeout 3000
+script 10012
+wait 40
+shot surf-message
+mash A for 3
+shot hm-1
+mash A for 3
+shot hm-2
+mash A for 3
+shot hm-3
+mash A for 3
+shot hm-4
+mash A for 3
+shot hm-5
+mash A for 3
+shot hm-6
+mash A for 3
+shot hm-7
+mash A for 3
+shot hm-8
+mash A for 3
+shot hm-9
+mash A for 3
+shot hm-10
+mash A for 3
+shot hm-11
+mash A for 3
+shot hm-12
+mash A until free timeout 3000
+# The Town Map on a wall (script 2508)
+script 2508
+wait 200
+shot townmap
+mash B for 200
+until free timeout 3000
+exit 0
