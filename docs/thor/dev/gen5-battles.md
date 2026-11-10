@@ -357,6 +357,11 @@ In slices, each tested on the desktop:
   dark backgrounds and crashes: never use it. Not every combination was looked at.
 - **Options:** Platinum's Text Speed goes to BW2's config (`Gen5Battle.textSpeed`: BW2's 0, 1, 2 are slow, normal,
   fast too), both the battle's own and the save's the text printing reads; the first was forced to 0 before.
+- **Sprites of Sinnoh's special trainers:** BW2 has its own for the eight Sinnoh Gym Leaders (Roark to Volkner) and
+  Cynthia, already used (`gen5/src/trainers.c`); where a trainer is in both games, BW2's is used. BW2 has no Sinnoh Elite
+  Four (Aaron, Bertha, Flint, Lucian), Barry, Cyrus or the Galactic commanders: they show another class's sprite for
+  now (Unova's Elite Four, Plasma's grunts) and need Sinnoh-style sprites made for them, as the player's back sprite
+  was (the owner will supply them).
 - **Still to do for the story's trainers:** the Thor (an APK built with these changes), critical hits in the first
   battle, Cynthia and the Galactic bosses' own texts and sprites (the nearest class is used).
 - **Next:** the trainer's items in battle (BW2's AI uses them: Potions), evolutions and new moves after the battle
