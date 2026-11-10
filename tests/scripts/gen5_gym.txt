@@ -1,0 +1,44 @@
+# Gen 5 battles, milestone 5: story trainers in Black 2 and White 2's engine with Settings > Gameplay > Gen 5 battles
+# on: Gym Leader Roark (Platinum's trainer 246), then the rival on Route 201 (trainer 851), each started as its encounter
+# starts it. FIGHT and the first move every turn until it's over; the log has the money and the party after. From a
+# finished game's save (the owner's fixture full100, never committed), whose level 100 party wins at once:
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_gym.txt --from full100
+
+gen5-import
+gen5-battles on
+# The save opens on the journal page (the shots give it real time to come up, which frames alone don't)
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+party
+battle-style set
+trainer 246
+until battle
+until command timeout 6000
+wait 30
+shot gen5-gym-command
+touch 128 95
+wait 30
+touch 64 54
+wait 120
+mash A until free timeout 12000
+shot gen5-gym-back
+party
+trainer 851
+until battle
+until command timeout 6000
+wait 30
+shot gen5-rival-command
+touch 128 95
+wait 30
+touch 64 54
+wait 120
+mash A until free timeout 12000
+shot gen5-rival-back
+party
+exit 0
