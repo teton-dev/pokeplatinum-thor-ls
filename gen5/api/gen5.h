@@ -152,6 +152,36 @@ void Gen5_BattleVBlank(void);
 // Gen5_BattleBegin had (unchanged if the battle failed).
 enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle);
 
+// The Pokémon summary screen, in BW2's own (the summary of "Gen 5 screens"): the player's party (or one Pokémon) and
+// which to show. partyCount Pokémon can be paged through; mode 1 asks which move to forget for `move` (Gen5Summary.slot
+// and result say what was chosen). Gen5_SummaryBegin, then the same Gen5_SetInput / Gen5_SetWidescreen /
+// Gen5_BattleFrame / Gen5_BattleVBlank as a battle, until Gen5_BattleFrame returns 0, then Gen5_SummaryEnd.
+enum Gen5SummaryMode {
+    GEN5_SUMMARY_NORMAL,
+    GEN5_SUMMARY_FORGET_MOVE, // Pick a move to forget for `move`
+};
+
+enum Gen5SummaryResult {
+    GEN5_SUMMARY_BACK, // Left with B or the back button
+    GEN5_SUMMARY_CLOSE, // Left with X, to the field
+    GEN5_SUMMARY_FORGET, // A move was chosen to forget: slot
+    GEN5_SUMMARY_FAILED,
+};
+
+typedef struct Gen5Summary {
+    Gen5Player player;
+    Gen5Pokemon party[GEN5_PARTY_MAX];
+    int partyCount;
+    int index; // The Pokémon shown first; the one shown last when it ends
+    int mode; // enum Gen5SummaryMode
+    unsigned move; // The move to be learnt, in GEN5_SUMMARY_FORGET_MOVE
+    int slot; // The move slot chosen to forget
+    int result; // enum Gen5SummaryResult
+} Gen5Summary;
+
+int Gen5_SummaryBegin(const Gen5Summary *summary, const char *gen5Dir);
+enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary);
+
 #ifdef __cplusplus
 }
 #endif

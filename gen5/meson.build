@@ -72,6 +72,15 @@ gen5_sources = [
     'src/ov169/condition_effects.c',
     'src/ov169/field_handlers.c',
     # The trainer AI (overlay 170)
+    # The Pokémon summary screen (overlay 207)
+    'src/ov207/p_sta_info.c',
+    'src/ov207/p_sta_oam.c',
+    'src/ov207/p_sta_ribbon.c',
+    'src/ov207/p_sta_skill.c',
+    'src/ov207/p_sta_sub.c',
+    'src/ov207/p_sta_sys.c',
+    'src/ov207/p_status.c',
+    'src/ov207/ribbon.c',
     # The battle screens' shared cursor and windows (overlay 285)
     'src/ov285/b_app_tool.c',
     # The battle bag (overlay 286)
@@ -182,6 +191,7 @@ gen5_sources = [
     'src/system/pokedex_savedata.c',
     'src/system/pokegra.c',
     'src/system/pokeparty.c',
+    'src/system/pokerus.c',
     'src/system/printsys.c',
     'src/system/record.c',
     'src/system/regulation.c',
