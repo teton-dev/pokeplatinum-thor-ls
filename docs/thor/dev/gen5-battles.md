@@ -468,6 +468,17 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
   `widescreen_journal.txt`, `widescreen_flymap.txt`, `widescreen_party.txt`: the test command `app bag|journal|townmap|flymap|party` opens the app over
   the overworld; it has no field task to return to, so each such script ends in the app.
 
+## Widescreen: Platinum's own battles (2026-11-09)
+
+The backdrop (BG3, `battle_main.c`) is drawn wide and mirrored at the sides (`SIM_SetWidescreenBgMirror`); the Pokemon,
+bases, HP boxes and text box stay in the 4:3 middle. The HP boxes' end caps (the owner's 5x33 texture, pure white
+transparent; enemy: at the box's left end, player: mirrored at its right end) are stamped onto BG3's wide picture each
+frame at the boxes' sprite positions (`UpdateHealthboxCaps`, `SIM_SetWidescreenStamps`, `libntr_wide_mirror.patch`), so
+they follow the boxes as they slide. A box's sprite position is its centre: enemy box 116 wide and 33 high (cap at
+x - 63, y - 16), player box 128 wide, 42 high with the EXP bar (cap at x + 64, y - 21, stretched; the player's HP
+band is a row lower than the enemy's). Double battles' player boxes (33 high assumed) are not checked.
+`tests/scripts/widescreen_gen4_battle.txt` has the shots.
+
 ## Particles (2026-11-09)
 
 The Poké Ball's throw and opening and the moves' particles weren't drawn. They were lost in libntr's renderer: it keeps

@@ -34,6 +34,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `widescreen_screens.txt` | `turtwig` | with widescreen on: Surf's cut-in band and the wall Town Map across the whole 16:9 window (the check is the shots) | ~30 s |
 | `widescreen_bag.txt`, `widescreen_journal.txt`, `widescreen_flymap.txt`, `widescreen_party.txt` | `turtwig` | with widescreen on: that screen opened by the test command `app` fills the 16:9 window, its contents in the 4:3 middle (the check is the shot) | ~20 s each |
 | `widescreen_journal_load.txt` | a save with journal entries | the Journal page that opens on loading it, with its paper and text (the check is the shots; the fixture is your own save) | ~30 s |
+| `widescreen_gen4_battle.txt` | `turtwig` | with widescreen on, Gen 5 battles off: a wild and a trainer battle in Platinum's engine, the backdrop across the 16:9 window and the HP boxes' end caps (the check is the shots) | ~1 min |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
 engine, and the test passes once that asks for a command (BW2's battle raises the same `command` event as Platinum's).
