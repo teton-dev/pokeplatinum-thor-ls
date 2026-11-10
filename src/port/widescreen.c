@@ -103,15 +103,22 @@ static BOOL Gen5BattleShown(void)
 // the page that opens on loading a save) and the Town Map (and the Fly map). They are drawn for 256 pixels; their
 // layers' edge columns continue across the sides, so the backgrounds reach the edges of the window and the
 // contents (text, lists, the map) stay in the 4:3 middle
-static BOOL WideApplication(void)
+static BOOL WideApplication(u8 *edgeBgs, u8 *edgeMirrorBgs)
 {
+    *edgeBgs = 0x0F;
+    *edgeMirrorBgs = 0;
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
     if (fieldSystem == NULL || fieldSystem->processManager == NULL || fieldSystem->processManager->child == NULL) {
         return FALSE;
     }
     const OverlayFunc init = fieldSystem->processManager->child->template.init;
+    if (init == gPokemonPartyAppTemplate.init) {
+        // Its background (BG3, lines) is mirrored across the sides, so the lines continue
+        *edgeMirrorBgs = (1 << 2) | (1 << 3);
+        return TRUE;
+    }
     return init == gBagApplicationTemplate.init || init == (OverlayFunc)JournalController_Init
-        || init == TownMap_Init || init == gPokemonPartyAppTemplate.init;
+        || init == TownMap_Init;
 }
 
 // The HP box end cap (5x33, RGB, pure white is transparent): the enemy's box gets it at its left end, the player's
@@ -232,15 +239,16 @@ void Widescreen_Update(void)
         wideBattle = TRUE;
     }
     UpdateHealthboxCaps(wideBattle);
-    if (!wide && WideApplication()) {
+    u8 edgeMirrorBgs = 0;
+    if (!wide && WideApplication(&edgeBgs, &edgeMirrorBgs)) {
         wide = TRUE;
-        edgeBgs = 0x0F;
     }
     SIM_SetWidescreenSceneOptions(FALSE, wideBgs);
     SIM_SetWidescreenObjWrap(objWrap);
     SIM_SetWidescreenBgMirror(mirrorBgs);
     // BW2's text box (BG1) reaches the edges of the wide screen; its text stays in the middle
     SIM_SetWidescreenBgEdgeExtend(edgeBgs);
+    SIM_SetWidescreenBgEdgeMirror(edgeMirrorBgs);
     // and its black bars (the party balls', the ability's), sprites that touch the picture's edges
     SIM_SetWidescreenObjEdgeExtend(Gen5BattleShown() ? 0x0F : 0);
     SIM_SetWidescreenScene(wide);
