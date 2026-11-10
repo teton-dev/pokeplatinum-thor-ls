@@ -16,9 +16,11 @@ directory = libntr
 # output plays (BW2's cries use it). libntr_g3_translucent_state.patch: each deferred translucent polygon is drawn with its own
 # culling and depth test (BW2's battle particles were culled). libntr_wide_edge.patch: SIM_SetWidescreenBgEdgeExtend,
 # a BG layer's edge columns continued across the sides of a wide scene (BW2's text box reaches the screen's edges).
+# libntr_wide_obj_edge.patch: SIM_SetWidescreenObjEdgeExtend, the dark pixels of OBJs at the 4:3 picture's edge continued
+# across the sides of a wide scene (BW2's party balls' bar and ability bar reach the screen's edges).
 # libntr_translucent_id.patch: SIM_SetTranslucentPolygonIdRule, the DS's rule that a translucent polygon doesn't blend
 # over a pixel another one with its polygon ID drew (BW2's shadows were darker where their parts overlap)
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch
 
 [provide]
 dependency_names = NitroSDK

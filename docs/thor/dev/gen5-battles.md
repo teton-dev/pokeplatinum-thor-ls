@@ -475,6 +475,16 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
   libntr's `SIM_SetWidescreenObjWrap` (`subprojects/packagefiles/libntr_wide_obj.patch`) and its BG2 picture through
   the wide BG layers libntr already had; only Flash's darkness stays 4:3 (`tests/scripts/widescreen_weather.txt`).
 
+## Widescreen: the party balls' bar and the ability bar (2026-11-09)
+
+BW2's black bars (the foe's party balls' frame, slid in from the left, the player's from the right, and the ability
+pop-up's) are OBJ sprites that touch the 4:3 picture's edges; they stopped there in a wide scene. libntr's
+`SIM_SetWidescreenObjEdgeExtend` (`libntr_wide_obj_edge.patch`) continues the *dark* pixels of an OBJ at the picture's
+left and right columns across the sides, for every priority, during a Gen 5 battle (`src/port/widescreen.c`). Dark
+only, so a ball or a light edge doesn't smear. Checked on the desktop for the balls' bar (`gen5_roark_intro.txt`,
+with widescreen on, frame by frame); the ability bar not yet (it needs an ability that fires at the send-out).
+The Gym Leader's cut-in before the battle is Platinum's own encounter effect, not BW2's, and is not part of this.
+
 ## Particles (2026-11-09)
 
 The Poké Ball's throw and opening and the moves' particles weren't drawn. They were lost in libntr's renderer: it keeps

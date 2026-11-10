@@ -88,6 +88,8 @@ void Widescreen_Update(void)
     SIM_SetWidescreenObjWrap(objWrap);
     // BW2's text box (BG1) reaches the edges of the wide screen; its text stays in the middle
     SIM_SetWidescreenBgEdgeExtend(Gen5BattleShown() ? (1 << 1) : 0);
+    // and its black bars (the party balls', the ability's), sprites that touch the picture's edges
+    SIM_SetWidescreenObjEdgeExtend(Gen5BattleShown() ? 0x0F : 0);
     SIM_SetWidescreenScene(wide);
 }
 
