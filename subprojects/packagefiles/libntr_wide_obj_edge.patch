@@ -61,7 +61,7 @@
  
  smooth in vec2 fragTexCoord;
  //uniform float inAlpha;
-@@ -69,10 +71,22 @@
+@@ -69,10 +71,23 @@
      bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], cEdge) : none);
      vec4 objc[4];
      vec2 cWrap = vec2(fract(c2d.s), c2d.t);
@@ -69,14 +69,15 @@
 -    objc[1] = inside2d ? texture(objTexture[1], c2d) : ((wideObjMask & 2) != 0 ? texture(objTexture[1], cWrap) : none);
 -    objc[2] = inside2d ? texture(objTexture[2], c2d) : ((wideObjMask & 4) != 0 ? texture(objTexture[2], cWrap) : none);
 -    objc[3] = inside2d ? texture(objTexture[3], c2d) : ((wideObjMask & 8) != 0 ? texture(objTexture[3], cWrap) : none);
-+    // Outside the 4:3 picture, the edge column's pixel if it is dark (a bar), for the priorities asked for
++    // Outside the 4:3 picture, the edge column's pixel if there is one (a bar that reaches the edge, with its border and
++    // its inside), for the priorities asked for
 +    vec2 cObjEdge = vec2(clamp(c2d.s, 0.002, 0.998), c2d.t);
 +    vec4 objEdge[4];
 +    for (int k = 0; k < 4; k++) {
 +        objEdge[k] = none;
 +        if (!inside2d && (wideObjEdgeMask & (1 << k)) != 0) {
 +            vec4 e = texture(objTexture[k], cObjEdge);
-+            if (e.a > 0.1 && max(e.r, max(e.g, e.b)) < 0.2) {
++            if (e.a > 0.1) {
 +                objEdge[k] = e;
 +            }
 +        }
