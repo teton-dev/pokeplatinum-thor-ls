@@ -480,6 +480,50 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
   libntr's `SIM_SetWidescreenObjWrap` (`subprojects/packagefiles/libntr_wide_obj.patch`) and its BG2 picture through
   the wide BG layers libntr already had; only Flash's darkness stays 4:3 (`tests/scripts/widescreen_weather.txt`).
 
+## Widescreen: field moves, Bag, maps, Journal (2026-11-09)
+
+- **Child applications** (`WideApplication` in `src/port/widescreen.c`): while the process manager's child is the Bag,
+  the party screen, the Town Map (item, wall and Fly modes) or the Journal (recognised by the child's `init`), the scene is wide and all
+  four BG layers' edge columns continue across the sides (`SIM_SetWidescreenBgEdgeExtend`, 0x0F). The apps draw for 256
+  pixels, so the lists, text and map stay in the middle; their backgrounds (the Bag's blue and green, the Town Map's blue
+  frame, the Journal's page) fill the sides. The Journal's load-time page opens before the field map exists, which is why
+  this doesn't depend on `ShownFieldSystem`.
+- **The party screen** edge-extends its layers, and mirrors BG2 and BG3 (the panels and the lined background) across the
+  sides through `SIM_SetWidescreenBgEdgeMirror` (a shader-side mirror for layers that aren't drawn through the wide path;
+  `libntr_wide_mirror.patch`). The occupied slot's blue panel shows once more, mirrored, at the left.
+- **The HM cut-in** is a band: BG3 (the rings) behind hardware window WIN0, whose X range grows from the middle to 0..255.
+  While `HMCutIn_PortIsPlaying()` BG3 is drawn wide (`G2SIM_DrawBGWide`) and libntr's window test treats a window that
+  starts at 0 or reaches 255 as continuing across the wide layer's sides (`libntr_wide_window.patch`). The rings are mirrored
+  at the sides (`SIM_SetWidescreenBgMirror`, `libntr_wide_mirror.patch`) and the cut-in's sprites (wind, the Pokemon)
+  use the OBJ wrap, so they continue to the edges. This works with clear weather too (an early return in
+  `WeatherLayers` used to skip it).
+- **The Journal's black pages** (4:3 too, found on the Thor): libntr's `G2_GetBG0CharPtr`, `G2_GetBG1CharPtr` and
+  `G2_GetBG2CharPtr` masked the character base to 128 KB (`& 131071`, `% 8`) while the renderer reads the real one. The
+  Journal's text windows on BG1 (char base 0x20000) were therefore loaded at 0, over the page's tiles (BG2 and BG3 at 0):
+  the pages with text lost their paper. The masks are gone (`libntr_bg_charbase.patch`). `widescreen_journal_load.txt`
+  shows the page that opens on loading a save (it needs a save with journal entries).
+- **Tests**: `tests/scripts/widescreen_screens.txt` (Surf's cut-in, the wall map), `widescreen_bag.txt`,
+  `widescreen_journal.txt`, `widescreen_flymap.txt`, `widescreen_party.txt`: the test command `app bag|journal|townmap|flymap|party` opens the app over
+  the overworld; it has no field task to return to, so each such script ends in the app.
+
+## Widescreen: Platinum's own battles (2026-11-09)
+
+The backdrop (BG3, `battle_main.c`) is drawn wide and mirrored at the sides (`SIM_SetWidescreenBgMirror`); the Pokemon,
+bases, HP boxes and text box stay in the 4:3 middle. The HP boxes' end caps (the owner's 5x33 texture, pure white
+transparent; enemy: at the box's left end, player: mirrored at its right end) are stamped onto BG3's wide picture each
+frame at the boxes' sprite positions (`UpdateHealthboxCaps`, `SIM_SetWidescreenStamps`, `libntr_wide_mirror.patch`), so
+they follow the boxes as they slide. A box's sprite position is its centre: enemy box 116 wide and 33 high (cap at
+x - 63, y - 16), player box 128 wide, 42 high with the EXP bar (cap at x + 64, y - 21, stretched; the player's HP
+band is a row lower than the enemy's). Double battles' player boxes (33 high assumed) are not checked.
+`tests/scripts/widescreen_gen4_battle.txt` has the shots.
+
+## Widescreen: the Gym Leader encounter effect (2026-11-09)
+
+`EncounterEffect_GymLeader` (`encounter_effect_core.c`) is the "VS" banner: BG3 (the banner, scrolled every frame)
+behind a window opened line by line, sprites (the sliding bars, priorities 1 to 3) and the leader's mugshot (priority 0,
+enters from x = 272). While it plays (`EncounterEffect_PortGymLeaderPlaying`) BG3 is drawn wide and mirrored and the OBJ
+wrap covers priorities 1 to 3 only, so the mugshot doesn't reappear at the left as it enters. The other encounter effects
+(wild, trainer, Elite Four...) are not widened. `tests/scripts/widescreen_leader.txt` (test command `leader N`).
 ## Widescreen: the party balls' bar and the ability bar (2026-11-09)
 
 BW2's bars reach the 4:3 picture's edges and stopped there in a wide scene. Two kinds:

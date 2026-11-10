@@ -1038,6 +1038,15 @@ static void HidePlayerMapObj(FieldSystem *fieldSystem, BOOL hidden)
     MapObject_SetHidden(playerMapObject, hidden);
 }
 
+#ifdef SDK_PORT
+static int sPortCutIns = 0;
+
+BOOL HMCutIn_PortIsPlaying(void)
+{
+    return sPortCutIns > 0;
+}
+#endif
+
 SysTask *HMCutIn_StartTask(FieldSystem *fieldSystem, BOOL isFly, Pokemon *shownPokemon, int playerGender)
 {
     SysTask *task;
@@ -1046,6 +1055,9 @@ SysTask *HMCutIn_StartTask(FieldSystem *fieldSystem, BOOL isFly, Pokemon *shownP
     cutIn->mon = shownPokemon;
     cutIn->playerGender = playerGender;
     cutIn->_1 = isFly;
+#ifdef SDK_PORT
+    sPortCutIns++;
+#endif
 
     if (isFly == FALSE) {
         task = SysTask_Start(SysTask_CutIn, cutIn, 133);
@@ -1066,6 +1078,11 @@ void HMCutIn_EndTask(SysTask *cutInTask)
 {
     HMCutIn *cutIn = SysTask_GetParam(cutInTask);
 
+#ifdef SDK_PORT
+    if (sPortCutIns > 0) {
+        sPortCutIns--;
+    }
+#endif
     FreeHMCutIn(cutIn);
     SysTask_Done(cutInTask);
 }
