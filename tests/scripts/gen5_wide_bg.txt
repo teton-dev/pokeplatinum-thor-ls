@@ -1,0 +1,24 @@
+# Gen 5 battles, widescreen: the arena's background and the sprites' placement while the camera idles. A wild
+# battle's command menu, shot ten times a second apart. From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=1280 WindowHeight=720' \
+#       tools/docker/desktop.sh test tests/scripts/gen5_wide_bg.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+wait 30
+wild 399 5
+until battle
+until command
+wait 60
+shot bg-1
+wait 45
+shot bg-2
+wait 45
+shot bg-3
+wait 45
+shot bg-4
+wait 45
+shot bg-5
+exit 0
