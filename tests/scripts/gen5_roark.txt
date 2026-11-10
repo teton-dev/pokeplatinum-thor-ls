@@ -1,0 +1,23 @@
+# Gen 5 battles, milestone 5: Gym Leader Roark's real script in Black 2 and White 2's engine, as a player meets him:
+# into Oreburgh Gym (map 47) in front of Roark, A, his lines, the battle (Tackle every turn: Turtwig loses to his level
+# 12 Pokémon), then the script's loss path: the blackout. The log has the battle's result and the money; the shots the
+# battle's start and where the player wakes. From the turtwig fixture:
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_roark.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+party
+jump 47 5 6
+until free timeout 3000
+walk UP 2
+press A
+mash A until battle timeout 3000
+mash A until command timeout 6000
+shot gen5-roark-command
+# The battle, then the blackout and the Pokémon Center
+mash A until free timeout 20000
+shot gen5-roark-after
+party
+exit 0

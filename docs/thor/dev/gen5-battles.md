@@ -329,6 +329,26 @@ In slices, each tested on the desktop:
     4 bytes early, in the middle of the table. `tr_ai.c`'s patch reads the offset first.
   - Tests: `gen5_trainer.txt` battles Youngster Tristan (Platinum's trainer 1, the test command `trainer`): won with
     Tackle, money +80 in the log.
+- **The story's trainers (2026-11-09, done on the desktop):** most need nothing more. Platinum's scripts start Gym
+  Leaders, the rival, Cynthia, Team Galactic and the rest with `Encounter_NewVsTrainer` and no status flag, as for a
+  route trainer, and the script reads the result (`CheckWonBattle`, `BlackOutFromBattle`, badges, `SetTrainerFlag`), so
+  the bridge's WON/LOST result is all they need. The flags that exist: `BATTLE_STATUS_FIRST_BATTLE` (Barry on
+  Route 201: **accepted now**; Platinum there also keeps critical hits out and shows only FIGHT, which BW2 doesn't
+  do), `DISTORTION` (the Distortion World, with Giratina: still Platinum's), and on wild battles `NO_RUNNING`,
+  `LEGENDARY`, `GIRATINA`, `HONEY_TREE`, `RECORDING`/`RECORDED` (link battles). Doubles and tag battles are milestone 7.
+  - **Battle style:** Platinum's Set/Shift option goes to BW2's config (`Gen5Battle.setStyle`). BW2 asks "Will you
+    switch?" after each of a trainer's Pokémon in Shift, as the scripted tests found out at Roark's second.
+  - **Level 100:** BW2's gauge divided by the experience still to go, 0 at level 100 (the DS's divider returns
+    garbage; x86 traps). `btlv_gauge.c`'s patch guards its four divisions.
+  - **Prize and loss:** Roark pays 1680 (his last Pokémon's level 14 times 4 times 30) and a loss with no badges and a
+    level 6 lead takes 48, both as Platinum's; the party is healed at the blackout.
+  - Tests: `gen5_roark.txt` (`turtwig`) plays Roark's real script from in front of him to the blackout;
+    `gen5_gym.txt` (the owner's finished save, `full100`) plays Roark and Route 201's rival through `trainer`, to the
+    end, with the prize money in the log; `gen5_first_battle.txt` (`before-starter`) Barry's first battle and the
+    script after it. The badge and TM scripts after a win are Platinum's own and weren't played here (the finished
+    save has the badge: a test would need a fresh game's Gym).
+- **Still to do for the story's trainers:** the Thor (an APK built with these changes), critical hits in the first
+  battle, Cynthia and the Galactic bosses' own texts and sprites (the nearest class is used).
 - **Next:** the trainer's items in battle (BW2's AI uses them: Potions), evolutions and new moves after the battle
   (as for wild battles), the rival's and Gym Leaders' battles (scripted, with flags), double battles (milestone 7).
 

@@ -98,6 +98,7 @@ typedef struct Gen5Trainer {
 // won or lost, and a caught Pokémon as the battle left it (with the ball it was caught in).
 typedef struct Gen5Battle {
     Gen5Player player;
+    int setStyle; // Platinum's Battle Style option: 1 is Set (no free switch after the opponent's Pokémon faints)
     Gen5Pokemon party[GEN5_PARTY_MAX];
     int partyCount;
     Gen5Item items[GEN5_ITEMS_MAX];

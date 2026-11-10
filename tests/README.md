@@ -25,6 +25,10 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `gen5_catch.txt` | `turtwig` | with *Gen 5 battles* on, a Bidoof caught into the party and, with the party full, a Starly into the PC (Master Balls); keep it as the fixture `gen5-caught` | ~2 min |
 | `gen5_caught.txt` | `gen5-caught` | logs what that save has: the party, the PC, the bag and the Pokédex (the check is the log's lines) | ~30 s |
 | `gen5_trainer.txt` | `turtwig` | with *Gen 5 battles* on, Youngster Tristan (trainer 1, the test command `trainer`) in BW2's engine with Platinum's AI: won, the prize money in the log (Gen 5 builds) | ~1 min |
+| `gen5_roark.txt` | `turtwig` | with *Gen 5 battles* on, Gym Leader Roark's real script (from in front of him in Oreburgh Gym) in BW2's engine: the battle, Turtwig's loss, the blackout (Gen 5 builds) | ~1 min |
+| `gen5_gym.txt` | `full100` (the owner's finished game, never committed) | Roark and the Route 201 rival (trainers 246 and 851) in BW2's engine with a level 100 party, to the end (Gen 5 builds) | ~2 min |
+| `gen5_first_battle.txt` | `before-starter` | Barry's first battle (`FIRST_BATTLE`) in BW2's engine, to the end and the script after it (Gen 5 builds) | ~1 min |
+| `fly_snowpoint.txt`, `fly_jubilife.txt` | `full100` | Fly with Arceus (the `fly` command: the HM cut-in, then the landing) to Snowpoint City and Jubilife City | ~1 min |
 | `pc.txt` | `turtwig` | a Pokémon Center's PC (Sandgem Town): the box screen shows, then back to the overworld (the check is the shot) | ~30 s |
 | `gen5_loss.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig loses (a level 100 Charizard): the blackout, back home (Gen 5 builds) | ~1 min |
 | `new_game_girl.txt` | nothing | `new_game.txt` with a girl: keep it as `before-starter-girl`, then `turtwig.txt --from before-starter-girl --keep turtwig-girl` | ~20 s |
@@ -79,6 +83,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `save` | saves the game, as the menu does, once the player is free |
 | `gen5-import` | imports the Black 2 or White 2 ROM in `POKEPLATINUM_GEN5_ROM` (the harness passes `GEN5_ROM`, or `~/thor-dev/PKMNB2.nds`) and waits; fails if it is refused or the self-check fails |
 | `gen5-battles on\|off` | *Settings > Gameplay > Gen 5 battles* |
+| `battle-style set\|shift` | the save's Battle Style option (Set: no free switch when the opponent sends in another Pokémon) |
 | `wild SPECIES LEVEL` | once the player is free, a wild SPECIES at LEVEL met as in tall grass (the field's own wild encounter, which the setting sends to the Gen 5 engine) |
 | `item ITEM COUNT` | puts items into the bag (the item's number: 1 is the Master Ball, 4 the Poké Ball) |
 | `give SPECIES LEVEL` | a new Pokémon into the party |

@@ -228,6 +228,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     // The money a loss takes is checked against what the player has (CalcLossMoney)
     getTrainerGameInfoAddress(SaveControl_GetInstance())->cash = battle->player.money;
     Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
+    Config_SetBattleStyle(config, battle->setStyle);
     BagSave *bag = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, BagSave_GetBlockSize(), TRUE, __FILE__, __LINE__));
     BagSave_Init(bag);
     // The player's items the battle can use; one BW2 doesn't have stays out (and comes back as it was)

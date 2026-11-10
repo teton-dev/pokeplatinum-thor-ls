@@ -20,6 +20,7 @@
 #include "message.h"
 #include "trainer_data.h"
 #include "bag.h"
+#include "game_options.h"
 #include "battle/battle_system.h"
 #include "constants/heap.h"
 #include "evolution.h"
@@ -73,7 +74,10 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     if (dto->battleType == BATTLE_TYPE_WILD_MON) {
         return (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
     }
-    return dto->battleType == BATTLE_TYPE_TRAINER && dto->battleStatusMask == 0;
+    // The story's trainers (Gym Leaders, the rival, Cynthia, Team Galactic) are started by their scripts as any
+    // trainer is, with no flag; Barry's first battle on Route 201 has BATTLE_STATUS_FIRST_BATTLE (Platinum there
+    // keeps critical hits out of it and shows only FIGHT; BW2's trainer battles never let the player run)
+    return dto->battleType == BATTLE_TYPE_TRAINER && (dto->battleStatusMask & ~BATTLE_STATUS_FIRST_BATTLE) == 0;
 }
 
 BOOL Gen5Battle_StartDebug(int species, int level)
@@ -311,6 +315,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
 
     memset(&sBattle, 0, sizeof(sBattle));
     TextToGen5(TrainerInfo_Name(trainerInfo), TRAINER_NAME_LEN + 1, sBattle.player.name, 8);
+    sBattle.setStyle = Options_BattleStyle(dto->options) == OPTIONS_BATTLE_STYLE_SET;
     sBattle.player.id = TrainerInfo_ID(trainerInfo);
     sBattle.player.gender = TrainerInfo_Gender(trainerInfo);
     sBattle.player.money = TrainerInfo_Money(trainerInfo);
