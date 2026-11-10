@@ -1,0 +1,57 @@
+# Gen 5 battles in widescreen: moves whose animations fill the screen or use many particles (Waterfall, Water Pulse,
+# Flamethrower) against a wild Pidgey, from the owner's finished save (the fixture full100, never committed; its
+# lead is made a level 100 Palkia that knows the move). One run per move; edit MOVE below. The shots follow the move
+# frame by frame:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/gen5_moves.txt --from full100
+
+gen5-import
+gen5-battles on
+mash A for 300
+shot j1
+mash A for 300
+shot j2
+mash B for 300
+shot j3
+mash A until free timeout 3000
+learn 127
+wild 16 50
+until battle
+until command timeout 6000
+wait 30
+# FIGHT, the first move
+touch 128 95
+wait 30
+touch 64 54
+wait 10
+shot m00
+wait 10
+shot m01
+wait 10
+shot m02
+wait 10
+shot m03
+wait 10
+shot m04
+wait 10
+shot m05
+wait 10
+shot m06
+wait 10
+shot m07
+wait 10
+shot m08
+wait 10
+shot m09
+wait 10
+shot m10
+wait 10
+shot m11
+wait 10
+shot m12
+wait 10
+shot m13
+wait 10
+shot m14
+exit 0

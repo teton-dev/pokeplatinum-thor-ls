@@ -91,6 +91,8 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `fly MAP X Z [SLOT]` | once the player is free, Fly as the town map's choice starts it: the HM cut-in with party member SLOT (default the first), then the landing, at map header MAP's fly destination at tile (X, Z) (165 379 234: Snowpoint City) |
 | `script ID` | once the player is free, runs the field script ID (2018: a Pokémon Center's PC, as facing it does) |
 | `trainer ID` | once the player is free, a battle against Platinum's trainer ID, as its encounter starts it |
+| `lead SLOT` | the party member in SLOT (0 to 5) to the front |
+| `learn MOVE` | the lead's first move becomes MOVE (its number: 127 Waterfall, 352 Water Pulse, 53 Flamethrower), with full PP |
 | `party` | logs the party, the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
 | `shot NAME` | a screenshot, `NAME.png` |
 | `log TEXT` | prints the text |
