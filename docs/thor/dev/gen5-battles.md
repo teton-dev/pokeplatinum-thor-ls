@@ -463,4 +463,7 @@ is round (the particle cameras' orthographic extents are widened in `GFL_G3DSysM
   (left of the enemy's spot, and at the right). The desktop's 4:3 shots show the same rays on a different arena, so it
   isn't widescreen's: the guess is that libntr draws each quad as a fan of triangles and interpolates the vertex
   colours across them, where the DS rasterises a quad as a whole. Not looked into yet.
-- The shadows under both Pokémon flicker (shaped correctly). Not looked into yet.
+- ~~The shadows under both Pokémon flickered~~ (fixed, confirmed on the Thor): their overlapping translucent quads were
+  blended twice, in an order that changed from frame to frame. libntr now has the DS's polygon ID rule (a translucent
+  polygon doesn't blend over a pixel another one with its ID drew; `libntr_translucent_id.patch`,
+  `SIM_SetTranslucentPolygonIdRule`, on only during a Gen 5 battle, stencil-based).
