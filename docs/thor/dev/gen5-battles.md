@@ -539,6 +539,18 @@ Checked on the desktop in widescreen: `gen5_roark_intro.txt` (the balls' bar, bo
 the player's bar, from the owner's finished save). The Gym Leader's cut-in before the battle is Platinum's own
 encounter effect, not BW2's, and is not part of this.
 
+## Widescreen: the full-screen moves (2026-11-10)
+
+Moves that fill the screen with a background of their own (Waterfall's water, Water Pulse's sea, Aerial Ace's chevrons,
+Fire Blast's rays, Psychic's waves, Flamethrower's red) draw it on BG2 or BG3 and showed it in the 4:3 middle with the
+edge columns smeared across the sides. Those layers are now edge-mirrored (`SIM_SetWidescreenBgEdgeMirror`, from the
+widescreen branch's `libntr_wide_mirror.patch`; `src/port/widescreen.c`): the picture is reflected across each side, so
+the patterns line up at the seam and fill the 16:9 window; the Pokémon, the particles and the text stay in the middle.
+The ability bar and the text box use the same layers' edge columns. Checked on the desktop in widescreen with
+`gen5_moves.txt` (the lead's first move set with the test command `learn MOVE`: 127 Waterfall, 352 Water Pulse,
+332 Aerial Ace, 126 Fire Blast, 94 Psychic, 53 Flamethrower; the shots follow each move). Open: Flamethrower's fire
+stream is a few faint red dots on its red background (Fire Blast's flames are solid): looked at, not understood.
+
 ## Particles (2026-11-09)
 
 The Poké Ball's throw and opening and the moves' particles weren't drawn. They were lost in libntr's renderer: it keeps
