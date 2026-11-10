@@ -1397,6 +1397,11 @@ static BOOL CutIn_InitSpritesFly(HMCutIn *cutIn)
 
 static BOOL HMCutIn_UnloadMonSprite(HMCutIn *cutIn)
 {
+#ifdef SDK_PORT
+    // The Pokémon's sprite stays in the sprite list, off screen, after its cell data is released below; drawing it
+    // then reads freed memory, which crashed Fly (depending on what reused the memory: Dialga, Giratina...)
+    Sprite_SetDrawFlag(cutIn->pokemonSprite, FALSE);
+#endif
     CutIn_UnloadPokemonSpriteResources(cutIn);
     cutIn->state++;
     return FALSE;
