@@ -1,0 +1,81 @@
+--- a/libraries/sim/src/shaders/g3_vertex.glsl
++++ b/libraries/sim/src/shaders/g3_vertex.glsl
+@@ -4,9 +4,14 @@
+ layout (location = 0) in vec3 position;
+ layout (location = 1) in vec2 texCoord;
+ layout (location = 2) in vec4 inColor;
++// The vertex's clip-space W (positive), for perspective-correct interpolation as on the DS; 0 (not set) draws
++// flat, as before
++layout (location = 3) in float clipW;
+ 
+ smooth out vec2 fragTexCoord;
+ smooth out vec4 fragInColor;
++// (xyz * w, w): the fragment shader divides by the interpolated w to get the screen-linear xyz back (NDC z
++// is linear in screen space; GLSL ES has no noperspective)
+-smooth out vec4 coords;
++smooth out vec4 coordsW;
+ 
+ // Widescreen scenes the game didn't widen itself: narrower, so 4:3 shapes stay 4:3
+@@ -14,8 +19,9 @@
+ 
+ void main()
+ {
+-    gl_Position = vec4(position.x * xScale, position.y, position.z, 1.0);
+-    coords = vec4(position.x, position.y, position.z, 1.0);
++    float w = clipW > 0.0 ? clipW : 1.0;
++    gl_Position = vec4(position.x * xScale * w, position.y * w, position.z * w, w);
++    coordsW = vec4(position.x * w, position.y * w, position.z * w, w);
+     fragTexCoord = vec2(texCoord.x, texCoord.y);
+     fragInColor = inColor;
+ }
+--- a/libraries/sim/src/shaders/g3_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_fragment.glsl
+@@ -10,7 +10,7 @@
+ uniform float fogDensity[32];
+ smooth in vec2 fragTexCoord;
+ smooth in vec4 fragInColor;
+-smooth in vec4 coords;
++smooth in vec4 coordsW;
+ // Edge marking (sim_main.cpp's edge pass) reads what the opaque pixels leave in attr: the
+ // polygon ID (6 bits, times 4) in r, the depth's high and low bytes in g and b. a is the write
+ // mask, blended like the colour: 1 for an opaque pixel replaces the pixel's attributes, 0 for a
+@@ -22,6 +22,7 @@
+ 
+ void main()
+ {
++    vec4 coords = vec4(coordsW.xyz / coordsW.w, 1.0);
+     vec4 shadedColor;
+     if( useTexture == 1 ) {
+         if(polygonMode == 0) {
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1679,7 +1679,8 @@
+         }
+ 
+         polyVerts[i].z = (((float)z / 16777215.0f) * 2.0f) - 1.0f;
+-        polyVerts[i].w = (((float)w / 16777215.0f) * 2.0f) - 1.0f;
++        // The clip-space W, for the vertex shader (W is not used otherwise)
++        polyVerts[i].w = (GLfloat)((double)vw / 4096.0);
+     }
+ 
+     // The clipped polygon is convex: a fan of triangles
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -226,14 +226,17 @@
+ 	glEnableVertexAttribArray(0);
+     glEnableVertexAttribArray(1);
+ 	glEnableVertexAttribArray(2);
++	glEnableVertexAttribArray(3);
+ 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(G3SIM_Vertex_t), (void*)offsetof(G3SIM_Vertex_t, x));
+     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(G3SIM_Vertex_t), (void*)offsetof(G3SIM_Vertex_t, s));
+ 	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(G3SIM_Vertex_t), (void*)offsetof(G3SIM_Vertex_t, r));
++	glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(G3SIM_Vertex_t), (void*)offsetof(G3SIM_Vertex_t, w));
+ 
+ 	glBindVertexArray(0);
+ 	glDisableVertexAttribArray(0);
+     glDisableVertexAttribArray(1);
+ 	glDisableVertexAttribArray(2);
++	glDisableVertexAttribArray(3);
+ }
+ 
+ static void G3SIM_FlushArrayInner();
