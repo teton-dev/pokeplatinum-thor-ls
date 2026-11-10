@@ -482,13 +482,18 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
 
 ## Widescreen: the party balls' bar and the ability bar (2026-11-09)
 
-BW2's black bars (the foe's party balls' frame, slid in from the left, the player's from the right, and the ability
-pop-up's) are OBJ sprites that touch the 4:3 picture's edges; they stopped there in a wide scene. libntr's
-`SIM_SetWidescreenObjEdgeExtend` (`libntr_wide_obj_edge.patch`) continues the *dark* pixels of an OBJ at the picture's
-left and right columns across the sides, for every priority, during a Gen 5 battle (`src/port/widescreen.c`). Dark
-only, so a ball or a light edge doesn't smear. Checked on the desktop for the balls' bar (`gen5_roark_intro.txt`,
-with widescreen on, frame by frame); the ability bar not yet (it needs an ability that fires at the send-out).
-The Gym Leader's cut-in before the battle is Platinum's own encounter effect, not BW2's, and is not part of this.
+BW2's bars reach the 4:3 picture's edges and stopped there in a wide scene. Two kinds:
+- **The party balls' bar** (the foe's slides in from the left, the player's from the right) is an OBJ sprite of priority 0.
+  libntr's `SIM_SetWidescreenObjEdgeExtend` (`libntr_wide_obj_edge.patch`) continues the pixels of OBJs at the picture's
+  left and right columns across the sides (the whole bar, border and inside), for the priorities asked for:
+  `src/port/widescreen.c` asks for priority 0 only during a Gen 5 battle. The other priorities hold the gauges, whose
+  edge pixels (the player's EXP bar) would smear.
+- **The ability pop-up's bar** ("Palkia's Pressure", from the left for the player's Pokémon, from the right for the
+  foe's) is a BG layer (2 or 3): `SIM_SetWidescreenBgEdgeExtend` now takes layers 1 to 3 (it was the text box, BG1).
+Checked on the desktop in widescreen: `gen5_roark_intro.txt` (the balls' bar, both sides),
+`gen5_ability_bar.txt` (a wild Gyarados's Intimidate, the foe's bar) and `gen5_ability_bar_player.txt` (Palkia's Pressure,
+the player's bar, from the owner's finished save). The Gym Leader's cut-in before the battle is Platinum's own
+encounter effect, not BW2's, and is not part of this.
 
 ## Particles (2026-11-09)
 

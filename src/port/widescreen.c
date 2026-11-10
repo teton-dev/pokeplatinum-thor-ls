@@ -86,10 +86,12 @@ void Widescreen_Update(void)
     }
     SIM_SetWidescreenSceneOptions(FALSE, wideBgs);
     SIM_SetWidescreenObjWrap(objWrap);
-    // BW2's text box (BG1) reaches the edges of the wide screen; its text stays in the middle
-    SIM_SetWidescreenBgEdgeExtend(Gen5BattleShown() ? (1 << 1) : 0);
-    // and its black bars (the party balls', the ability's), sprites that touch the picture's edges
-    SIM_SetWidescreenObjEdgeExtend(Gen5BattleShown() ? 0x0F : 0);
+    // BW2's text box (BG1) and the ability pop-up's bar (BG2 or BG3) reach the edges of the wide screen; their text
+    // stays in the middle
+    SIM_SetWidescreenBgEdgeExtend(Gen5BattleShown() ? ((1 << 1) | (1 << 2) | (1 << 3)) : 0);
+    // and the party balls' bar, sprites of priority 0 that touch the picture's edges (the other priorities hold the
+    // gauges, whose edge pixels would smear)
+    SIM_SetWidescreenObjEdgeExtend(Gen5BattleShown() ? 0x01 : 0);
     SIM_SetWidescreenScene(wide);
 }
 
