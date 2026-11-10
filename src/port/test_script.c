@@ -10,6 +10,8 @@
 #include <simulator/sim.h>
 
 #include "field/field_system.h"
+#include "field_move_tasks.h"
+#include "field_task.h"
 #include "player_avatar.h"
 #include "port/debug_field.h"
 #include "port/frame_rate.h"
@@ -52,6 +54,7 @@ enum TestOp {
     OP_GEN5_SETTING,
     OP_WILD,
     OP_JUMP,
+    OP_FLY,
     OP_SCRIPT,
     OP_ITEM,
     OP_GIVE,
@@ -308,6 +311,17 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->map = atoi(words[1]);
         command->x = atoi(words[2]);
         command->y = atoi(words[3]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if (strcmp(words[0], "fly") == 0 && count >= 4) {
+        // fly MAP X Z [SLOT]: Fly as the town map's choice starts it (the HM cut-in with party member SLOT, default the first, then the
+        // landing), to the fly destination at map header MAP's tile (X, Z), once the player is free
+        command->op = OP_FLY;
+        command->map = atoi(words[1]);
+        command->x = atoi(words[2]);
+        command->y = atoi(words[3]);
+        command->frames = count >= 5 ? atoi(words[4]) : 0;
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
@@ -684,6 +698,23 @@ static u16 Step(void)
                 return 0;
             }
             GUI_MapJump_JumpToMap(command->map, command->x, command->y);
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
+        case OP_FLY:
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for Fly");
+                }
+                return 0;
+            }
+            {
+                FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+                FlyContext *flyCtx = FlyContext_New(HEAP_ID_FIELD2, fieldSystem,
+                    Party_GetPokemonBySlotIndex(SaveData_GetParty(SaveData_Ptr()), command->frames), command->map, command->x,
+                    command->y);
+                FieldSystem_CreateTask(fieldSystem, FieldMoves_FlyTask, flyCtx);
+            }
             sTest.freeFrames = 0;
             Next();
             return 0;

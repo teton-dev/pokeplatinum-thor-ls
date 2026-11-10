@@ -83,6 +83,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `item ITEM COUNT` | puts items into the bag (the item's number: 1 is the Master Ball, 4 the Poké Ball) |
 | `give SPECIES LEVEL` | a new Pokémon into the party |
 | `jump MAP X Z` | once the player is free, to map header MAP at (X, Z), as *Settings*' map jump does (420: Sandgem Town's Pokémon Center) |
+| `fly MAP X Z [SLOT]` | once the player is free, Fly as the town map's choice starts it: the HM cut-in with party member SLOT (default the first), then the landing, at map header MAP's fly destination at tile (X, Z) (165 379 234: Snowpoint City) |
 | `script ID` | once the player is free, runs the field script ID (2018: a Pokémon Center's PC, as facing it does) |
 | `trainer ID` | once the player is free, a battle against Platinum's trainer ID, as its encounter starts it |
 | `party` | logs the party, the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
