@@ -50,8 +50,7 @@ Status: **milestones 1 to 4 are done on the desktop build** (the plan's "Milesto
 builds 207 of pokebw2's files, renamed `bw2_...`, into one object the game links whole (`-Dpokebw2=../pokebw2`);
 *Settings > Games > Gen 5 battles* imports a Black 2 / White 2 ROM into the data folder's `gen5/`, and BW2's code reads
 it; with the switch next to the import on, wild single battles run in BW2's engine with the player's party, bag and
-money, and the results (experience, levels, catches, evolutions, blackouts) come back. Still silent, and with black
-patches in the arena's distant background until libntr's renderer clips polygons. Next is milestone 5, trainers.
+money, and the results (experience, levels, catches, evolutions, blackouts) come back. Still silent. Next is milestone 5, trainers.
 An NDK build of the APK with the option is still to do. pokebw2 is never changed: the port's shims, patches and
 boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this repository, not inside it.
 
