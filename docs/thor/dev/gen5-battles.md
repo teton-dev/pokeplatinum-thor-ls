@@ -452,3 +452,15 @@ translucent polygons (alpha under 31, A3I5 and A5I3 textures: every particle) fo
 with the culling and depth test that the frame's last polygon attributes left in GL, so particle quads drawn without
 culling were culled. Fixed in libntr (`subprojects/packagefiles/libntr_g3_translucent_state.patch`, in the wrap's
 `diff_files`): each deferred polygon gets its own culling and depth test.
+
+## Widescreen on the Thor, first look (2026-11-09)
+
+On the Thor (combined2 build): the enemy and the player's Pokémon stay on their platforms as the camera moves (BW2's
+screen-position maths, `MCSS_Draw`'s and `BtlvEffvm_ProjectToScreen`'s 128 and 4, now use `Gen5_Widen`), the Poké Ball
+is round (the particle cameras' orthographic extents are widened in `GFL_G3DSysMtxSetProjection`), and the text box
+(BG1) reaches the screen's edges (libntr_wide_edge.patch). Seen, not fixed:
+- The arena's sky and ground show stair-stepped diagonal creases in their gradient, which shift as the camera idles
+  (left of the enemy's spot, and at the right). The desktop's 4:3 shots show the same rays on a different arena, so it
+  isn't widescreen's: the guess is that libntr draws each quad as a fan of triangles and interpolates the vertex
+  colours across them, where the DS rasterises a quad as a whole. Not looked into yet.
+- The shadows under both Pokémon flicker (shaped correctly). Not looked into yet.
