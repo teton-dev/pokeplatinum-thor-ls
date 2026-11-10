@@ -144,6 +144,8 @@ int Gen5_BattleFrame(void);
 // Widescreen (milestone 6): BW2's 3D drawn ratio times as wide as the DS's, unstretched (its camera and the Pokémon
 // sprites' own projection widened), for libntr's wide scene; 1 for the DS's. Before each Gen5_BattleFrame
 void Gen5_SetWidescreen(float ratio);
+// Whether a move's full-screen background is up, for its sides to be mirrored in a wide scene
+int Gen5_MoveBgShown(void);
 
 // In the VBlank: BW2's VBlank work (VRAM transfers, its VBlank tasks and callback)
 void Gen5_BattleVBlank(void);

@@ -39,6 +39,22 @@ wait 25
 shot a13
 wait 25
 shot a14
+wait 25
+shot a15
+wait 25
+shot a16
+wait 25
+shot a17
+wait 25
+shot a18
+wait 25
+shot a19
+wait 25
+shot a20
+wait 25
+shot a21
+wait 25
+shot a22
 until command timeout 6000
 shot cmd
 exit 0

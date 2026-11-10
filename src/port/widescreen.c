@@ -251,7 +251,9 @@ void Widescreen_Update(void)
     // picture where they are patterns
     if (Gen5BattleShown()) {
         edgeBgs |= (1 << 1) | (1 << 2) | (1 << 3);
-        edgeMirrorBgs |= (1 << 2) | (1 << 3);
+        if (Gen5Battle_MoveBgShown()) {
+            edgeMirrorBgs |= (1 << 3);
+        }
     }
     SIM_SetWidescreenBgEdgeExtend(edgeBgs);
     SIM_SetWidescreenBgEdgeMirror(edgeMirrorBgs);

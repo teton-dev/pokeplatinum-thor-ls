@@ -32,6 +32,8 @@ BOOL Gen5Battle_StartDebug(int species, int level);
 // A battle is running in the Gen 5 engine (not yet the catch's naming screen or an evolution after it):
 // widescreen widens its camera (port/widescreen.h)
 BOOL Gen5Battle_IsShown(void);
+// A move's full-screen background is up in it (widescreen mirrors the sides)
+BOOL Gen5Battle_MoveBgShown(void);
 
 #ifdef __cplusplus
 }
