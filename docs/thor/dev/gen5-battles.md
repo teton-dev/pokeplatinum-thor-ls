@@ -329,6 +329,41 @@ In slices, each tested on the desktop:
     4 bytes early, in the middle of the table. `tr_ai.c`'s patch reads the offset first.
   - Tests: `gen5_trainer.txt` battles Youngster Tristan (Platinum's trainer 1, the test command `trainer`): won with
     Tackle, money +80 in the log.
+- **The story's trainers (2026-11-09, done on the desktop):** most need nothing more. Platinum's scripts start Gym
+  Leaders, the rival, Cynthia, Team Galactic and the rest with `Encounter_NewVsTrainer` and no status flag, as for a
+  route trainer, and the script reads the result (`CheckWonBattle`, `BlackOutFromBattle`, badges, `SetTrainerFlag`), so
+  the bridge's WON/LOST result is all they need. The flags that exist: `BATTLE_STATUS_FIRST_BATTLE` (Barry on
+  Route 201: **accepted now**; Platinum there also keeps critical hits out and shows only FIGHT, which BW2 doesn't
+  do), `DISTORTION` (the Distortion World, with Giratina: still Platinum's), and on wild battles `NO_RUNNING`,
+  `LEGENDARY`, `GIRATINA`, `HONEY_TREE`, `RECORDING`/`RECORDED` (link battles). Doubles and tag battles are milestone 7.
+  - **Battle style:** Platinum's Set/Shift option goes to BW2's config (`Gen5Battle.setStyle`). BW2 asks "Will you
+    switch?" after each of a trainer's Pokémon in Shift, as the scripted tests found out at Roark's second.
+  - **Level 100:** BW2's gauge divided by the experience still to go, 0 at level 100 (the DS's divider returns
+    garbage; x86 traps). `btlv_gauge.c`'s patch guards its four divisions.
+  - **Prize and loss:** Roark pays 1680 (his last Pokémon's level 14 times 4 times 30) and a loss with no badges and a
+    level 6 lead takes 48, both as Platinum's; the party is healed at the blackout.
+  - Tests: `gen5_roark.txt` (`turtwig`) plays Roark's real script from in front of him to the blackout;
+    `gen5_gym.txt` (the owner's finished save, `full100`) plays Roark and Route 201's rival through `trainer`, to the
+    end, with the prize money in the log; `gen5_first_battle.txt` (`before-starter`) Barry's first battle and the
+    script after it. The badge and TM scripts after a win are Platinum's own and weren't played here (the finished
+    save has the badge: a test would need a fresh game's Gym).
+- **Arenas (2026-11-09):** the arena was always the default grass one. `ArenaFromDTO` (`src/port/gen5_battle.c`) now
+  maps where Platinum puts the battle to BW2's arena table (`BtlFieldEnv.bgType` and `terrain`; the table is file 0 of
+  archive 151 in the ROM, 21 backgrounds with 20 terrain floors each): Gym Leaders get BW2's gym hall (background 4,
+  terrain 19: dark walls, a stone floor), Platinum's Elite Four and Champion their own rooms (12 to 16), the
+  Distortion World the purple void (11), and the rest from `dto->background` and `dto->terrain` (sea, city,
+  mountain, snow, indoors and caves, sand, grass, water, ice). Found by rendering every background and terrain
+  (`POKEPLATINUM_GEN5_ARENA=bg,terrain` overrides it; `tests/scripts/gen5_arena.txt`). Terrain 7 has no floor in the
+  dark backgrounds and crashes: never use it. Not every combination was looked at.
+- **Options:** Platinum's Text Speed goes to BW2's config (`Gen5Battle.textSpeed`: BW2's 0, 1, 2 are slow, normal,
+  fast too), both the battle's own and the save's the text printing reads; the first was forced to 0 before.
+- **Sprites of Sinnoh's special trainers:** BW2 has its own for the eight Sinnoh Gym Leaders (Roark to Volkner) and
+  Cynthia, already used (`gen5/src/trainers.c`); where a trainer is in both games, BW2's is used. BW2 has no Sinnoh Elite
+  Four (Aaron, Bertha, Flint, Lucian), Barry, Cyrus or the Galactic commanders: they show another class's sprite for
+  now (Unova's Elite Four, Plasma's grunts) and need Sinnoh-style sprites made for them, as the player's back sprite
+  was (the owner will supply them).
+- **Still to do for the story's trainers:** the Thor (an APK built with these changes), critical hits in the first
+  battle, Cynthia and the Galactic bosses' own texts and sprites (the nearest class is used).
 - **Next:** the trainer's items in battle (BW2's AI uses them: Potions), evolutions and new moves after the battle
   (as for wild battles), the rival's and Gym Leaders' battles (scripted, with flags), double battles (milestone 7).
 
@@ -486,6 +521,15 @@ behind a window opened line by line, sprites (the sliding bars, priorities 1 to 
 enters from x = 272). While it plays (`EncounterEffect_PortGymLeaderPlaying`) BG3 is drawn wide and mirrored and the OBJ
 wrap covers priorities 1 to 3 only, so the mugshot doesn't reappear at the left as it enters. The other encounter effects
 (wild, trainer, Elite Four...) are not widened. `tests/scripts/widescreen_leader.txt` (test command `leader N`).
+## Widescreen: the party balls' bar and the ability bar (2026-11-09)
+
+BW2's black bars (the foe's party balls' frame, slid in from the left, the player's from the right, and the ability
+pop-up's) are OBJ sprites that touch the 4:3 picture's edges; they stopped there in a wide scene. libntr's
+`SIM_SetWidescreenObjEdgeExtend` (`libntr_wide_obj_edge.patch`) continues the *dark* pixels of an OBJ at the picture's
+left and right columns across the sides, for every priority, during a Gen 5 battle (`src/port/widescreen.c`). Dark
+only, so a ball or a light edge doesn't smear. Checked on the desktop for the balls' bar (`gen5_roark_intro.txt`,
+with widescreen on, frame by frame); the ability bar not yet (it needs an ability that fires at the send-out).
+The Gym Leader's cut-in before the battle is Platinum's own encounter effect, not BW2's, and is not part of this.
 
 ## Particles (2026-11-09)
 

@@ -1,0 +1,17 @@
+# A control for fly_snowpoint.txt: the same Fly to Jubilife City (map 3, 0xB4 0x309).
+#   tools/docker/desktop.sh test tests/scripts/fly_jubilife.txt --from full100
+
+# The save opens on the journal page: A and B, a few times, until the overworld
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+party
+fly 3 180 777 3
+until free timeout 3000
+wait 90
+shot jubilife-fly
+exit 0
