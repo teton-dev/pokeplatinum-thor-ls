@@ -267,6 +267,122 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
 }
 
 // A Platinum trainer for BW2's battle (milestone 5): its party as Platinum made it (Trainer_Encounter), its class
+// Platinum's own front sprite of a trainer class, which BW2 has no sprite for (Sinnoh's Elite Four), made into the art
+// the Gen 5 battle draws in its place. Platinum keeps it as an 80x80 picture of 8x8 tiles (4 bits a pixel), laid out
+// by the first cell of the class's cell bank (an NCER: OBJ rectangles over the tiles, the tile numbers in units of two
+// tiles, 1D mapping); its first 16 colors are the palette. Drawn into a 256x128 texture, in 4 bits a pixel with the
+// left pixel in the low nibble, as the DS's textures are. Nothing from the ROM is kept: this is done for each battle
+static BOOL TrainerClassHasPlatinumArt(int trainerClass)
+{
+    return trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_ELITE_FOUR_LUCIAN;
+}
+
+static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
+{
+    static const u8 sObjWidth[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
+    static const u8 sObjHeight[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
+    const int base = trainerClass * 5; // TRAINER_CLASS_NUM_FILETYPES: tiles, palette, cells, animations, scan
+    const u8 *tiles;
+    const u8 *palette;
+    const u8 *cells;
+    const u32 tileSize = NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base);
+    int left = 0, top = 0, right = 0, bottom = 0;
+
+    tiles = Heap_Alloc(HEAP_ID_APPLICATION, tileSize);
+    palette = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1));
+    cells = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2));
+    NARC_ReadWholeMemberByIndexPair((void *)tiles, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base);
+    NARC_ReadWholeMemberByIndexPair((void *)palette, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1);
+    NARC_ReadWholeMemberByIndexPair((void *)cells, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2);
+
+    // NCGR: "RGCN" header 16 bytes, "RAHC" section: tiles from 0x30 (0x18 after the section's start at 0x10 + 8).
+    // NCLR: colors from 0x28. NCER: "KBEC" section at 0x10; cell entries (16 bytes each) from 0x30, OBJs (6 bytes) after
+    const u8 *tileData = tiles + 0x30;
+    const int cellCount = *(const u16 *)(cells + 0x18);
+    const u8 *cellEntry = cells + 0x30;
+    const u8 *objs = cells + 0x30 + cellCount * 16;
+    const int objCount = *(const u16 *)cellEntry;
+    objs += *(const u32 *)(cellEntry + 4);
+
+    memset(dest->artTexture, 0, sizeof(dest->artTexture));
+    for (int i = 0; i < 16; i++) {
+        dest->artPalette[i] = *(const u16 *)(palette + 0x28 + i * 2);
+    }
+    dest->artPalette[0] = 0;
+    // The OBJs are placed from the cell's centre (-40..40 for 80x80); the picture starts at its top left
+    for (int k = 0; k < objCount; k++) {
+        const u16 attr0 = *(const u16 *)(objs + k * 6);
+        const u16 attr1 = *(const u16 *)(objs + k * 6 + 2);
+        const int shape = (attr0 >> 14) & 3;
+        const int size = (attr1 >> 14) & 3;
+        int x = attr1 & 0x1FF;
+        int y = attr0 & 0xFF;
+        if (shape > 2) {
+            continue;
+        }
+        if (x >= 256) {
+            x -= 512;
+        }
+        if (y >= 128) {
+            y -= 256;
+        }
+        if (k == 0) {
+            left = x;
+            top = y;
+            right = x;
+            bottom = y;
+        }
+        left = x < left ? x : left;
+        top = y < top ? y : top;
+        right = x + sObjWidth[shape][size] > right ? x + sObjWidth[shape][size] : right;
+        bottom = y + sObjHeight[shape][size] > bottom ? y + sObjHeight[shape][size] : bottom;
+    }
+    const int width = right - left;
+    const int height = bottom - top;
+    for (int k = 0; k < objCount && width <= 256 && height <= 128; k++) {
+        const u16 attr0 = *(const u16 *)(objs + k * 6);
+        const u16 attr1 = *(const u16 *)(objs + k * 6 + 2);
+        const u16 attr2 = *(const u16 *)(objs + k * 6 + 4);
+        const int shape = (attr0 >> 14) & 3;
+        const int size = (attr1 >> 14) & 3;
+        int x = attr1 & 0x1FF;
+        int y = attr0 & 0xFF;
+        if (shape > 2) {
+            continue;
+        }
+        if (x >= 256) {
+            x -= 512;
+        }
+        if (y >= 128) {
+            y -= 256;
+        }
+        const int w = sObjWidth[shape][size];
+        const int h = sObjHeight[shape][size];
+        const int firstTile = (attr2 & 0x3FF) * 2;
+        for (int py = 0; py < h; py++) {
+            for (int px = 0; px < w; px++) {
+                const int tile = firstTile + (py / 8) * (w / 8) + px / 8;
+                const u32 offset = tile * 32 + (py % 8) * 4 + (px % 8) / 2;
+                if (offset >= tileSize - 0x30) {
+                    continue;
+                }
+                const u8 pair = tileData[offset];
+                const u8 pixel = (px & 1) ? pair >> 4 : pair & 15;
+                const int tx = x - left + px;
+                const int ty = y - top + py;
+                u8 *out = &dest->artTexture[(ty * 256 + tx) / 2];
+                *out |= (tx & 1) ? pixel << 4 : pixel;
+            }
+        }
+    }
+    dest->artWidth = width;
+    dest->artHeight = height;
+    dest->hasArt = width > 0 && height > 0 && width <= 256 && height <= 128;
+    Heap_Free((void *)tiles);
+    Heap_Free((void *)palette);
+    Heap_Free((void *)cells);
+}
+
 // name and the line it says when beaten from Platinum's messages, and its class's prize (battle_script.c's table)
 static void TrainerToGen5(FieldBattleDTO *dto, Gen5Trainer *dest)
 {
@@ -277,6 +393,9 @@ static void TrainerToGen5(FieldBattleDTO *dto, Gen5Trainer *dest)
     dest->id = id;
     dest->platinumClass = trainer->header.trainerType;
     dest->aiFlags = trainer->header.aiMask;
+    if (TrainerClassHasPlatinumArt(dest->platinumClass)) {
+        TrainerArtToGen5(dest->platinumClass, dest);
+    }
     for (int i = 0; i < MAX_TRAINER_ITEMS && i < 4; i++) {
         dest->items[i] = trainer->header.items[i];
     }
@@ -344,8 +463,12 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain)
         *bg = ARENA_BG_INDOORS;
         *terrain = 19;
     } else if (trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_CHAMPION_CYNTHIA) {
-        // Each has a room of its own in Platinum: Aaron, Bertha, Flint, Lucian, Cynthia; BW2's are 12 to 16
-        *bg = 12 + (trainerClass - TRAINER_CLASS_ELITE_FOUR_AARON);
+        // Each has a room of its own in Platinum: Aaron, Bertha, Flint, Lucian, Cynthia. BW2's rooms are 12 to 16:
+        // 12 a grey hall with yellow rings, 13 purple with green discs (its Psychic member's), 14 steel blue, 15 sand
+        // and brown, 16 a night sky. Matched by type: Lucian (Psychic) 13, Bertha (Ground) 15, Flint (Fire) 12,
+        // Aaron (Bug) 14, Cynthia 16
+        static const u8 sEliteFourArenas[] = { 14, 15, 12, 13, 16 };
+        *bg = sEliteFourArenas[trainerClass - TRAINER_CLASS_ELITE_FOUR_AARON];
         *terrain = 0;
     } else {
         switch (dto->background) {
@@ -425,6 +548,27 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     memset(&sBattle, 0, sizeof(sBattle));
     TextToGen5(TrainerInfo_Name(trainerInfo), TRAINER_NAME_LEN + 1, sBattle.player.name, 8);
     ArenaFromDTO(dto, &sBattle.arenaBg, &sBattle.arenaTerrain);
+    {
+        // The time of day as Platinum has it (its battle backgrounds follow the clock): BW2's arenas that take the
+        // zone's light (grass, city, mountain, sea...) change with it. POKEPLATINUM_GEN5_TIME=HOUR[:MINUTE] and
+        // POKEPLATINUM_GEN5_ZONE=N override them for tests
+        RTCTime now;
+        RTC_GetCurrentTime(&now);
+        sBattle.hour = now.hour;
+        sBattle.minute = now.minute;
+        sBattle.zone = 0;
+        const char *envTime = getenv("POKEPLATINUM_GEN5_TIME");
+        if (envTime != NULL) {
+            int h = sBattle.hour, m = 0;
+            sscanf(envTime, "%d:%d", &h, &m);
+            sBattle.hour = h;
+            sBattle.minute = m;
+        }
+        const char *envZone = getenv("POKEPLATINUM_GEN5_ZONE");
+        if (envZone != NULL) {
+            sBattle.zone = atoi(envZone);
+        }
+    }
     sBattle.textSpeed = Options_TextSpeed(dto->options);
     sBattle.setStyle = Options_BattleStyle(dto->options) == OPTIONS_BATTLE_STYLE_SET;
     sBattle.player.id = TrainerInfo_ID(trainerInfo);
