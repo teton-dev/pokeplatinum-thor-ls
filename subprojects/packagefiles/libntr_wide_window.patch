@@ -1,0 +1,42 @@
+--- a/libraries/sim/src/sim_g2.cpp
++++ b/libraries/sim/src/sim_g2.cpp
+@@ -66,6 +66,21 @@
+   pixel[3] = 255;
+ }
+ 
++// Whether a hardware window's horizontal range holds screenX. On a wide layer a window that
++// starts at the screen's left edge (0) continues across the left side, and one that reaches its
++// right edge (255) across the right side (the HM cut-in's band spans the whole screen)
++static bool WideWindowContains(int screenX, int left, int right) {
++  if (sWideOut != nullptr) {
++    if (left == 0 && screenX < 0) {
++      screenX = 0;
++    }
++    if (right >= SIM_NDS_SCREEN_WIDTH - 1 && screenX >= SIM_NDS_SCREEN_WIDTH - 1) {
++      screenX = SIM_NDS_SCREEN_WIDTH - 2;
++    }
++  }
++  return screenX >= 0 && screenX < SIM_NDS_SCREEN_WIDTH && screenX >= left && screenX < right;
++}
++
+ static void DrawBGLine_Text(u32 line, u32 bgnum, u8 mosaic, u8 isSub);
+ static void DrawBGLine_Extended(u32 line, u32 bgnum, u8 mosaic, u8 isSub);
+ static void DrawBGLine_Affine(u32 line, u32 bgnum, u8 mosaic, u8 isSub);
+@@ -650,7 +665,7 @@
+         u8 windowTop = (win0V >> 8) & 0b11111111;
+ 
+         const int screenX = (int)i + sLineStart;
+-        if (screenX >= 0 && screenX < SIM_NDS_SCREEN_WIDTH && screenX >= windowLeft && screenX < windowRight &&
++        if (WideWindowContains(screenX, windowLeft, windowRight) &&
+             line >= windowTop && line < windowBottom) {
+           // Inside window
+           windowPass = ((winIn >> bgnum) & 1);
+@@ -746,7 +761,7 @@
+         u8 windowTop = (win0V >> 8) & 0b11111111;
+ 
+         const int screenX = (int)i + sLineStart;
+-        if (screenX >= 0 && screenX < SIM_NDS_SCREEN_WIDTH && screenX >= windowLeft && screenX < windowRight &&
++        if (WideWindowContains(screenX, windowLeft, windowRight) &&
+             line >= windowTop && line < windowBottom) {
+           // Inside window
+           windowPass = ((winIn >> bgnum) & 1);

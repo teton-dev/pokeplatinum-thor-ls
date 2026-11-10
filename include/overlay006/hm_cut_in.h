@@ -13,4 +13,9 @@ SysTask *FieldTask_FlyLanding_InitTask(FieldSystem *fieldSystem, int playerGende
 int FlyLanding_IsAnimFinished(SysTask *sysTask);
 void FlyLanding_SetTaskDone(SysTask *sysTask);
 
+#ifdef SDK_PORT
+// A cut-in is playing: its band is BG3 behind a hardware window, which widescreen draws across the whole width
+BOOL HMCutIn_PortIsPlaying(void);
+#endif
+
 #endif // POKEPLATINUM_HM_CUT_IN_H

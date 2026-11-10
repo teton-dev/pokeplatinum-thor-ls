@@ -136,17 +136,28 @@ on the second display (not swapped):
   forests' light span the whole width. While the start menu is open, the falling
   particles show only in the middle (its icons would repeat at the left otherwise).
   Dark caves before Flash stay 4:3: the darkness is a circle drawn for the 4:3 screen.
+* **Field moves**: the band that crosses the screen when a Pokemon uses Fly, Surf, Cut
+  and the other moves spans the whole wide screen: its rings are mirrored at the sides
+  and the wind and the Pokemon that cross it continue to the edges. A Gym Leader's
+  "VS" banner before a battle does the same: it spans the whole width, with the leader
+  and the name where they are.
+* **Bag, party, Town Map, Fly map and Journal** (including the page that opens when you load a
+  save) fill the wide screen (the Journal's pages with entries also have their paper
+  again; they showed text on black before): their backgrounds continue to the left and right edges,
+  while their lists, text and the map stay in the 4:3 middle. The party screen's background lines and panels are mirrored across the sides. Other menus (Pokedex,
+  Pokemon Summary...) still sit in a 4:3 box with black sides.
 
 **Rain** falls from the top of the screen to the bottom and splashes, as on the DS (earlier
 builds only showed a few drops near the bottom: each drop stopped on its second frame).
 * **Gen 5 battles** (*Settings > Gameplay > Gen 5 battles*) fill the wide screen: the
   arena is 3D, so its camera sees more of it on the left and right, unstretched. The
   Pokemon, trainers, HP boxes and text stay where they are, in the 4:3 middle.
-* **Platinum's own battles** stay 4:3 with black bars at the sides: the battle backdrop
-  is a 256-pixel picture and the bases and HP boxes are placed for 256 pixels, so
-  there's nothing real to show beside them.
+* **Platinum's own battles** fill the wide screen too: the backdrop is a 256-pixel picture,
+  so it is mirrored at both sides, and the HP boxes get a rounded end cap on their outer
+  side so that they look like windows floating over it. The Pokemon, bases and text box
+  stay in the 4:3 middle.
 
-Menus and other screens stay 4:3.
+Other menus and screens stay 4:3.
 
 **3D as the DS draws it:** lit 3D models are shaded the way the DS lights them (towns
 at night look brighter and bluer than in earlier builds), and the overworld has the

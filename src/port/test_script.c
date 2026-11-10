@@ -21,6 +21,11 @@
 #include "gui_createmon_utils.h"
 #include "gui_mapjump_utils.h"
 #include "script_manager.h"
+#include "applications/town_map/main.h"
+#include "item_use_functions.h"
+#include "unk_0203D1B8.h"
+#include "enc_effects.h"
+#include "overlay005/encounter_effect.h"
 #include "bag.h"
 #include "constants/heap.h"
 #include "savedata.h"
@@ -59,6 +64,8 @@ enum TestOp {
     OP_JUMP,
     OP_FLY,
     OP_SCRIPT,
+    OP_APP,
+    OP_LEADER,
     OP_ITEM,
     OP_GIVE,
     OP_LEAD,
@@ -320,6 +327,22 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
+    } else if (strcmp(words[0], "leader") == 0 && count >= 2) {
+        // leader N: the Gym Leader encounter effect N (0: Roark, 1: Gardenia...) plays, once the player is free
+        command->op = OP_LEADER;
+        command->x = atoi(words[1]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if (strcmp(words[0], "app") == 0 && count >= 2) {
+        // app bag|journal|townmap|flymap|party: opens that application over the overworld, once the player is free (leave it
+        // with B, as the player would)
+        command->op = OP_APP;
+        command->x = strcmp(words[1], "bag") == 0 ? 1 : strcmp(words[1], "journal") == 0 ? 2
+            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : 0;
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return command->x != 0;
     } else if (strcmp(words[0], "jump") == 0 && count >= 4) {
         // jump MAP X Z: to map header MAP at (X, Z), as Settings' map jump does, once the player is free
         command->op = OP_JUMP;
@@ -710,6 +733,42 @@ static u16 Step(void)
             sTest.freeFrames = 0;
             Next();
             return 0;
+        case OP_LEADER: {
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the encounter effect");
+                }
+                return 0;
+            }
+            static BOOL sLeaderDone;
+            EncounterEffect_Start(ENCEFF_CUTIN_LEADER_ROARK + command->x, DEBUG_GetFieldSystem(), &sLeaderDone);
+            Next();
+            return 0;
+        }
+        case OP_APP: {
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the application");
+                }
+                return 0;
+            }
+            FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+            static ItemUseContext sItemUseCtx;
+            if (command->x == 1) {
+                FieldSystem_OpenBag(fieldSystem, &sItemUseCtx);
+            } else if (command->x == 2) {
+                sub_0203D30C(fieldSystem, NULL);
+            } else if (command->x == 5) {
+                FieldSystem_OpenPartyMenu_SelectPokemon(0, fieldSystem);
+            } else {
+                TownMapContext *townMapCtx = Heap_Alloc(HEAP_ID_FIELD2, sizeof(TownMapContext));
+                TownMapContext_Init(fieldSystem, townMapCtx, command->x == 3 ? TOWN_MAP_MODE_ITEM : TOWN_MAP_MODE_FLY);
+                FieldSystem_OpenTownMap(fieldSystem, townMapCtx);
+            }
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
+        }
         case OP_JUMP:
             if (!ConditionMet(command)) {
                 if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
