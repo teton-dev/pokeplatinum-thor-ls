@@ -22,6 +22,7 @@
 #include "gfl/sound.h"
 #include "gfl/ui.h"
 #include "gen5.h"
+#include "gen5/player_back.h"
 #include "pml/poke_party.h"
 #include "pml/species_names.h"
 #include "save/bag.h"
@@ -264,7 +265,9 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sSetup->shooterSettings.launcher = 1;
     sSetup->fieldSituation.bgm = SEQ_BGM_VS_NORAPOKE;
     sSetup->fieldSituation.winBgm = SEQ_BGM_WIN1;
-    sSetup->fieldSituation.env.hour = 12;
+    sSetup->fieldSituation.env.hour = battle->hour;
+    sSetup->fieldSituation.env.minute = battle->minute;
+    sSetup->fieldSituation.env.zoneId = battle->zone;
     sSetup->fieldSituation.env.bgType = battle->arenaBg;
     sSetup->fieldSituation.env.terrain = battle->arenaTerrain;
     sSetup->badgeCount = battle->player.badges;
@@ -282,6 +285,11 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
             trainer->items[i] = src->items[i];
         }
         GFL_StrBufLoadString(trainer->name, src->name);
+        if (src->hasArt) {
+            Gen5_SetTrainerArt(trainer->trainerClass, src->artTexture, src->artPalette, src->artWidth, src->artHeight);
+        } else {
+            Gen5_SetTrainerArt(0, NULL, NULL, 0, 0);
+        }
         sSetup->trainers[1] = trainer;
         // Platinum's class name in BW2's messages, in place of the class's
         sSetup->trainerNames[1] = Keep(GFL_StrBufCreate(32, HEAPID_PORT_BATTLE));

@@ -91,6 +91,14 @@ typedef struct Gen5Trainer {
     unsigned short defeatText[GEN5_TEXT_LENGTH];
     Gen5Pokemon party[GEN5_PARTY_MAX];
     int partyCount;
+    // Art to draw for the trainer in place of BW2's sprite of its class (a Sinnoh trainer BW2 has no sprite for, from
+    // Platinum's own): a 256x128 4-bit texture (low nibble first), its 16 colors (the first transparent), and the size
+    // of the picture in the texture's top left corner. hasArt is 0 for BW2's own
+    int hasArt;
+    unsigned char artTexture[256 * 128 / 2];
+    unsigned short artPalette[16];
+    int artWidth;
+    int artHeight;
 } Gen5Trainer;
 
 // A single battle: the player's party and bag against one wild Pokémon, or a trainer (isTrainer). Gen5_BattleEnd writes back the party as
@@ -100,6 +108,9 @@ typedef struct Gen5Battle {
     Gen5Player player;
     int arenaBg; // BW2's battle background (the field environment's bgType) and terrain: where the battle is
     int arenaTerrain;
+    int hour; // The time of day (the clock's: Platinum's morning, day, evening and night follow it), which lights the arena
+    int minute;
+    int zone; // The BW2 zone whose lights the arena takes (its daylight over the day)
     int textSpeed; // Platinum's Text Speed option: 0 slow, 1 normal, 2 fast (BW2's own numbers for them)
     int setStyle; // Platinum's Battle Style option: 1 is Set (no free switch after the opponent's Pokémon faints)
     Gen5Pokemon party[GEN5_PARTY_MAX];
