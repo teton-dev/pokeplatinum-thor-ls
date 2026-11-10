@@ -357,6 +357,18 @@ unsigned Gen5_TakeEvents(void)
 }
 
 // Widescreen: how many times as wide as the DS's the 3D is drawn
+static int sMoveBgShown;
+
+void Gen5_SetMoveBgShown(int shown)
+{
+    sMoveBgShown = shown;
+}
+
+int Gen5_MoveBgShown(void)
+{
+    return sMoveBgShown;
+}
+
 static float sWideRatio = 1.0f;
 
 fx32 Gen5_Widen(fx32 width)

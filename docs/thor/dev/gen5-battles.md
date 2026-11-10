@@ -546,7 +546,9 @@ Fire Blast's rays, Psychic's waves, Flamethrower's red) draw it on BG2 or BG3 an
 edge columns smeared across the sides. Those layers are now edge-mirrored (`SIM_SetWidescreenBgEdgeMirror`, from the
 widescreen branch's `libntr_wide_mirror.patch`; `src/port/widescreen.c`): the picture is reflected across each side, so
 the patterns line up at the seam and fill the 16:9 window; the Pokémon, the particles and the text stay in the middle.
-The ability bar and the text box use the same layers' edge columns. Checked on the desktop in widescreen with
+The ability pop-up's bar is on BG3 too, and its text would be mirrored, so the mirror is on only while a move's background
+is up: `btlv_effvm.c`'s patch tells the port when `BtlvEffvm_CmdLoadBg` loads one and when the move's end restores BG3
+(`Gen5_SetMoveBgShown`, `Gen5Battle_MoveBgShown`); otherwise the layers' edge columns are continued, as the text box's are. Checked on the desktop in widescreen with
 `gen5_moves.txt` (the lead's first move set with the test command `learn MOVE`: 127 Waterfall, 352 Water Pulse,
 332 Aerial Ace, 126 Fire Blast, 94 Psychic, 53 Flamethrower; the shots follow each move). Open: Flamethrower's fire
 stream is a few faint red dots on its red background (Fire Blast's flames are solid): looked at, not understood.

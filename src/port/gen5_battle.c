@@ -62,6 +62,11 @@ BOOL Gen5Battle_IsShown(void)
     return sShown;
 }
 
+BOOL Gen5Battle_MoveBgShown(void)
+{
+    return sShown && Gen5_MoveBgShown();
+}
+
 void Gen5Battle_RequestNext(void)
 {
     sRequested = TRUE;
