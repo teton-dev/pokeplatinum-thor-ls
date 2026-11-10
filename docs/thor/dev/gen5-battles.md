@@ -190,10 +190,14 @@ game is back on the overworld afterwards. `tests/scripts/gen5_battle.txt` plays 
   script didn't ask for, and, when the harness stops a run at its time limit, three samples of where the game thread
   is. `desktop.sh test` turns them into functions and lines.
 - **Not done yet:**
-  - The arena's distant background: libntr's renderer has no polygon clipping (its clipper's segment code is
-    commented out) and drops polygons that come out far off screen, so BW2's large sky and ground meshes, which reach
-    behind the camera, leave black patches when the camera is close. Platinum's scenes don't have such polygons. The
-    fix is in libntr's renderer (clipping, or letting OpenGL clip).
+  - ~~The arena's distant background~~ (done, 2026-11-09): the black patches were polygons the renderer dropped.
+    BW2's sky and ground meshes reach behind the camera, so some vertices had tiny or negative W; `w &= 0x00FFFFFF`
+    turned a negative W into a huge one, and the "out of bounds" check (screen coordinates beyond +-50) then dropped
+    the polygon (about 8 of them every frame). `G3SIM_SubmitPolygon` now clips in clip space against the near and far
+    planes (-W <= Z <= W) before the divide, interpolating texture coordinates and colours, and triangulates the
+    result as a fan (`subprojects/packagefiles/libntr_g3_clip.patch`). Triangle splitting and colour blending were not
+    the cause. Left: textures and colours are interpolated in screen space (the vertex shader's W is 1), not
+    perspective-correct as on the DS; check large polygons for warping.
   - Sound (above). A block of 0 bytes is left in one of BW2's heaps at the end (listed, harmless).
   - The Android build, as for milestones 1 and 2.
 

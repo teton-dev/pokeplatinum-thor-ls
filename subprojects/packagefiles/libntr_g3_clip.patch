@@ -1,0 +1,214 @@
+diff --git a/libraries/sim/src/g3_handler.cpp b/libraries/sim/src/g3_handler.cpp
+index 59cc18a..6b601d9 100644
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1617,35 +1617,82 @@ void G3SIM_Vtx(s16 x, s16 y, s16 z)
+     return;
+ }
+ 
+-void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
+-    G3SIM_Vertex_t glVerts[6];
++// Clips a polygon (in clip space, before the divide by W) against the near and far planes,
++// -W <= Z <= W, as the DS's geometry engine does. Without it, polygons that reach behind the
++// camera (Black 2 and White 2's sky and ground) get negative or tiny W: they came out as huge
++// or flipped screen coordinates and were dropped. Returns the new vertex count (at most n + 2).
++static int G3SIM_ClipNearFar(G3SIM_FxVtx_t * in, int n, G3SIM_FxVtx_t * out)
++{
++    G3SIM_FxVtx_t tmp[8];
++    G3SIM_FxVtx_t * src = in;
++    int srcN = n;
++
++    for(int pass = 0; pass < 2; pass++) {
++        G3SIM_FxVtx_t * dst = (pass == 0) ? tmp : out;
++        int dstN = 0;
++        // pass 0: Z + W >= 0 (near), pass 1: W - Z >= 0 (far)
++        #define DIST(v) ((pass == 0) ? ((double)(v)->z + (double)(v)->w) : ((double)(v)->w - (double)(v)->z))
++        for(int i = 0; i < srcN; i++) {
++            G3SIM_FxVtx_t * cur = &src[i];
++            G3SIM_FxVtx_t * nxt = &src[(i + 1) % srcN];
++            double dc = DIST(cur), dn = DIST(nxt);
++            if(dc >= 0.0) {
++                dst[dstN++] = *cur;
++            }
++            if((dc >= 0.0) != (dn >= 0.0)) {
++                double t = dc / (dc - dn);
++                G3SIM_FxVtx_t * o = &dst[dstN++];
++                #define LERPI(f) o->f = (fx32)((double)cur->f + ((double)nxt->f - (double)cur->f) * t)
++                #define LERPF(f) o->f = (GLfloat)((double)cur->f + ((double)nxt->f - (double)cur->f) * t)
++                LERPI(x); LERPI(y); LERPI(z); LERPI(w);
++                LERPF(s); LERPF(t); LERPF(r); LERPF(g); LERPF(b); LERPF(a);
++                #undef LERPI
++                #undef LERPF
++            }
++        }
++        #undef DIST
++        if(dstN < 3) return 0;
++        src = dst;
++        srcN = dstN;
++    }
++    return srcN;
++}
++
++void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxIn, int numVerts) {
++    G3SIM_Vertex_t glVerts[18];
++    G3SIM_FxVtx_t fxVerts[8];
+     u8 addPolygon = TRUE;
+-    int numFinalVerts = numVerts;
+ 
+     if(numVerts < 3 || numVerts > 4) {
+         SIM_assert_always();
+         return;
+     }
+ 
++    numVerts = G3SIM_ClipNearFar(fxIn, numVerts, fxVerts);
++    if(numVerts < 3) {
++        return;
++    }
++
+     for(int i=0; i < numVerts; i++) {
+         G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-    
+-        // Truncate W to 24 bits
++
++        // Truncate W to 24 bits (it is positive after the clipping)
++        if(curVtx->w < 1) curVtx->w = 1;
+         curVtx->w &= 0x00FFFFFF;
+-    
++
+         float floatX, floatY, floatW;
+         float screenX, screenY;
+-    
++
+         floatX = FX_FX32_TO_F32(curVtx->x);
+         floatY = FX_FX32_TO_F32(curVtx->y);
+         floatW = FX_FX32_TO_F32(curVtx->w);
+-    
++
+         screenX = (((floatX+floatW)*256.0f) / (2*floatW));
+         screenY = (((floatY+floatW)*192.0f) / (2*floatW));
+-        					
++
+         screenX = (screenX / 128.0f) - 1.0f;
+         screenY = (screenY / 96.0f) - 1.0f;
+-    
++
+         glVerts[i].x = screenX;
+         glVerts[i].y = screenY;
+         glVerts[i].s = curVtx->s;
+@@ -1656,90 +1703,57 @@ void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
+         glVerts[i].a = curVtx->a;
+     }
+ 
+-    // Get the W size and remove the polygon if W is 0
++    // Get the W size
+     u32 wsize = 0;
+-    for(int i=0; i < 4; i++) {
+-        G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-        u32 w = curVtx->w;
+-        if(w == 0){
+-            addPolygon = FALSE;
+-        }
++    for(int i=0; i < numVerts; i++) {
++        u32 w = fxVerts[i].w;
+         while ((w >> wsize) && (wsize < 32)) {
+             wsize += 4;
+         }
+     }
+ 
+     // Normalize W
+-    for(int i=0; i < 4; i++) {
++    for(int i=0; i < numVerts; i++) {
+         G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-        
++
+         s32 w, wshifted;
+-        
++
+         if(wsize < 16) {
+-        	w = curVtx->w << (16-wsize);
+-        	wshifted = w >> (16-wsize);
+-        } else {
+-        	w = curVtx->w >> (wsize - 16);
+-        	wshifted = w << (wsize - 16);
+-        }
+-        
+-        s32 z;
+-        
+-        if(curVtx->w) {
+-        	z = ((((s64)curVtx->z * 0x4000) / curVtx->w) + 0x3FFF) * 0x200;
++            w = curVtx->w << (16-wsize);
++            wshifted = w >> (16-wsize);
+         } else {
+-        	z = 0x7FFE00;
++            w = curVtx->w >> (wsize - 16);
++            wshifted = w << (wsize - 16);
+         }
+-        
++
++        s32 z = ((((s64)curVtx->z * 0x4000) / curVtx->w) + 0x3FFF) * 0x200;
++
+         if(s_SIM_useWBuffer) {
+-        	z = wshifted;
++            z = wshifted;
+         }
+-        
++
+         if(z < 0) {
+-        	z = 0;
++            z = 0;
+         } else if(z > 0xFFFFFF) {
+-        	z = 0xFFFFFF;
++            z = 0xFFFFFF;
+         }
+-        
++
+         glVerts[i].z = (((float)z / 16777215.0f) * 2.0f) - 1.0f;
+         glVerts[i].w = (((float)w / 16777215.0f) * 2.0f) - 1.0f;
+     }
+ 
+-    // If we have a quad, convert it into 2 triangles
+-    if(numVerts == 4) {
+-        //make a copy of the quad
+-        G3SIM_Vertex_t quad[4];
+-        memcpy(quad, glVerts, sizeof(G3SIM_Vertex_t) * 4);
+-
+-        //Convert to 2 triangles
+-        #define CopyVertex(srcIdx, destIdx) memcpy(&glVerts[destIdx], &quad[srcIdx], sizeof(G3SIM_Vertex_t))
+-        CopyVertex(0, 0);
+-        CopyVertex(1, 1);
+-        CopyVertex(2, 2);
+-        CopyVertex(2, 3);
+-        CopyVertex(3, 4);
+-        CopyVertex(0, 5);
+-        #undef CopyVertex
+-
+-        numFinalVerts = 6;
+-    }
+-
+-    // Check if any of the verts are horribly out of bounds
+-    // TODO: This is a HACK and we should eventually remove it
+-    for(int i=0; i < numFinalVerts; i++) {
+-        if(glVerts[i].x > 50.0f || glVerts[i].x < -50.0f) {
+-            addPolygon = FALSE;
+-        }
+-        if(glVerts[i].y > 50.0f || glVerts[i].y < -50.0f) {
+-            addPolygon = FALSE;
+-        }
++    // A triangle fan out of the polygon (a quad is the usual two triangles)
++    G3SIM_Vertex_t tris[18];
++    int numFinalVerts = 0;
++    for(int i = 1; i + 1 < numVerts; i++) {
++        tris[numFinalVerts++] = glVerts[0];
++        tris[numFinalVerts++] = glVerts[i];
++        tris[numFinalVerts++] = glVerts[i + 1];
+     }
+ 
+     if(addPolygon) {
+         for(int i=0; i < numFinalVerts; i++) {
+-            G3SIM_AddVtx(&glVerts[i]);
++            G3SIM_AddVtx(&tris[i]);
+         }
+     }
+-
+-
+ }
