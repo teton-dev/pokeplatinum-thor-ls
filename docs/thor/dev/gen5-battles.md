@@ -457,6 +457,11 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
   While `HMCutIn_PortIsPlaying()` BG3 is drawn wide (`G2SIM_DrawBGWide`) and libntr's window test treats a window that
   starts at 0 or reaches 255 as continuing across the wide layer's sides (`libntr_wide_window.patch`). The rings' tile
   pattern repeats (it isn't periodic over 256 pixels, so a seam shows at the 4:3 edge).
+- **The Journal's black pages** (4:3 too, found on the Thor): libntr's `G2_GetBG0CharPtr`, `G2_GetBG1CharPtr` and
+  `G2_GetBG2CharPtr` masked the character base to 128 KB (`& 131071`, `% 8`) while the renderer reads the real one. The
+  Journal's text windows on BG1 (char base 0x20000) were therefore loaded at 0, over the page's tiles (BG2 and BG3 at 0):
+  the pages with text lost their paper. The masks are gone (`libntr_bg_charbase.patch`). `widescreen_journal_load.txt`
+  shows the page that opens on loading a save (it needs a save with journal entries).
 - **Tests**: `tests/scripts/widescreen_screens.txt` (Surf's cut-in, the wall map), `widescreen_bag.txt`,
   `widescreen_journal.txt`, `widescreen_flymap.txt`: the test command `app bag|journal|townmap|flymap` opens the app over
   the overworld; it has no field task to return to, so each such script ends in the app.

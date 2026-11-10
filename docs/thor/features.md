@@ -139,7 +139,8 @@ on the second display (not swapped):
 * **Field moves**: the band that crosses the screen when a Pokemon uses Fly, Surf, Cut
   and the other moves spans the whole wide screen.
 * **Bag, Town Map, Fly map and Journal** (including the page that opens when you load a
-  save) fill the wide screen: their backgrounds continue to the left and right edges,
+  save) fill the wide screen (the Journal's pages with entries also have their paper
+  again; they showed text on black before): their backgrounds continue to the left and right edges,
   while their lists, text and the map stay in the 4:3 middle. Other menus (party,
   Pokedex, Pokemon Summary...) still sit in a 4:3 box with black sides.
 

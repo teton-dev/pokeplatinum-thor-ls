@@ -12,4 +12,10 @@ wait 60
 app journal
 wait 200
 shot journal
+press A
+wait 120
+shot journal-text
+press A
+wait 120
+shot journal-text2
 exit 0
