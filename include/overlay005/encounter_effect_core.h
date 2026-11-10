@@ -35,4 +35,9 @@ void EncounterEffect_EliteFourFlint(SysTask *task, void *param);
 void EncounterEffect_EliteFourLucian(SysTask *task, void *param);
 void EncounterEffect_ChampionCynthia(SysTask *task, void *param);
 
+#ifdef SDK_PORT
+// A Gym Leader's encounter effect is playing (its banner is BG3, a window and sprites: widescreen draws it across the sides)
+BOOL EncounterEffect_PortGymLeaderPlaying(void);
+#endif
+
 #endif // POKEPLATINUM_ENCOUNTER_EFFECT_CORE_H

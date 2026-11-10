@@ -20,6 +20,8 @@
 #include "applications/town_map/main.h"
 #include "item_use_functions.h"
 #include "unk_0203D1B8.h"
+#include "enc_effects.h"
+#include "overlay005/encounter_effect.h"
 #include "bag.h"
 #include "constants/heap.h"
 #include "savedata.h"
@@ -57,6 +59,7 @@ enum TestOp {
     OP_JUMP,
     OP_SCRIPT,
     OP_APP,
+    OP_LEADER,
     OP_ITEM,
     OP_GIVE,
     OP_PARTY,
@@ -302,6 +305,13 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
     } else if (strcmp(words[0], "script") == 0 && count >= 2) {
         // script ID: runs the field script ID (2018: a Pokemon Center's PC), once the player is free
         command->op = OP_SCRIPT;
+        command->x = atoi(words[1]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if (strcmp(words[0], "leader") == 0 && count >= 2) {
+        // leader N: the Gym Leader encounter effect N (0: Roark, 1: Gardenia...) plays, once the player is free
+        command->op = OP_LEADER;
         command->x = atoi(words[1]);
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
@@ -689,6 +699,18 @@ static u16 Step(void)
             sTest.freeFrames = 0;
             Next();
             return 0;
+        case OP_LEADER: {
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the encounter effect");
+                }
+                return 0;
+            }
+            static BOOL sLeaderDone;
+            EncounterEffect_Start(ENCEFF_CUTIN_LEADER_ROARK + command->x, DEBUG_GetFieldSystem(), &sLeaderDone);
+            Next();
+            return 0;
+        }
         case OP_APP: {
             if (!ConditionMet(command)) {
                 if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {

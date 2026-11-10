@@ -1,0 +1,43 @@
+# Widescreen on a Gym Leader's encounter effect (Roark's): the banner (mirrored) and the bars across the whole 16:9
+# window, the leader's sprite where it is. From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_leader.txt --from turtwig
+mash A until free
+jump 342 114 854
+until free timeout 3000
+wait 30
+leader 0
+wait 8
+shot leader-1
+wait 8
+shot leader-2
+wait 8
+shot leader-3
+wait 8
+shot leader-4
+wait 8
+shot leader-5
+wait 8
+shot leader-6
+wait 8
+shot leader-7
+wait 8
+shot leader-8
+wait 8
+shot leader-9
+wait 8
+shot leader-10
+wait 8
+shot leader-11
+wait 8
+shot leader-12
+wait 8
+shot leader-13
+wait 8
+shot leader-14
+wait 8
+shot leader-15
+wait 8
+shot leader-16
+exit 0
