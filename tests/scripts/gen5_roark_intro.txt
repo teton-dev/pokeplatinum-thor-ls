@@ -1,0 +1,42 @@
+# Gen 5 battles in widescreen: Roark's introduction frame by frame (the trainer's cut-in, the party balls' bar, the
+# send-out), for checking what fills the 16:9 window. From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/gen5_roark_intro.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+jump 47 5 6
+until free timeout 3000
+walk UP 2
+press A
+mash A until battle timeout 3000
+shot i00
+wait 20
+shot i01
+wait 20
+shot i02
+wait 20
+shot i03
+wait 20
+shot i04
+wait 20
+shot i05
+wait 20
+shot i06
+wait 20
+shot i07
+wait 20
+shot i08
+wait 20
+shot i09
+wait 20
+shot i10
+wait 20
+shot i11
+wait 20
+shot i12
+until command timeout 6000
+shot cmd
+exit 0

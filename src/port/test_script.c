@@ -10,6 +10,10 @@
 #include <simulator/sim.h>
 
 #include "field/field_system.h"
+#include "field_move_tasks.h"
+#include "game_options.h"
+#include "save_player.h"
+#include "field_task.h"
 #include "player_avatar.h"
 #include "port/debug_field.h"
 #include "port/frame_rate.h"
@@ -55,8 +59,10 @@ enum TestOp {
     OP_GEN5_IMPORT,
     OP_GEN5_BATTLE,
     OP_GEN5_SETTING,
+    OP_BATTLE_STYLE,
     OP_WILD,
     OP_JUMP,
+    OP_FLY,
     OP_SCRIPT,
     OP_APP,
     OP_LEADER,
@@ -334,6 +340,17 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
+    } else if (strcmp(words[0], "fly") == 0 && count >= 4) {
+        // fly MAP X Z [SLOT]: Fly as the town map's choice starts it (the HM cut-in with party member SLOT, default the first, then the
+        // landing), to the fly destination at map header MAP's tile (X, Z), once the player is free
+        command->op = OP_FLY;
+        command->map = atoi(words[1]);
+        command->x = atoi(words[2]);
+        command->y = atoi(words[3]);
+        command->frames = count >= 5 ? atoi(words[4]) : 0;
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
     } else if (strcmp(words[0], "wild") == 0 && count >= 3) {
         // A wild SPECIES at LEVEL, met as in tall grass (the field's own wild encounter), once the player is free
         command->op = OP_WILD;
@@ -347,6 +364,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_GEN5_SETTING;
         command->frames = strcmp(words[1], "on") == 0;
         return strcmp(words[1], "on") == 0 || strcmp(words[1], "off") == 0;
+    } else if (strcmp(words[0], "battle-style") == 0 && count >= 2) {
+        // battle-style set|shift: the save's Battle Style option (Settings > Options in the game)
+        command->op = OP_BATTLE_STYLE;
+        command->frames = strcmp(words[1], "set") == 0;
+        return strcmp(words[1], "set") == 0 || strcmp(words[1], "shift") == 0;
     } else if (strcmp(words[0], "gen5-import") == 0) {
         // Imports the Black 2 / White 2 ROM in POKEPLATINUM_GEN5_ROM, as the settings do, and waits for it
         command->op = OP_GEN5_IMPORT;
@@ -746,6 +768,23 @@ static u16 Step(void)
             sTest.freeFrames = 0;
             Next();
             return 0;
+        case OP_FLY:
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for Fly");
+                }
+                return 0;
+            }
+            {
+                FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+                FlyContext *flyCtx = FlyContext_New(HEAP_ID_FIELD2, fieldSystem,
+                    Party_GetPokemonBySlotIndex(SaveData_GetParty(SaveData_Ptr()), command->frames), command->map, command->x,
+                    command->y);
+                FieldSystem_CreateTask(fieldSystem, FieldMoves_FlyTask, flyCtx);
+            }
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
         case OP_WILD:
             if (!ConditionMet(command)) {
                 if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
@@ -833,6 +872,12 @@ static u16 Step(void)
         case OP_GEN5_SETTING:
             SIM_Config_prj_GetConfig()->gen5Battles = command->frames;
             printf("[test] Gen 5 battles %s\n", command->frames ? "on" : "off");
+            Next();
+            continue;
+        case OP_BATTLE_STYLE:
+            Options_SetBattleStyle(SaveData_GetOptions(SaveData_Ptr()),
+                command->frames ? OPTIONS_BATTLE_STYLE_SET : OPTIONS_BATTLE_STYLE_SHIFT);
+            printf("[test] battle style %s\n", command->frames ? "set" : "shift");
             Next();
             continue;
         case OP_SHOT:

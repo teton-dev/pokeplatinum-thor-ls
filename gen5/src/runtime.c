@@ -31,6 +31,7 @@
 #include "save/pokedex_savedata.h"
 #include "save/records.h"
 #include "save/save_control.h"
+#include "save/trainer_data_savedata.h"
 #include "save/trainer_game_info.h"
 #include "system/brightness.h"
 #include "system/gfl_use.h"
@@ -228,6 +229,10 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     // The money a loss takes is checked against what the player has (CalcLossMoney)
     getTrainerGameInfoAddress(SaveControl_GetInstance())->cash = battle->player.money;
     Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
+    Config_SetBattleStyle(config, battle->setStyle);
+    // The battle's messages take their speed from this config, and the text printing's own waits from the save's
+    Config_SetTextSpeed(config, battle->textSpeed);
+    Config_SetTextSpeed(&getTrainerDataBlkAddress(SaveControl_GetInstance())->config, battle->textSpeed);
     BagSave *bag = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, BagSave_GetBlockSize(), TRUE, __FILE__, __LINE__));
     BagSave_Init(bag);
     // The player's items the battle can use; one BW2 doesn't have stays out (and comes back as it was)
@@ -260,6 +265,8 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sSetup->fieldSituation.bgm = SEQ_BGM_VS_NORAPOKE;
     sSetup->fieldSituation.winBgm = SEQ_BGM_WIN1;
     sSetup->fieldSituation.env.hour = 12;
+    sSetup->fieldSituation.env.bgType = battle->arenaBg;
+    sSetup->fieldSituation.env.terrain = battle->arenaTerrain;
     sSetup->badgeCount = battle->player.badges;
     sSetup->result = BTL_RESULT_VICTORY;
     sSetup->party[0] = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));

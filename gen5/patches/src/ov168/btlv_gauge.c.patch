@@ -1,5 +1,28 @@
 --- a/src/ov168/btlv_gauge.c
 +++ b/src/ov168/btlv_gauge.c
+@@ -1017,9 +1017,9 @@
+         tiles[i] = 0;
+     }
+     if (max < dots) {
+-        rest = *anim * dots / max >> 8;
++        rest = max != 0 ? *anim * dots / max >> 8 : 0;
+     } else {
+-        rest = *anim * dots / max;
++        rest = max != 0 ? *anim * dots / max : 0;
+     }
+     fill = rest;
+     if (rest == 0 && target > 0) {
+@@ -1053,8 +1053,8 @@
+     } else if (target > max) {
+         target = max;
+     }
+-    now = value * dots / max;
+-    next = target * dots / max;
++    now = max != 0 ? value * dots / max : 0;
++    next = max != 0 ? target * dots / max : 0;
+     diff = now - next;
+     return MATH_ABS(diff);
+ }
 @@ -1084,27 +1084,27 @@
          ClActor_GetImageProxy(entry->nameActor, &proxy);
          if (entry->mon.side) {
@@ -129,3 +152,12 @@
                           0x20);
          }
      }
+@@ -1615,7 +1615,7 @@
+ }
+ 
+ static u32 BtlvGauge_CalcFill(u32 value, u32 max, u32 width) {
+-    u32 fill = value * width / max;
++    u32 fill = max != 0 ? value * width / max : 0;
+ 
+     if (fill == 0 && value != 0) {
+         fill = 1;
