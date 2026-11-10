@@ -529,6 +529,41 @@ head and feet likewise: **each part moves during the first cycle after the Poké
   60 Hz: BW2's animation timing, not measured against a real BW2.
 - **Testing tip (from the owner):** choosing FIGHT and backing out locks the battle camera in place.
 
+## Pokémon sprite animations (2026-11-10): findings, not fixed
+
+Reported on the Thor: a foe Bronzong's far arm static and one cycle repeated forever; a foe Houndoom's mouth opening on
+every cycle; the player's Suicune's head still and its feet lifting and shifting before it sits, after the send-out (the
+send-out itself is right); the tip of the player's Houndoom's tail not following the rest. **Not reproduced on the desktop
+build**, so nothing was changed. What was checked (with temporary logging in libntrsystem and BW2's `mcss.c`, since
+removed):
+
+- **The data and the engine agree.** BW2's Pokémon sprites are one multi-cell animation each (`MCSS`: NMCR + NMAR + NCER +
+  NANR + a small `.bin`), the animation bank holds **one** sequence (Bronzong, Suicune, Houndoom: checked in the ROM), so
+  BW2's "second animation" (`MCSS_SetAnimation(.., 1)` in `BtlvMcss_OnAnimationEnd`) is never used for them; the file
+  has no such sequence. A Pokémon's loop is its sequence: Houndoom's is five frames of 50 and a last of 90 on the second
+  multi-cell (the mouth-open cell animations), so the mouth opens every loop (about 340 video frames) in the data;
+  Bronzong's is 315 + 105; Suicune's 35 frames (a 96-frame pose in the middle, and zero-length frames at 16 and 34).
+- **Idle:** the `.bin` tail's idle node count is 0 for all three (`MCSS_GetIdleNodeCount`), read correctly (a 4-byte tail
+  in the file). `BtlvMcss_OnAnimationEnd` therefore starts `BtlvMcss_IdleTask` about every second or third loop (1/3, 1/2,
+  then always): it stops the multi-cell animation and every node (none is listed as an idle node) for 0x30 to 0x40
+  frames, then sets animation 0 again. The sprite freezes briefly then; this is BW2's code as written, not a port issue.
+- **Every node animates.** Per-tick dumps of the multi-cell instance (frames, active flags, sequences) for all the
+  sprites on screen: no cell animation stays inactive or stuck while its multi-cell is running (about 1500 ticks each,
+  Suicune 21 nodes, Houndoom 15, Bronzong 3); the multi-cell bank unpacked by `Gen5_UnpackMultiCellBank` matches a
+  parse of the file; the cell animation sequences (rotation, translation) match the files; Bronzong's arms have mirrored
+  rotation sequences (up to +-30 degrees) and both move on screen.
+- **A real defect in libntrsystem, not the cause:** `SequenceEdgeHandleCommon_`'s `SDK_PORT` guard
+  (`g2d_Animation.c`) tests `pCurrent->frames == 0`, with `pCurrent` already one past the sequence's end, so it reads the
+  next sequence's first frame (or whatever follows the array) and stops the animation for good if that is 0. It never
+  fired in these battles (counted), so it was left alone: testing "no frame of the sequence lasts any time" instead is the
+  fix, to try if an animation ever stops for good.
+- **Not checked:** the Android build (arm64) itself: the Thor wasn't reachable over adb when this was looked at, and
+  every check above is the desktop build's. Differences between the two that this could be: arm64-only code in libntr's
+  renderer (GLES) or an old APK. To check next: the same battle on the Thor with a build from this branch, and on the
+  desktop in real time (these tests run the game faster than real time). Also: the battle runs at Platinum's 30 Hz
+  logic rate (`FrameRate`, unless 60 FpsEverywhere), where BW2 runs its own at 60 Hz: every BW2 animation's timing is
+  half-speed in game time if BW2's durations (7 frames per cell step...) assume 60 Hz; not measured against a real BW2.
+
 ## Risks
 
 - **64-bit layouts** in BW2 data loaded from files or shared with the SDK: found case by case at runtime.
