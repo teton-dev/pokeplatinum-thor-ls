@@ -1,4 +1,7 @@
 // Battles in the Gen 5 engine; see include/port/gen5_battle.h
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "port/gen5_battle.h"
 
 #include <nitro.h>
@@ -15,7 +18,10 @@
 #include "applications/naming_screen.h"
 #include "constants/narc.h"
 #include "data/trainer_class_prize_mul.h"
+#include "generated/battle_backgrounds.h"
+#include "generated/battle_terrains.h"
 #include "generated/text_banks.h"
+#include "generated/trainer_classes.h"
 #include "generated/trainer_message_types.h"
 #include "message.h"
 #include "trainer_data.h"
@@ -306,6 +312,109 @@ static void TrainerToGen5(FieldBattleDTO *dto, Gen5Trainer *dest)
     }
 }
 
+// BW2's arena (its battle background, the field environment's bgType, and the terrain that picks the floor) for
+// where Platinum puts the battle. The numbers are the rows of BW2's arena table (a/1/5/1, file 0) and its terrain
+// columns, seen by rendering each (tests/scripts/gen5_arena.txt): background 0 sunny grassland, 2 a city's grey sky,
+// 4 an indoor or cave's dark walls, 5 the same, darker, 6 overcast, 7 mountains, 8 the sea, 9 and 10 sunset; 11 a
+// purple void, 12 to 16 the Elite Four's and Champion's rooms, whatever the terrain. Terrains: 0 to 3 and 5 grass,
+// 4 and 10 bare earth, 6 and 9 water, 8 sand, 13 and 14 ice and snow, 15 ash, 17 lava, 19 a stone floor. Terrain 7 has
+// no floor in the dark backgrounds, and crashes.
+enum {
+    ARENA_BG_GRASS = 0,
+    ARENA_BG_CITY = 2,
+    ARENA_BG_INDOORS = 4,
+    ARENA_BG_OVERCAST = 6,
+    ARENA_BG_MOUNTAIN = 7,
+    ARENA_BG_SEA = 8,
+    ARENA_BG_VOID = 11,
+};
+
+static BOOL IsGymLeaderClass(int trainerClass)
+{
+    return trainerClass == TRAINER_CLASS_LEADER_ROARK || trainerClass == TRAINER_CLASS_LEADER_BYRON
+        || (trainerClass >= TRAINER_CLASS_LEADER_GARDENIA && trainerClass <= TRAINER_CLASS_LEADER_VOLKNER);
+}
+
+static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain)
+{
+    const int trainerClass = (dto->battleType & BATTLE_TYPE_TRAINER) ? dto->trainer[BATTLER_ENEMY_1].header.trainerType : -1;
+
+    if (IsGymLeaderClass(trainerClass)) {
+        // BW2's Gym Leaders battle on a stone floor in a dark hall (Clay's)
+        *bg = ARENA_BG_INDOORS;
+        *terrain = 19;
+    } else if (trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_CHAMPION_CYNTHIA) {
+        // Each has a room of its own in Platinum: Aaron, Bertha, Flint, Lucian, Cynthia; BW2's are 12 to 16
+        *bg = 12 + (trainerClass - TRAINER_CLASS_ELITE_FOUR_AARON);
+        *terrain = 0;
+    } else {
+        switch (dto->background) {
+        case BACKGROUND_WATER:
+            *bg = ARENA_BG_SEA;
+            break;
+        case BACKGROUND_CITY:
+            *bg = ARENA_BG_CITY;
+            break;
+        case BACKGROUND_MOUNTAIN:
+            *bg = ARENA_BG_MOUNTAIN;
+            break;
+        case BACKGROUND_SNOW:
+            *bg = ARENA_BG_OVERCAST;
+            break;
+        case BACKGROUND_INDOORS_1:
+        case BACKGROUND_INDOORS_2:
+        case BACKGROUND_INDOORS_3:
+        case BACKGROUND_CAVE_1:
+        case BACKGROUND_CAVE_2:
+        case BACKGROUND_CAVE_3:
+            *bg = ARENA_BG_INDOORS;
+            break;
+        case BACKGROUND_DISTORTION_WORLD:
+            *bg = ARENA_BG_VOID;
+            break;
+        default:
+            *bg = ARENA_BG_GRASS;
+            break;
+        }
+        switch (dto->terrain) {
+        case TERRAIN_SAND:
+            *terrain = 8;
+            break;
+        case TERRAIN_GRASS:
+            *terrain = 5;
+            break;
+        case TERRAIN_PUDDLE:
+            *terrain = 9;
+            break;
+        case TERRAIN_MOUNTAIN:
+        case TERRAIN_CAVE:
+        case TERRAIN_GREAT_MARSH:
+            *terrain = 10;
+            break;
+        case TERRAIN_SNOW:
+            *terrain = 14;
+            break;
+        case TERRAIN_ICE:
+            *terrain = 13;
+            break;
+        case TERRAIN_WATER:
+            *terrain = 6;
+            break;
+        case TERRAIN_BUILDING:
+        case TERRAIN_BRIDGE:
+            *terrain = *bg == ARENA_BG_INDOORS ? 19 : 0;
+            break;
+        default:
+            *terrain = 0;
+            break;
+        }
+    }
+    const char *override = getenv("POKEPLATINUM_GEN5_ARENA");
+    if (override != NULL) {
+        sscanf(override, "%d,%d", bg, terrain);
+    }
+}
+
 static BOOL Init(ApplicationManager *appMan, int *state)
 {
     (void)state;
@@ -315,6 +424,8 @@ static BOOL Init(ApplicationManager *appMan, int *state)
 
     memset(&sBattle, 0, sizeof(sBattle));
     TextToGen5(TrainerInfo_Name(trainerInfo), TRAINER_NAME_LEN + 1, sBattle.player.name, 8);
+    ArenaFromDTO(dto, &sBattle.arenaBg, &sBattle.arenaTerrain);
+    sBattle.textSpeed = Options_TextSpeed(dto->options);
     sBattle.setStyle = Options_BattleStyle(dto->options) == OPTIONS_BATTLE_STYLE_SET;
     sBattle.player.id = TrainerInfo_ID(trainerInfo);
     sBattle.player.gender = TrainerInfo_Gender(trainerInfo);

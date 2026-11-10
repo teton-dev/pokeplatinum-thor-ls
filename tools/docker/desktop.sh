@@ -150,7 +150,7 @@ test)
     GEN5_ROM=${GEN5_ROM:-$(ls "$THOR_DEV"/PKMNB2.nds "$THOR_DEV"/PKMNW2.nds 2>/dev/null | head -n 1)}
     docker run -d --name $TEST --user "$(id -u):$(id -g)" -e HOME=/home -e DISPLAY=:1 -e SDL_AUDIODRIVER=dummy \
         -e LIBGL_ALWAYS_SOFTWARE=1 -e LIBNTR_TEST_MODE=1 -e POKEPLATINUM_TEST_SCRIPT="$SCRIPT" \
-        -e POKEPLATINUM_GEN5_ROM="$GEN5_ROM" $(mounts) -w "$RUN" \
+        -e POKEPLATINUM_GEN5_ROM="$GEN5_ROM" -e POKEPLATINUM_GEN5_ARENA="$POKEPLATINUM_GEN5_ARENA" $(mounts) -w "$RUN" \
         $IMAGE sh -c "Xvfb :1 -screen 0 ${SCREEN}x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
                       sleep 1
                       cp -f '$BIN/firmware.bin' '$BIN/header.bin' .

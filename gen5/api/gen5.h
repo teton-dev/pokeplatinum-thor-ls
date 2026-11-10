@@ -98,6 +98,9 @@ typedef struct Gen5Trainer {
 // won or lost, and a caught Pokémon as the battle left it (with the ball it was caught in).
 typedef struct Gen5Battle {
     Gen5Player player;
+    int arenaBg; // BW2's battle background (the field environment's bgType) and terrain: where the battle is
+    int arenaTerrain;
+    int textSpeed; // Platinum's Text Speed option: 0 slow, 1 normal, 2 fast (BW2's own numbers for them)
     int setStyle; // Platinum's Battle Style option: 1 is Set (no free switch after the opponent's Pokémon faints)
     Gen5Pokemon party[GEN5_PARTY_MAX];
     int partyCount;

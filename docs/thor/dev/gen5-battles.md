@@ -347,6 +347,16 @@ In slices, each tested on the desktop:
     end, with the prize money in the log; `gen5_first_battle.txt` (`before-starter`) Barry's first battle and the
     script after it. The badge and TM scripts after a win are Platinum's own and weren't played here (the finished
     save has the badge: a test would need a fresh game's Gym).
+- **Arenas (2026-11-09):** the arena was always the default grass one. `ArenaFromDTO` (`src/port/gen5_battle.c`) now
+  maps where Platinum puts the battle to BW2's arena table (`BtlFieldEnv.bgType` and `terrain`; the table is file 0 of
+  archive 151 in the ROM, 21 backgrounds with 20 terrain floors each): Gym Leaders get BW2's gym hall (background 4,
+  terrain 19: dark walls, a stone floor), Platinum's Elite Four and Champion their own rooms (12 to 16), the
+  Distortion World the purple void (11), and the rest from `dto->background` and `dto->terrain` (sea, city,
+  mountain, snow, indoors and caves, sand, grass, water, ice). Found by rendering every background and terrain
+  (`POKEPLATINUM_GEN5_ARENA=bg,terrain` overrides it; `tests/scripts/gen5_arena.txt`). Terrain 7 has no floor in the
+  dark backgrounds and crashes: never use it. Not every combination was looked at.
+- **Options:** Platinum's Text Speed goes to BW2's config (`Gen5Battle.textSpeed`: BW2's 0, 1, 2 are slow, normal,
+  fast too), both the battle's own and the save's the text printing reads; the first was forced to 0 before.
 - **Still to do for the story's trainers:** the Thor (an APK built with these changes), critical hits in the first
   battle, Cynthia and the Galactic bosses' own texts and sprites (the nearest class is used).
 - **Next:** the trainer's items in battle (BW2's AI uses them: Potions), evolutions and new moves after the battle
