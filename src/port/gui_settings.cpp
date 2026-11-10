@@ -558,6 +558,9 @@ void DrawGameplay()
         "wild Pokemon in tall grass, caves and water, and single battles against the trainers on routes (with "
         "Platinum's AI); double battles, Gym Leaders and the rival stay in Platinum's battles for now. Needs the ROM in "
         "Settings > Games > Gen 5 battles.", &config->gen5Battles, Gen5Rom_GameName() != nullptr);
+    ConfigToggle("Gen 5 screens", "The Pokemon Summary screen in Black 2 and White 2's own design, kept to the "
+        "middle of a widescreen display. Experimental: the PC and the party screen are still Platinum's. Needs the "
+        "ROM in Settings > Games > Gen 5 battles.", &config->gen5Screens, Gen5Rom_GameName() != nullptr);
 #endif
     Section("Field moves");
     ConfigToggle("Field moves without HMs", "With the HM in your bag (and its badge), Cut, Fly, Surf, Strength, "

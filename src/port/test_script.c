@@ -327,7 +327,7 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         // with B, as the player would)
         command->op = OP_APP;
         command->x = strcmp(words[1], "bag") == 0 ? 1 : strcmp(words[1], "journal") == 0 ? 2
-            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : 0;
+            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : strcmp(words[1], "summary") == 0 ? 6 : 0;
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return command->x != 0;
@@ -359,6 +359,12 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
+    } else if (strcmp(words[0], "gen5-screens") == 0 && count >= 2) {
+        // gen5-screens on|off: Settings > Gameplay > Gen 5 screens
+        command->op = OP_GEN5_SETTING;
+        command->x = 1;
+        command->frames = strcmp(words[1], "on") == 0;
+        return strcmp(words[1], "on") == 0 || strcmp(words[1], "off") == 0;
     } else if (strcmp(words[0], "gen5-battles") == 0 && count >= 2) {
         // gen5-battles on|off: Settings > Gameplay > Gen 5 battles
         command->op = OP_GEN5_SETTING;
@@ -746,6 +752,8 @@ static u16 Step(void)
                 FieldSystem_OpenBag(fieldSystem, &sItemUseCtx);
             } else if (command->x == 2) {
                 sub_0203D30C(fieldSystem, NULL);
+            } else if (command->x == 6) {
+                FieldSystem_GetPartyMenuMonSummary(0, fieldSystem, 0);
             } else if (command->x == 5) {
                 FieldSystem_OpenPartyMenu_SelectPokemon(0, fieldSystem);
             } else {
@@ -870,6 +878,12 @@ static u16 Step(void)
             continue;
         }
         case OP_GEN5_SETTING:
+            if (command->x == 1) {
+                SIM_Config_prj_GetConfig()->gen5Screens = command->frames;
+                printf("[test] Gen 5 screens %s\n", command->frames ? "on" : "off");
+                Next();
+                continue;
+            }
             SIM_Config_prj_GetConfig()->gen5Battles = command->frames;
             printf("[test] Gen 5 battles %s\n", command->frames ? "on" : "off");
             Next();
