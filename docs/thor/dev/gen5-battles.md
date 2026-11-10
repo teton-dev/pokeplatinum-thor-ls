@@ -488,6 +488,9 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
   pixels, so the lists, text and map stay in the middle; their backgrounds (the Bag's blue and green, the Town Map's blue
   frame, the Journal's page) fill the sides. The Journal's load-time page opens before the field map exists, which is why
   this doesn't depend on `ShownFieldSystem`.
+- **The party screen** edge-extends its layers, and mirrors BG2 and BG3 (the panels and the lined background) across the
+  sides through `SIM_SetWidescreenBgEdgeMirror` (a shader-side mirror for layers that aren't drawn through the wide path;
+  `libntr_wide_mirror.patch`). The occupied slot's blue panel shows once more, mirrored, at the left.
 - **The HM cut-in** is a band: BG3 (the rings) behind hardware window WIN0, whose X range grows from the middle to 0..255.
   While `HMCutIn_PortIsPlaying()` BG3 is drawn wide (`G2SIM_DrawBGWide`) and libntr's window test treats a window that
   starts at 0 or reaches 255 as continuing across the wide layer's sides (`libntr_wide_window.patch`). The rings are mirrored

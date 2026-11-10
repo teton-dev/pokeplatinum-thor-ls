@@ -10,6 +10,6 @@ until free timeout 3000
 wait 60
 # (Opened by the test command app, it has no field task to return to: the run ends in it.)
 app party
-wait 200
+wait 600
 shot party
 exit 0
