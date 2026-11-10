@@ -467,3 +467,12 @@ is round (the particle cameras' orthographic extents are widened in `GFL_G3DSysM
   blended twice, in an order that changed from frame to frame. libntr now has the DS's polygon ID rule (a translucent
   polygon doesn't blend over a pixel another one with its ID drew; `libntr_translucent_id.patch`,
   `SIM_SetTranslucentPolygonIdRule`, on only during a Gen 5 battle, stencil-based).
+
+## The arena's warping (2026-11-09)
+
+The sky and ground polygons were warped on the Thor (stair-stepped, sheared textures) after the clipper was in. Cause:
+libntr's vertex shader had W fixed at 1, so textures and colours were interpolated in screen space, not
+perspective-correct as on the DS; large polygons warp. Fix: each vertex carries its clip-space W
+(`libntr_g3_perspective.patch`), the shader outputs `(xyz*w, w)`, and the fog depth is recovered as screen-linear in the
+fragment shader (`coordsW`; GLSL ES has no `noperspective`). Checked on the Thor: wild battle, no shader errors, sky and
+ground correct. Open: the stat raising and lowering particles look a bit off (not investigated).
