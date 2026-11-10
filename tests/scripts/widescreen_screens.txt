@@ -6,7 +6,7 @@
 #
 mash A until free
 wait 30
-jump 165 353 209
+jump 342 114 854
 until free timeout 3000
 wait 60
 # Surf's cut-in (press START

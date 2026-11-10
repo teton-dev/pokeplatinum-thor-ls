@@ -22,7 +22,9 @@ directory = libntr
 # sides (the HM cut-in's band spans the whole wide screen). libntr_bg_charbase.patch: GX_LoadBG0/1/2Char loaded at
 # the character base masked to 128 KB, where the renderer reads the real one (the Journal's text on BG1, char base
 # 0x20000, was written over the page's tiles at 0: black pages)
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_window.patch, libntr_bg_charbase.patch
+# libntr_wide_mirror.patch: SIM_SetWidescreenBgMirror, a wide BG layer's sides mirror the 256-pixel picture (the HM
+# cut-in's rings) instead of repeating it
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch
 
 [provide]
 dependency_names = NitroSDK
