@@ -20,9 +20,9 @@
 +} SIM_WideStamp;
 +void SIM_SetWidescreenStampImage(const unsigned char *rgb, int width, int height);
 +void SIM_SetWidescreenStamps(unsigned char bgLayer, const SIM_WideStamp *stamps, int count);
- BOOL SIM_IsWidescreenActive(void);
- 
- // The DS's polygon ID rule for translucent polygons: one is not blended over a pixel that another translucent
+ // Also asked for every frame: main-engine OBJ priorities (bit n: priority n) whose dark pixels at the 4:3 picture's
+ // leftmost and rightmost columns continue across the sides of a wide scene, for a black bar that reaches the
+ // screen's edge (the Gen 5 battle's party balls' bar and ability bar). Default: none.
 --- a/libraries/sim/src/sim_g2.cpp
 +++ b/libraries/sim/src/sim_g2.cpp
 @@ -277,7 +277,33 @@
@@ -140,19 +140,19 @@
    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, kWideTexWidth, SIM_NDS_SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, sWideBuf);
 --- a/libraries/sim/src/sim_main.cpp
 +++ b/libraries/sim/src/sim_main.cpp
-@@ -740,6 +740,8 @@
- static u8 sWideObjRequested = 0;
- static u8 sWideObjWrap = 0;       // main-engine OBJ priorities repeated across the sides
+@@ -742,6 +742,8 @@
  static u8 sWideEdgeRequested = 0;
+ static u8 sWideObjEdgeRequested = 0;
+ static u8 sWideObjEdge = 0;       // main-engine OBJ priorities whose dark edge pixels continue across the sides
 +static u8 sWideMirrorRequested = 0;
 +static u8 sWideMirrorBgs = 0;     // wide BG layers whose sides mirror the picture
  static u8 sWideEdgeBgs = 0;       // main-engine BG layers whose edge columns continue across the sides
  
  extern "C" void SIM_SetWidescreenScene(BOOL wide) {
-@@ -753,8 +755,20 @@
+@@ -759,8 +761,20 @@
  
- extern "C" void SIM_SetWidescreenObjWrap(u8 objPriorities) {
-   sWideObjRequested = objPriorities & 0x0F;
+ extern "C" void SIM_SetWidescreenObjEdgeExtend(u8 objPriorities) {
+   sWideObjEdgeRequested = objPriorities & 0x0F;
 +}
 +
 +extern "C" void SIM_SetWidescreenStampImage(const unsigned char *rgb, int width, int height) {
@@ -170,7 +170,7 @@
  extern "C" void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers) {
    sWideEdgeRequested = bgLayers & 0x0F;
  }
-@@ -1301,7 +1315,7 @@
+@@ -1307,7 +1321,7 @@
      const int bg = bgOrder[i];
      glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bg]);
      if (bgEnabled[bg] && !(bg == 0 && bg0as3d)) {
@@ -179,14 +179,14 @@
          wideBgMask |= 1 << bg;
          continue;
        }
-@@ -2485,6 +2499,7 @@
+@@ -2493,6 +2507,7 @@
      sWideBgLayers = wide ? sWideBgRequested : 0;
      sWideObjWrap = wide ? sWideObjRequested : 0;
      sWideEdgeBgs = wide ? sWideEdgeRequested : 0;
 +    sWideMirrorBgs = wide ? sWideMirrorRequested : 0;
+     sWideObjEdge = wide ? sWideObjEdgeRequested : 0;
    }
  
-   // Setup 3D Viewport
 --- a/libraries/sim/include/sim_g2.h
 +++ b/libraries/sim/include/sim_g2.h
 @@ -1,10 +1,13 @@
