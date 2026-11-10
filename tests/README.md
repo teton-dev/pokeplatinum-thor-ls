@@ -32,7 +32,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `gen5_widescreen.txt` | `turtwig` | with widescreen on (`TEST_CONFIG`, below): the overworld, then a wild and a trainer battle in BW2's engine fill the 16:9 window, the sprites and text in the 4:3 middle (the check is the shots) (Gen 5 builds) | ~2 min |
 | `widescreen_weather.txt` | `turtwig` | with widescreen on: rain, a blizzard (and its start menu), a sandstorm, fog, ash and Snowpoint City, each across the whole 16:9 window (the check is the shots) | ~30 s |
 | `widescreen_screens.txt` | `turtwig` | with widescreen on: Surf's cut-in band and the wall Town Map across the whole 16:9 window (the check is the shots) | ~30 s |
-| `widescreen_bag.txt`, `widescreen_journal.txt`, `widescreen_flymap.txt` | `turtwig` | with widescreen on: that screen opened by the test command `app` fills the 16:9 window, its contents in the 4:3 middle (the check is the shot) | ~20 s each |
+| `widescreen_bag.txt`, `widescreen_journal.txt`, `widescreen_flymap.txt`, `widescreen_party.txt` | `turtwig` | with widescreen on: that screen opened by the test command `app` fills the 16:9 window, its contents in the 4:3 middle (the check is the shot) | ~20 s each |
 | `widescreen_journal_load.txt` | a save with journal entries | the Journal page that opens on loading it, with its paper and text (the check is the shots; the fixture is your own save) | ~30 s |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
@@ -87,7 +87,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `give SPECIES LEVEL` | a new Pokémon into the party |
 | `jump MAP X Z` | once the player is free, to map header MAP at (X, Z), as *Settings*' map jump does (420: Sandgem Town's Pokémon Center) |
 | `script ID` | once the player is free, runs the field script ID (2018: a Pokémon Center's PC, as facing it does) |
-| `app NAME` | once the player is free, opens `bag`, `journal`, `townmap` or `flymap` over the overworld; nothing returns to the field from it, so the script ends in it |
+| `app NAME` | once the player is free, opens `bag`, `journal`, `townmap`, `flymap` or `party` over the overworld; nothing returns to the field from it, so the script ends in it |
 | `trainer ID` | once the player is free, a battle against Platinum's trainer ID, as its encounter starts it |
 | `party` | logs the party, the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
 | `shot NAME` | a screenshot, `NAME.png` |

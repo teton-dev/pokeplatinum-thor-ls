@@ -1,0 +1,101 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -146,6 +146,8 @@
+ // usual, with their leftmost and rightmost pixel columns continued across the sides of a wide scene,
+ // for a bar or a box that reaches the screen's edges (its text stays in the middle). Default: none.
+ void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers);
++// Wide BG layers (SIM_SetWidescreenSceneOptions) whose sides mirror the 256-pixel picture instead of repeating it
++void SIM_SetWidescreenBgMirror(u8 bgLayers);
+ BOOL SIM_IsWidescreenActive(void);
+ 
+ // The DS's polygon ID rule for translucent polygons: one is not blended over a pixel that another translucent
+--- a/libraries/sim/src/sim_g2.cpp
++++ b/libraries/sim/src/sim_g2.cpp
+@@ -277,7 +277,7 @@
+ #endif
+ }
+ 
+-bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width) {
++bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width, bool mirror) {
+   const bool text = bgNum <= 1 ? bgMode <= 5 : bgNum == 2 ? (bgMode <= 1 || bgMode == 3) : bgMode == 0;
+   if (!text || width <= SIM_NDS_SCREEN_WIDTH || width > kWideTexWidth || !s_SIM_DBG_BGenable[bgNum]) {
+     return false;
+@@ -306,6 +306,29 @@
+   sLineWidth = SIM_NDS_SCREEN_WIDTH;
+   sWideOut = nullptr;
+ 
++  if (mirror) {
++    // The sides show the picture mirrored: column -1-k is column k, and column 256+k is column 255-k
++    const int pad = (width - SIM_NDS_SCREEN_WIDTH) / 2;
++    for (int row = 0; row < SIM_NDS_SCREEN_HEIGHT; row++) {
++      u8 *line = sWideBuf + 4 * kWideTexWidth * row;
++      for (int x = 0; x < width; x++) {
++        const int screenX = x - pad;
++        int src;
++        if (screenX < 0) {
++          src = -1 - screenX;
++        } else if (screenX >= SIM_NDS_SCREEN_WIDTH) {
++          src = 2 * SIM_NDS_SCREEN_WIDTH - 1 - screenX;
++        } else {
++          continue;
++        }
++        if (src < 0 || src >= SIM_NDS_SCREEN_WIDTH) {
++          continue; // more than a screen's width of side
++        }
++        memcpy(line + 4 * x, line + 4 * (src + pad), 4);
++      }
++    }
++  }
++
+   glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bgNum]);
+   glBindTexture(GL_TEXTURE_2D, sWideTextures[bgNum]);
+   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, kWideTexWidth, SIM_NDS_SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, sWideBuf);
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -740,6 +740,8 @@
+ static u8 sWideObjRequested = 0;
+ static u8 sWideObjWrap = 0;       // main-engine OBJ priorities repeated across the sides
+ static u8 sWideEdgeRequested = 0;
++static u8 sWideMirrorRequested = 0;
++static u8 sWideMirrorBgs = 0;     // wide BG layers whose sides mirror the picture
+ static u8 sWideEdgeBgs = 0;       // main-engine BG layers whose edge columns continue across the sides
+ 
+ extern "C" void SIM_SetWidescreenScene(BOOL wide) {
+@@ -755,6 +757,10 @@
+   sWideObjRequested = objPriorities & 0x0F;
+ }
+ 
++extern "C" void SIM_SetWidescreenBgMirror(u8 bgLayers) {
++  sWideMirrorRequested = bgLayers & 0x0F;
++}
++
+ extern "C" void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers) {
+   sWideEdgeRequested = bgLayers & 0x0F;
+ }
+@@ -1301,7 +1307,7 @@
+     const int bg = bgOrder[i];
+     glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bg]);
+     if (bgEnabled[bg] && !(bg == 0 && bg0as3d)) {
+-      if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, sWide3dWidth)) {
++      if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, sWide3dWidth, ((sWideMirrorBgs >> bg) & 1) != 0)) {
+         wideBgMask |= 1 << bg;
+         continue;
+       }
+@@ -2485,6 +2491,7 @@
+     sWideBgLayers = wide ? sWideBgRequested : 0;
+     sWideObjWrap = wide ? sWideObjRequested : 0;
+     sWideEdgeBgs = wide ? sWideEdgeRequested : 0;
++    sWideMirrorBgs = wide ? sWideMirrorRequested : 0;
+   }
+ 
+   // Setup 3D Viewport
+--- a/libraries/sim/include/sim_g2.h
++++ b/libraries/sim/include/sim_g2.h
+@@ -6,5 +6,5 @@
+ void G2SIM_PlotPixel(u8 * screenBuf, u8 r, u8 g, u8 b, u32 x, u32 y, BOOL isSub);
+ // Widescreen: a main-engine text-mode BG layer drawn width DS pixels wide (centred on the
+ // screen) into its own texture, bound to the layer's texture unit. false: not text mode
+-bool G2SIM_DrawBGWide( u8 bgNum, u8 bgMode, int width );
++bool G2SIM_DrawBGWide( u8 bgNum, u8 bgMode, int width, bool mirror );
+ #endif
+\ No newline at end of file
