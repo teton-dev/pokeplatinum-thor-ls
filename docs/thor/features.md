@@ -150,11 +150,12 @@ builds only showed a few drops near the bottom: each drop stopped on its second 
 * **Gen 5 battles** (*Settings > Gameplay > Gen 5 battles*) fill the wide screen: the
   arena is 3D, so its camera sees more of it on the left and right, unstretched. The
   Pokemon, trainers, HP boxes and text stay where they are, in the 4:3 middle.
-* **Platinum's own battles** stay 4:3 with black bars at the sides: the battle backdrop
-  is a 256-pixel picture and the bases and HP boxes are placed for 256 pixels, so
-  there's nothing real to show beside them.
+* **Platinum's own battles** fill the wide screen too: the backdrop is a 256-pixel picture,
+  so it is mirrored at both sides, and the HP boxes get a rounded end cap on their outer
+  side so that they look like windows floating over it. The Pokemon, bases and text box
+  stay in the 4:3 middle.
 
-Menus and other screens stay 4:3.
+Other menus and screens stay 4:3.
 
 **3D as the DS draws it:** lit 3D models are shaded the way the DS lights them (towns
 at night look brighter and bluer than in earlier builds), and the overworld has the
