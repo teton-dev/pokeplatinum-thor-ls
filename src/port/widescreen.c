@@ -11,6 +11,7 @@
 #include "field/field_system.h"
 #include "field/field_system_sub2_t.h"
 #include "overlay005/ov5_021D5EB8.h"
+#include "overlay005/encounter_effect_core.h"
 #include "overlay006/hm_cut_in.h"
 #include "applications/bag/application.h"
 #include "applications/journal_display/journal_controller.h"
@@ -60,6 +61,13 @@ static BOOL WeatherLayers(FieldSystem *fieldSystem, u8 *objWrap, u8 *wideBgs, u8
         *wideBgs |= 1 << 3;
         *mirrorBgs |= 1 << 3;
         *objWrap |= 0x0F;
+    }
+    // A Gym Leader's encounter effect: its banner is BG3 (mirrored across the sides); the bars that slide across
+    // (sprites of priority 1 to 3) continue to the edges, the leader's sprite (priority 0) stays where it is
+    if (EncounterEffect_PortGymLeaderPlaying()) {
+        *wideBgs |= 1 << 3;
+        *mirrorBgs |= 1 << 3;
+        *objWrap |= 0x0E;
     }
     if (fieldSystem->unk_04 == NULL || fieldSystem->unk_04->unk_0C == NULL) {
         return TRUE;

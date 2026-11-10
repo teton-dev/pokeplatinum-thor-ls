@@ -479,6 +479,14 @@ x - 63, y - 16), player box 128 wide, 42 high with the EXP bar (cap at x + 64, y
 band is a row lower than the enemy's). Double battles' player boxes (33 high assumed) are not checked.
 `tests/scripts/widescreen_gen4_battle.txt` has the shots.
 
+## Widescreen: the Gym Leader encounter effect (2026-11-09)
+
+`EncounterEffect_GymLeader` (`encounter_effect_core.c`) is the "VS" banner: BG3 (the banner, scrolled every frame)
+behind a window opened line by line, sprites (the sliding bars, priorities 1 to 3) and the leader's mugshot (priority 0,
+enters from x = 272). While it plays (`EncounterEffect_PortGymLeaderPlaying`) BG3 is drawn wide and mirrored and the OBJ
+wrap covers priorities 1 to 3 only, so the mugshot doesn't reappear at the left as it enters. The other encounter effects
+(wild, trainer, Elite Four...) are not widened. `tests/scripts/widescreen_leader.txt` (test command `leader N`).
+
 ## Particles (2026-11-09)
 
 The Poké Ball's throw and opening and the moves' particles weren't drawn. They were lost in libntr's renderer: it keeps

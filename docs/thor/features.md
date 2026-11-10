@@ -138,7 +138,9 @@ on the second display (not swapped):
   Dark caves before Flash stay 4:3: the darkness is a circle drawn for the 4:3 screen.
 * **Field moves**: the band that crosses the screen when a Pokemon uses Fly, Surf, Cut
   and the other moves spans the whole wide screen: its rings are mirrored at the sides
-  and the wind and the Pokemon that cross it continue to the edges.
+  and the wind and the Pokemon that cross it continue to the edges. A Gym Leader's
+  "VS" banner before a battle does the same: it spans the whole width, with the leader
+  and the name where they are.
 * **Bag, party, Town Map, Fly map and Journal** (including the page that opens when you load a
   save) fill the wide screen (the Journal's pages with entries also have their paper
   again; they showed text on black before): their backgrounds continue to the left and right edges,

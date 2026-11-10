@@ -35,6 +35,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `widescreen_bag.txt`, `widescreen_journal.txt`, `widescreen_flymap.txt`, `widescreen_party.txt` | `turtwig` | with widescreen on: that screen opened by the test command `app` fills the 16:9 window, its contents in the 4:3 middle (the check is the shot) | ~20 s each |
 | `widescreen_journal_load.txt` | a save with journal entries | the Journal page that opens on loading it, with its paper and text (the check is the shots; the fixture is your own save) | ~30 s |
 | `widescreen_gen4_battle.txt` | `turtwig` | with widescreen on, Gen 5 battles off: a wild and a trainer battle in Platinum's engine, the backdrop across the 16:9 window and the HP boxes' end caps (the check is the shots) | ~1 min |
+| `widescreen_leader.txt` | `turtwig` | with widescreen on: Roark's "VS" encounter effect across the 16:9 window (the check is the shots) | ~20 s |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
 engine, and the test passes once that asks for a command (BW2's battle raises the same `command` event as Platinum's).
@@ -89,6 +90,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `jump MAP X Z` | once the player is free, to map header MAP at (X, Z), as *Settings*' map jump does (420: Sandgem Town's Pokémon Center) |
 | `script ID` | once the player is free, runs the field script ID (2018: a Pokémon Center's PC, as facing it does) |
 | `app NAME` | once the player is free, opens `bag`, `journal`, `townmap`, `flymap` or `party` over the overworld; nothing returns to the field from it, so the script ends in it |
+| `leader N` | once the player is free, plays Gym Leader encounter effect N (0: Roark, 1: Gardenia...) over the overworld |
 | `trainer ID` | once the player is free, a battle against Platinum's trainer ID, as its encounter starts it |
 | `party` | logs the party, the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
 | `shot NAME` | a screenshot, `NAME.png` |
