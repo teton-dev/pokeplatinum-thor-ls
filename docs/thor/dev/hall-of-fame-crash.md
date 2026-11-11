@@ -19,3 +19,15 @@ report named `sub_02052F28` at `clear_game.c:260`. After the fix it passes throu
 
 **Other use-after-free of the same kind:** any code that touches `fieldSystem->bgConfig` while a child application
 runs. None other was seen here.
+
+# Pokémon Center healing: the trainer sprite glitch (not found yet)
+
+Tried on the desktop build with `tests/scripts/heal_shots.txt` (new `jump MAP X Z` script command: warps to Jubilife's
+Pokémon Center, talks to the nurse, then takes a screenshot every few frames): about 130 frames of the exchange, from
+the nurse's question to "Thank you for waiting", showed no wrong palette, sprite or OAM frame. The healing machine
+(`src/overlay006/healing_machine_animation/pokecenter.c`) is only 3D map props (mini Poké Balls, the screen); it has
+no trainer sprite of its own, so a glitch there would be the player's or the nurse's OBJ sprite, or the field's
+transition. Screenshots taken by the harness pause the game for about 2 s each and skip frames, so a glitch of a
+frame or two may just not be caught. What would help: whether the glitch is the player or the nurse, whether it
+happens on the desktop build as well as the Thor, and at which line of the text; then a recording or a
+`SIM` frame dump around it.
