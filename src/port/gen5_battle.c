@@ -22,6 +22,7 @@
 #include "generated/battle_terrains.h"
 #include "generated/text_banks.h"
 #include "generated/trainer_classes.h"
+#include "generated/trainers.h"
 #include "generated/trainer_message_types.h"
 #include "message.h"
 #include "trainer_data.h"
@@ -332,6 +333,7 @@ enum {
     ARENA_BG_MOUNTAIN = 7,
     ARENA_BG_SEA = 8,
     ARENA_BG_VOID = 11,
+    ARENA_BG_TOURNAMENT = 19,
 };
 
 static BOOL IsGymLeaderClass(int trainerClass)
@@ -349,8 +351,15 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain)
         *bg = ARENA_BG_INDOORS;
         *terrain = 19;
     } else if (trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_CHAMPION_CYNTHIA) {
-        // Each has a room of its own in Platinum: Aaron, Bertha, Flint, Lucian, Cynthia; BW2's are 12 to 16
-        *bg = 12 + (trainerClass - TRAINER_CLASS_ELITE_FOUR_AARON);
+        const int id = dto->trainerIDs[BATTLER_ENEMY_1];
+        if (id >= TRAINER_ELITE_FOUR_AARON_REMATCH && id <= TRAINER_ELITE_FOUR_LUCIAN_REMATCH) {
+            // The Elite Four's rematches are in BW2's World Tournament's arena with the coloured lights (19); Cynthia
+            // keeps her room in every fight
+            *bg = ARENA_BG_TOURNAMENT;
+        } else {
+            // Each has a room of its own in Platinum: Aaron, Bertha, Flint, Lucian, Cynthia; BW2's are 12 to 16
+            *bg = 12 + (trainerClass - TRAINER_CLASS_ELITE_FOUR_AARON);
+        }
         *terrain = 0;
     } else {
         switch (dto->background) {
