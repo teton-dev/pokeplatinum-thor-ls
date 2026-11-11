@@ -271,6 +271,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sSetup->fieldSituation.env.zoneId = battle->zone;
     sSetup->fieldSituation.env.bgType = battle->arenaBg;
     sSetup->fieldSituation.env.terrain = battle->arenaTerrain;
+    sSetup->unkDD_6 = battle->arenaAlt;
     sSetup->badgeCount = battle->player.badges;
     sSetup->result = BTL_RESULT_VICTORY;
     sSetup->party[0] = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));

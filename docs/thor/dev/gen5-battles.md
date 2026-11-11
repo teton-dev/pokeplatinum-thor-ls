@@ -354,7 +354,9 @@ In slices, each tested on the desktop:
   Distortion World the purple void (11), and the rest from `dto->background` and `dto->terrain` (sea, city,
   mountain, snow, indoors and caves, sand, grass, water, ice). Found by rendering every background and terrain
   (`POKEPLATINUM_GEN5_ARENA=bg,terrain` overrides it; `tests/scripts/gen5_arena.txt`). The Elite Four's rematches (trainers 866 to 869) get BW2's World Tournament arena with the coloured rim lights (19);
-Cynthia keeps her room (16) in every fight. Terrain 7 has no floor in the
+Cynthia keeps her room (16) in every fight. The tournament arena's coloured light pools are its alternate variant
+(`BtlvField_Create`'s `alternateFieldVariant`, set by `BtlSetup.unkDD_6`, which the World Tournament's final uses): only
+field 46 has one (the arena table's file 1 lists each field's variants), so the lights can't go on the other rooms. Terrain 7 has no floor in the
   dark backgrounds and crashes: never use it. Not every combination was looked at.
 - **Options:** Platinum's Text Speed goes to BW2's config (`Gen5Battle.textSpeed`: BW2's 0, 1, 2 are slow, normal,
   fast too), both the battle's own and the save's the text printing reads; the first was forced to 0 before.

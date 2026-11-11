@@ -461,8 +461,9 @@ static BOOL IsGymLeaderClass(int trainerClass)
         || (trainerClass >= TRAINER_CLASS_LEADER_GARDENIA && trainerClass <= TRAINER_CLASS_LEADER_VOLKNER);
 }
 
-static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain)
+static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *alt)
 {
+    *alt = 0;
     const int trainerClass = (dto->battleType & BATTLE_TYPE_TRAINER) ? dto->trainer[BATTLER_ENEMY_1].header.trainerType : -1;
 
     if (IsGymLeaderClass(trainerClass)) {
@@ -475,6 +476,7 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain)
             // The Elite Four's rematches are in BW2's World Tournament's arena with the coloured lights (19); Cynthia
             // keeps her room in every fight
             *bg = ARENA_BG_TOURNAMENT;
+            *alt = 1;
         } else {
             // Each has a room of its own in Platinum: Aaron, Bertha, Flint, Lucian, Cynthia; BW2's are 12 to 16
             *bg = 12 + (trainerClass - TRAINER_CLASS_ELITE_FOUR_AARON);
@@ -557,7 +559,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
 
     memset(&sBattle, 0, sizeof(sBattle));
     Gen5_TextToGen5(TrainerInfo_Name(trainerInfo), TRAINER_NAME_LEN + 1, sBattle.player.name, 8);
-    ArenaFromDTO(dto, &sBattle.arenaBg, &sBattle.arenaTerrain);
+    ArenaFromDTO(dto, &sBattle.arenaBg, &sBattle.arenaTerrain, &sBattle.arenaAlt);
     {
         // The time of day as Platinum has it (its battle backgrounds follow the clock): BW2's arenas that take the
         // zone's light (grass, city, mountain, sea...) change with it. POKEPLATINUM_GEN5_TIME=HOUR[:MINUTE] and
