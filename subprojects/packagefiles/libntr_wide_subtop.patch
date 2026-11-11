@@ -1,0 +1,58 @@
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -728,6 +728,7 @@
+ // viewport that wide (latched at the end of SIM_Render, for the 3D drawn until the next one)
+ static BOOL sWideRequested = FALSE;
+ static bool sWideActive = false;
++static bool sWideSubTop = false; // a wide scene whose top screen is the sub engine (2D only: BW2's Summary)
+ static int sWide3dWidth = SIM_NDS_SCREEN_WIDTH; // the 3D being drawn: its width
+ static int sWideWidth = SIM_NDS_SCREEN_WIDTH;   // the top display's
+ static int sFboWidth = SIM_NDS_SCREEN_WIDTH;    // the 3D framebuffer's
+@@ -1386,9 +1387,9 @@
+ 
+   // Widescreen: the 3D engine on the top screen shows the whole wide scene, its 2D layers in
+   // the middle; otherwise the 3D scene is the left DS screen's width of its framebuffer
+-  const bool wideHere = sWideActive && !isSub && topScreen;
++  const bool wideHere = (sWideActive && !isSub && topScreen) || (sWideSubTop && isSub && topScreen);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideRatio"),
+-                     wideHere ? (float)sWide3dWidth / (float)SIM_NDS_SCREEN_WIDTH : 1.0f);
++                     wideHere ? (float)(sWideSubTop && isSub ? sFboWidth : sWide3dWidth) / (float)SIM_NDS_SCREEN_WIDTH : 1.0f);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "tex3dScaleS"),
+                      (float)(wideHere ? sWide3dWidth : SIM_NDS_SCREEN_WIDTH) / (float)sFboWidth);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgMask"),
+@@ -1841,8 +1842,8 @@
+     }
+     if (dualScreen) {
+       aspectRatio = 256.0f / 192.0f;
+-      if (sWideActive && !s_SIM_config.swapScreens) {
+-        aspectRatio = (float)sWide3dWidth / 192.0f;
++      if ((sWideActive || sWideSubTop) && !s_SIM_config.swapScreens) {
++        aspectRatio = (float)sFboWidth / 192.0f;
+       }
+ 
+       // Widescreen: the top display's width at the DS screen's height, even, up to 2:1
+@@ -2509,15 +2510,20 @@
+     if (wide != sWideActive) {
+       printf("Widescreen: %s\n", wide ? "on" : "off");
+     }
++    // The sub engine on the top screen (2D only): the scene stays 4:3 for the 3D (on the bottom screen), the top 2D
++    // layers get the wide scene's edge extension
++    const bool wideSub = s_SIM_config.widescreen && sWideRequested && SIM_Display_SecondaryActive() &&
++                         !s_SIM_config.swapScreens && !(s_reg_GX_POWCNT >> 15) && sFboWidth > SIM_NDS_SCREEN_WIDTH;
++    sWideSubTop = wideSub;
+     sWideActive = wide;
+     sWide3dWidth = wide ? sFboWidth : SIM_NDS_SCREEN_WIDTH;
+     sWideScale3D = wide && sWideScale3DRequested;
+     sWideBgLayers = wide ? sWideBgRequested : 0;
+-    sWideObjWrap = wide ? sWideObjRequested : 0;
+-    sWideEdgeBgs = wide ? sWideEdgeRequested : 0;
++    sWideObjWrap = (wide || wideSub) ? sWideObjRequested : 0;
++    sWideEdgeBgs = (wide || wideSub) ? sWideEdgeRequested : 0;
+     sWideMirrorBgs = wide ? sWideMirrorRequested : 0;
+-    sWideEdgeMirrorBgs = wide ? sWideEdgeMirrorRequested : 0;
+-    sWideObjEdge = wide ? sWideObjEdgeRequested : 0;
++    sWideEdgeMirrorBgs = (wide || wideSub) ? sWideEdgeMirrorRequested : 0;
++    sWideObjEdge = (wide || wideSub) ? sWideObjEdgeRequested : 0;
+   }
+ 
+   // Setup 3D Viewport

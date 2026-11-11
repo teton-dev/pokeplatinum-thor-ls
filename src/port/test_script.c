@@ -10,7 +10,9 @@
 #include <simulator/sim.h>
 
 #include "field/field_system.h"
+#include "applications/party_menu/main.h"
 #include "field_move_tasks.h"
+#include "field_system.h"
 #include "game_options.h"
 #include "save_player.h"
 #include "field_task.h"
@@ -31,6 +33,7 @@
 #include "savedata.h"
 #include "party.h"
 #include "pc_boxes.h"
+#include "applications/pc_boxes/pokemon_storage_session.h"
 #include "pokemon.h"
 #include "savedata/save_table.h"
 #include "pokedex.h"
@@ -70,6 +73,7 @@ enum TestOp {
     OP_GIVE,
     OP_LEAD,
     OP_LEARN,
+    OP_TEACH,
     OP_PARTY,
     OP_TRAINER,
     OP_SHOT,
@@ -309,6 +313,18 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_LEARN;
         command->x = atoi(words[1]);
         return TRUE;
+    } else if (strcmp(words[0], "teach") == 0 && count >= 3) {
+        // teach MOVE SLOT: the party's first Pokemon knows MOVE in move slot SLOT (a field move to try in the party)
+        command->op = OP_TEACH;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "hold") == 0 && count == 2) {
+        // hold ITEM: the party's first Pokemon holds ITEM
+        command->op = OP_TEACH;
+        command->x = atoi(words[1]);
+        command->y = -1;
+        return TRUE;
     } else if (strcmp(words[0], "trainer") == 0 && count >= 2) {
         // A battle against trainer ID (Platinum's trainer numbers), as its encounter starts it, once the player is free
         command->op = OP_TRAINER;
@@ -339,7 +355,7 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         // with B, as the player would)
         command->op = OP_APP;
         command->x = strcmp(words[1], "bag") == 0 ? 1 : strcmp(words[1], "journal") == 0 ? 2
-            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : strcmp(words[1], "summary") == 0 ? 6 : 0;
+            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : strcmp(words[1], "summary") == 0 ? 6 : strcmp(words[1], "pc") == 0 ? 7 : strcmp(words[1], "party-field") == 0 ? 8 : strcmp(words[1], "party-give") == 0 ? 9 : 0;
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return command->x != 0;
@@ -767,6 +783,31 @@ static u16 Step(void)
                 FieldSystem_OpenBag(fieldSystem, &sItemUseCtx);
             } else if (command->x == 2) {
                 sub_0203D30C(fieldSystem, NULL);
+            } else if (command->x == 9) {
+                // The party as the bag opens it to give an item (Potion): pick the Pokemon to give it to
+                static FieldMoveContext sGiveContext;
+                FieldMoves_SetUsableMoves(fieldSystem, &sGiveContext);
+                PartyMenu *partyMenu = Heap_Alloc(HEAP_ID_FIELD2, sizeof(PartyMenu));
+                memset(partyMenu, 0, sizeof(PartyMenu));
+                partyMenu->party = SaveData_GetParty(fieldSystem->saveData);
+                partyMenu->bag = SaveData_GetBag(fieldSystem->saveData);
+                partyMenu->mailbox = SaveData_GetMailbox(fieldSystem->saveData);
+                partyMenu->options = SaveData_GetOptions(fieldSystem->saveData);
+                partyMenu->fieldMoveContext = &sGiveContext;
+                partyMenu->type = PARTY_MENU_TYPE_BASIC;
+                partyMenu->mode = PARTY_MENU_MODE_GIVE_ITEM;
+                partyMenu->usedItemID = ITEM_POTION;
+                partyMenu->fieldSystem = fieldSystem;
+                FieldSystem_StartChildProcess(fieldSystem, &gPokemonPartyAppTemplate, partyMenu);
+            } else if (command->x == 8) {
+                static FieldMoveContext sMoveContext;
+                FieldMoves_SetUsableMoves(fieldSystem, &sMoveContext);
+                FieldSystem_OpenPartyMenu(fieldSystem, &sMoveContext, 0);
+            } else if (command->x == 7) {
+                static PokemonStorageSession sPcSession;
+                sPcSession.saveData = fieldSystem->saveData;
+                sPcSession.boxMode = 0;
+                FieldSystem_OpenPokemonStorage(fieldSystem, &sPcSession);
             } else if (command->x == 6) {
                 FieldSystem_GetPartyMenuMonSummary(0, fieldSystem, 0);
             } else if (command->x == 5) {
@@ -867,13 +908,30 @@ static u16 Step(void)
             Next();
             continue;
         }
+        case OP_TEACH: {
+            Pokemon *mon = Party_GetPokemonBySlotIndex(SaveData_GetParty(SaveData_Ptr()), 0);
+            u32 move = command->x;
+            u32 pp = 20;
+            if (command->y < 0) {
+                Pokemon_SetValue(mon, MON_DATA_HELD_ITEM, &move);
+                printf("[test] the first Pokemon holds item %d\n", command->x);
+                Next();
+                continue;
+            }
+            Pokemon_SetValue(mon, MON_DATA_MOVE1 + command->y, &move);
+            Pokemon_SetValue(mon, MON_DATA_MOVE1_PP + command->y, &pp);
+            printf("[test] taught move %d in slot %d\n", command->x, command->y);
+            Next();
+            continue;
+        }
         case OP_PARTY: {
             SaveData *save = SaveData_Ptr();
             Party *party = SaveData_GetParty(save);
             for (int i = 0; i < Party_GetCurrentCount(party); i++) {
                 Pokemon *mon = Party_GetPokemonBySlotIndex(party, i);
-                printf("[test] party %d: species %u level %u ball %u OT %u HP %u/%u nickname %u\n", i,
+                printf("[test] party %d: species %u item %u level %u ball %u OT %u HP %u/%u nickname %u\n", i,
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_HELD_ITEM, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_LEVEL, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_POKEBALL, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_OT_ID, NULL),
@@ -882,7 +940,7 @@ static u16 Step(void)
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_HAS_NICKNAME, NULL));
             }
             Bag *bag = SaveData_GetBag(save);
-            printf("[test] bag: %u Master Balls, %u Poke Balls\n",
+            printf("[test] bag: %u Potions, %u Master Balls, %u Poke Balls\n", (unsigned)Bag_GetItemQuantity(bag, 17, HEAP_ID_APPLICATION),
                 (unsigned)Bag_GetItemQuantity(bag, 1, HEAP_ID_APPLICATION), (unsigned)Bag_GetItemQuantity(bag, 4,
                 HEAP_ID_APPLICATION));
             PCBoxes *boxes = SaveData_GetPCBoxes(save);

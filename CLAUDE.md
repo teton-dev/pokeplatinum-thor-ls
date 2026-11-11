@@ -56,6 +56,12 @@ sound effects and cries (from the imported ROM's sound data) over Platinum's mus
 changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this
 repository, not inside it.
 
+## Roadmap after Gen 5 battles
+
+HeartGold/SoulSilver support, then Renegade Platinum, then **enhanced graphics** (custom shaders: cloud shadows,
+lighting, weather, reflections, bloom...) as the very last step. Its plan is `docs/thor/dev/enhanced-graphics.md`:
+not started; add rendering findings to it as other work turns them up.
+
 ## Testing locally (Docker)
 
 The owner's ROMs are in `~/thor-dev` (`PKMNPLAT.nds`, `PKMNB2.nds`). `tools/docker/desktop.sh` builds and runs the
