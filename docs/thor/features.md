@@ -140,7 +140,8 @@ on the second display (not swapped):
   and the other moves spans the whole wide screen: its rings are mirrored at the sides
   and the wind and the Pokemon that cross it continue to the edges. A Gym Leader's
   "VS" banner before a battle does the same: it spans the whole width, with the leader
-  and the name where they are.
+  and the name where they are. So does the band of the Elite Four's and the Champion's
+  "VS" (their portraits stay in the 4:3 middle).
 * **Bag, party, Town Map, Fly map and Journal** (including the page that opens when you load a
   save) fill the wide screen (the Journal's pages with entries also have their paper
   again; they showed text on black before): their backgrounds continue to the left and right edges,

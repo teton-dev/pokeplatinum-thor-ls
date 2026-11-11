@@ -39,6 +39,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `widescreen_bag.txt`, `widescreen_journal.txt`, `widescreen_flymap.txt`, `widescreen_party.txt` | `turtwig` | with widescreen on: that screen opened by the test command `app` fills the 16:9 window, its contents in the 4:3 middle (the check is the shot) | ~20 s each |
 | `widescreen_journal_load.txt` | a save with journal entries | the Journal page that opens on loading it, with its paper and text (the check is the shots; the fixture is your own save) | ~30 s |
 | `widescreen_gen4_battle.txt` | `turtwig` | with widescreen on, Gen 5 battles off: a wild and a trainer battle in Platinum's engine, the backdrop across the 16:9 window and the HP boxes' end caps (the check is the shots) | ~1 min |
+| `widescreen_e4.txt` | `turtwig` | with widescreen on: the Elite Four's "VS" encounter effect (Aaron's), frame by frame with `stillshot`: the band across the 16:9 window, the portraits in the middle (the check is the shots; `leader 12` for Cynthia) | ~2 min |
 | `widescreen_leader.txt` | `turtwig` | with widescreen on: Roark's "VS" encounter effect across the 16:9 window (the check is the shots) | ~20 s |
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
@@ -96,12 +97,13 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `fly MAP X Z [SLOT]` | once the player is free, Fly as the town map's choice starts it: the HM cut-in with party member SLOT (default the first), then the landing, at map header MAP's fly destination at tile (X, Z) (165 379 234: Snowpoint City) |
 | `script ID` | once the player is free, runs the field script ID (2018: a Pokémon Center's PC, as facing it does) |
 | `app NAME` | once the player is free, opens `bag`, `journal`, `townmap`, `flymap` or `party` over the overworld; nothing returns to the field from it, so the script ends in it |
-| `leader N` | once the player is free, plays Gym Leader encounter effect N (0: Roark, 1: Gardenia...) over the overworld |
+| `leader N` | once the player is free, plays Gym Leader encounter effect N (0: Roark, 1: Gardenia... 7: Volkner, 8: Aaron... 11: Lucian, 12: Cynthia) over the overworld |
 | `trainer ID` | once the player is free, a battle against Platinum's trainer ID, as its encounter starts it |
 | `lead SLOT` | the party member in SLOT (0 to 5) to the front |
 | `learn MOVE` | the lead's first move becomes MOVE (its number: 127 Waterfall, 352 Water Pulse, 53 Flamethrower), with full PP |
 | `party` | logs the party, the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
-| `shot NAME` | a screenshot, `NAME.png` |
+| `shot NAME` | a screenshot, `NAME.png` (the game runs on while it is taken: about 45 frames) |
+| `stillshot NAME` | the same with the game stopped on the frame just drawn, for the frames of a short effect one after another (`wait` between the shots) |
 | `log TEXT` | prints the text |
 | `exit [code]` | ends the run: 0 passes |
 

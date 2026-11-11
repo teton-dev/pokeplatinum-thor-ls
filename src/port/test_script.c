@@ -405,8 +405,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
-    } else if (strcmp(words[0], "shot") == 0 && rest != NULL) {
+    } else if ((strcmp(words[0], "shot") == 0 || strcmp(words[0], "stillshot") == 0) && rest != NULL) {
+        // shot NAME: a screenshot while the game runs on; stillshot NAME: one with the game stopped, to catch the frames
+        // of a short effect one at a time (wait N frames between the shots)
         command->op = OP_SHOT;
+        command->frames = words[0][0] == 's' && words[0][1] == 't' ? 1 : 0;
         snprintf(command->text, sizeof(command->text), "%s", rest);
         return TRUE;
     } else if (strcmp(words[0], "log") == 0 && rest != NULL) {
@@ -922,6 +925,28 @@ static u16 Step(void)
             Next();
             continue;
         case OP_SHOT:
+            if (command->frames == 1) {
+                // stillshot: every frame is shown for three frames, then the game stops on the one just drawn for as long as
+                // the shot takes
+                static u32 sStillPresentMs;
+                SIM_config_type *config = SIM_GetConfigPtr();
+                if (elapsed == 0) {
+                    sStillPresentMs = config->testModePresentMs;
+                    config->testModePresentMs = 1;
+                }
+                if (elapsed < 3) {
+                    return 0;
+                }
+                printf("[test] shot %s\n", command->text);
+                fflush(stdout);
+                const Uint64 until = SDL_GetTicks64() + SHOT_PAUSE_MS;
+                while (SDL_GetTicks64() < until) {
+                    SDL_Delay(16);
+                }
+                config->testModePresentMs = sStillPresentMs;
+                Next();
+                return 0;
+            }
             // The harness takes the screenshot while the game runs on without input
             printf("[test] shot %s\n", command->text);
             fflush(stdout);

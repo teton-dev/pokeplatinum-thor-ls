@@ -572,7 +572,21 @@ band is a row lower than the enemy's). Double battles' player boxes (33 high ass
 behind a window opened line by line, sprites (the sliding bars, priorities 1 to 3) and the leader's mugshot (priority 0,
 enters from x = 272). While it plays (`EncounterEffect_PortGymLeaderPlaying`) BG3 is drawn wide and mirrored and the OBJ
 wrap covers priorities 1 to 3 only, so the mugshot doesn't reappear at the left as it enters. The other encounter effects
-(wild, trainer, Elite Four...) are not widened. `tests/scripts/widescreen_leader.txt` (test command `leader N`).
+(wild, trainer...) are not widened. `tests/scripts/widescreen_leader.txt` (test command `leader N`).
+
+## Widescreen: the Elite Four's and the Champion's encounter effect (2026-11-11)
+
+`EncounterEffect_EliteFourChampion` (Aaron, Bertha, Flint, Lucian and Cynthia: one function, the parameters differ) is
+a different build from the Gym Leader's: a captured frame (BG3 bitmap), 3D particles (BG0), and sprites: the two
+portraits, the band's two halves (green, orange, purple, grey: its palette) and the "VS". The band is OBJs, so BG
+layers don't help. While it plays (`EncounterEffect_PortEliteFourPlaying`) `src/port/widescreen.c` asks libntr's OBJ
+edge extend (`SIM_SetWidescreenObjEdgeExtend`, the party balls' bar's mechanism) for **priority 2**, and the effect puts
+the band's halves (they were priority 1, as the portraits) at priority 2: the band's edge columns, with the white borders,
+continue across the sides, as the halves slide out too; the portraits stay at priority 1 so that their edge pixels
+(hair, skin) never smear, and the name text (BG2, priority 0) stays above them. The 3D particles (priority 1 from the
+clash on) now draw over the band instead of behind it, as they already did before the clash. Cynthia's portrait has a
+black dotted blob over her mouth: it is in the art (`res/trainers/classes/champion_cynthia/mugshot.png`), not the port.
+Checked frame by frame on the desktop with the new test command `stillshot` (`tests/scripts/widescreen_e4.txt`).
 ## Widescreen: the party balls' bar and the ability bar (2026-11-09)
 
 BW2's bars reach the 4:3 picture's edges and stopped there in a wide scene. Two kinds:

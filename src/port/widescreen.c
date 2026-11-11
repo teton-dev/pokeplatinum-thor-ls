@@ -257,9 +257,10 @@ void Widescreen_Update(void)
     }
     SIM_SetWidescreenBgEdgeExtend(edgeBgs);
     SIM_SetWidescreenBgEdgeMirror(edgeMirrorBgs);
-    // and the party balls' bar, sprites of priority 0 that touch the picture's edges (the other priorities hold the
+    // and the party balls' bar, sprites of priority 0 (the Elite Four's and the Champion's encounter effect: its band's
+    // halves, sprites of priority 2, reach the edges) that touch the picture's edges (the other priorities hold the
     // gauges, whose edge pixels would smear)
-    SIM_SetWidescreenObjEdgeExtend(Gen5BattleShown() ? 0x01 : 0);
+    SIM_SetWidescreenObjEdgeExtend(Gen5BattleShown() ? 0x01 : (EncounterEffect_PortEliteFourPlaying() ? 0x04 : 0));
     SIM_SetWidescreenScene(wide);
 }
 
