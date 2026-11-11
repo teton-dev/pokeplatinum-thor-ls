@@ -4,7 +4,9 @@ url = https://github.com/cybervisi0n/libntrsystem.git
 revision = 97fa995ed33fe2ab8c83ec7068aa3aa5b4c3e12f
 depth = 1
 directory = libntrsystem
-diff_files = libntrsystem_android.patch
+# teton-dev fork, Gen 5 battles: libntrsystem_anim_edge.patch (an animation's end read one frame past its sequence and could
+# stop it for good: BW2's Pokémon sprite parts stopped after their first cycle on the Thor). For libntrsystem itself, later
+diff_files = libntrsystem_android.patch, libntrsystem_anim_edge.patch
 
 [provide]
 dependency_names = NitroSystem

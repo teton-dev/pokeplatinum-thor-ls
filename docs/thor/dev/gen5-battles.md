@@ -455,6 +455,34 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
 - **Next:** hear it on the Thor; perhaps the victory music and fanfares as Platinum's (`GFL_SndBGMPlay` with BW2's
   win BGM).
 
+## Pokémon sprite animations (2026-11-10)
+
+Reported on the Thor: a foe Bronzong's far arm still after the first cycle; a foe Houndoom's tail tip, the player's Suicune's
+head and feet likewise: **each part moves during the first cycle after the Pokémon appears, then stops for good**.
+
+- **Cause:** libntrsystem's `SequenceEdgeHandleCommon_` (`g2d_Animation.c`), at the end of a sequence, had an `SDK_PORT`
+  guard that stops the animation if `pCurrent->frames == 0`. At that point `pCurrent` is one past the sequence's end, so
+  it read the next sequence's first frame, or for the last sequence of a bank the memory after the frame array (the port's
+  `malloc` in `NNS_G2dUnpackNAN`). When that is 0 the animation is stopped for good at the end of its first cycle. On
+  Linux that memory is non-zero, so the desktop build never showed it (a counter in the guard never fired); on Android's
+  allocator it was zero for some sequences: the last of Bronzong's three cell animations (the arm), and so on.
+  BW2's sprites are one multi-cell animation whose nodes each play a cell animation sequence, so it is the parts that
+  stop, the rest going on.
+- **Shown on the desktop:** allocating one zeroed frame after the array (`calloc(n + 1)`) made the far arm of Bronzong
+  stop after its first cycle exactly as on the Thor; with the fix below, the same run moves both arms.
+- **Fix:** `subprojects/packagefiles/libntrsystem_anim_edge.patch` (the wrap's `diff_files`): the guard stops only a
+  sequence in which no frame lasts any time (the case it was written for: it would loop forever). Platinum uses the same
+  library: its animations behave as before wherever the old read was non-zero. To check on the Thor with a build that
+  has it.
+- **Not defects** (checked, for the record): BW2's sprites have one multi-cell sequence each in the ROM, so
+  `BtlvMcss_OnAnimationEnd`'s alternate animation (sequence 1) never exists for them; their `.bin` idle-node count is 0, so
+  BW2's idle task freezes the whole sprite for about a second every two or three loops; Houndoom's loop is five frames
+  of 50 then 90 on the multi-cell with the open mouth, so its mouth opens every loop in the data (how the real game makes
+  it occasional isn't known: not seen); Bronzong's arms have mirrored rotation sequences of about +-30 degrees.
+- **Open:** the battle runs at Platinum's 30 Hz logic rate (`FrameRate`, unless 60 FpsEverywhere) where BW2 runs at
+  60 Hz: BW2's animation timing, not measured against a real BW2.
+- **Testing tip (from the owner):** choosing FIGHT and backing out locks the battle camera in place.
+
 ## Risks
 
 - **64-bit layouts** in BW2 data loaded from files or shared with the SDK: found case by case at runtime.
