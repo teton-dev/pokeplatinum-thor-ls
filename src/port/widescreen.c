@@ -287,3 +287,22 @@ void Widescreen_BeforeFieldRender(FieldSystem *fieldSystem)
         Camera_ComputeProjectionMatrix(camera->projection, camera);
     }
 }
+
+int Widescreen_BattleSpreadX(int battlerType)
+{
+    if (!SIM_IsWidescreenActive()) {
+        return 0;
+    }
+
+    // Slot 1 of each side is the one nearer the screen's edge... in the player's side the left one, in the enemy's the
+    // right one: they move outward, the other slot of the pair the other way
+    switch (battlerType) {
+    case BATTLER_TYPE_PLAYER_SIDE_SLOT_1:
+    case BATTLER_TYPE_ENEMY_SIDE_SLOT_2:
+        return -14;
+    case BATTLER_TYPE_PLAYER_SIDE_SLOT_2:
+    case BATTLER_TYPE_ENEMY_SIDE_SLOT_1:
+        return 14;
+    }
+    return 0;
+}
