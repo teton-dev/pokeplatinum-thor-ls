@@ -1,0 +1,73 @@
+# Gen 5 battles in widescreen: the ability banner of the player's lead (Suicune's Pressure: a long name) as it slides in.
+# Shots ab-14..ab-20 catch the banner. From the turtwig fixture (the lead is swapped for a level 40 Suicune):
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/gen5_ability_banner.txt --from turtwig
+#
+# Gen 5 battles, milestone 6: widescreen. With Settings > Display > Widescreen on and the bottom screen in its own
+# window, the top window 16:9: the overworld (Twinleaf Town, outside the player's house) and a wild and a trainer
+# battle in Black 2 and White 2's engine fill the window, unstretched, with the sprites, gauges and text in the 4:3
+gen5-import
+mash A until free
+give 245 40
+lead 1
+gen5-battle 399 5
+until battle
+wait 12
+wait 12
+wait 12
+wait 12
+wait 12
+wait 12
+wait 12
+wait 12
+wait 8
+wait 1
+shot ab-1
+wait 1
+shot ab-2
+wait 1
+shot ab-3
+wait 1
+shot ab-4
+wait 1
+shot ab-5
+wait 1
+shot ab-6
+wait 1
+shot ab-7
+wait 1
+shot ab-8
+wait 1
+shot ab-9
+wait 1
+shot ab-10
+wait 1
+shot ab-11
+wait 1
+shot ab-12
+wait 1
+shot ab-13
+wait 1
+shot ab-14
+wait 1
+shot ab-15
+wait 1
+shot ab-16
+wait 1
+shot ab-17
+wait 1
+shot ab-18
+wait 1
+shot ab-19
+wait 1
+shot ab-20
+wait 1
+shot ab-21
+wait 1
+shot ab-22
+wait 1
+shot ab-23
+wait 1
+shot ab-24
+exit 0
