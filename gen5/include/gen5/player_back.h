@@ -40,9 +40,20 @@ typedef struct {
 
 struct MCSSSystem;
 
+// The art for the opposing trainer of this BW2 class in the battle that runs (Gen5Trainer's art, which runtime.c sets
+// up for the battle), or NULL for BW2's own sprite. One pose, drawn for each of the sprite's multi-cells
+const Gen5BackSprite *Gen5_TrainerFrontArt(u32 trainerClass);
+
 // The art for a BW2 trainer class shown as the player's back (the player's classes: Lucas for the male ones, Dawn for
 // the female), or NULL to leave BW2's sprite
 const Gen5BackSprite *PlayerBack_ForTrainerClass(u32 trainerClass);
+
+// The art for the opposing trainer of this BW2 class in the battle that runs (the Gen5Trainer's art, which runtime.c
+// sets up when the battle starts), or NULL for BW2's own sprite. One pose, drawn for each of the sprite's multi-cells
+const Gen5BackSprite *Gen5_TrainerFrontArt(u32 trainerClass);
+
+// runtime.c: the art for the battle about to start (the picture's size in pixels), or NULL to clear it
+void Gen5_SetTrainerArt(u32 trainerClass, const void *texture, const void *palette, int width, int height);
 
 // mcss.c's patch: the next sprite MCSSSys_Add adds is drawn with this art (NULL: its own)
 void MCSSSys_SetNextBackSprite(struct MCSSSystem *system, const Gen5BackSprite *sprite);

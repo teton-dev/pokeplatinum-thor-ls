@@ -1,0 +1,19 @@
+# Gen 5 battles: Sinnoh's Elite Four in BW2's engine. BW2 has no sprites for them: Platinum's own are drawn in place of
+# the nearest BW2 class's, in the arena BW2 has for their type (Lucian's is the purple one with green discs). Edit the
+# trainer to 261 (Aaron), 262 (Bertha), 263 (Flint) or 264 (Lucian), from the turtwig fixture. The shots: the battle's
+# start (the trainer sliding in), then the command menu.
+# POKEPLATINUM_GEN5_TIME=HOUR[:MINUTE] sets the time of day the arena is lit for (the clock's by default).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_elite_four.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+trainer 264
+until battle
+wait 150
+shot elite-four-intro
+until command timeout 6000
+wait 60
+shot elite-four-command
+exit 0
