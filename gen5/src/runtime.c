@@ -551,6 +551,7 @@ static PokeListParam sListParam;
 static PStatusParam sListSummary;
 static PokeParty *sListParty;
 static BagSave *sListBag;
+static BOOL sListItemInBag[GEN5_ITEMS_MAX];
 static BOOL sListInSummary;
 static u32 sListIdentity[GEN5_PARTY_MAX][2]; // Each Pokémon's PID and OT ID, to find it again in the new order
 static int sListCount;
@@ -642,6 +643,11 @@ int Gen5_PartyBegin(const Gen5Party *party, const char *gen5Dir)
     }
     sListBag = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, BagSave_GetBlockSize(), TRUE, __FILE__, __LINE__));
     BagSave_Init(sListBag);
+    // The player's items (the held-item menu gives from and takes into the bag): those BW2 has go in, the others stay out
+    // and keep their count
+    for (int i = 0; i < party->itemCount; i++) {
+        sListItemInBag[i] = BagSave_AddItem(sListBag, party->items[i].item, party->items[i].count, HEAPID_PORT_BATTLE);
+    }
     BagCursor *bagCursor = Keep(BagCursor_Create(HEAPID_PORT_BATTLE));
     PokeDexSave *pokedex =
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, getSizeofPokedexData(), TRUE, __FILE__, __LINE__));
@@ -651,7 +657,20 @@ int Gen5_PartyBegin(const Gen5Party *party, const char *gen5Dir)
     // What PokeListParam_Setup (system/plist_data_setup.c) takes from BW2's game data; the blocks BW2's field has that
     // the list only reads when the player does things this port doesn't offer are zeroed
     memset(&sListParam, 0, sizeof(sListParam));
-    sListParam.mode = party->mode == GEN5_PARTY_SELECT ? POKELIST_MODE_SELECT : POKELIST_MODE_FIELD;
+    switch (party->mode) {
+    case GEN5_PARTY_SELECT:
+        sListParam.mode = POKELIST_MODE_SELECT;
+        break;
+    case GEN5_PARTY_GIVE_ITEM:
+        sListParam.mode = POKELIST_MODE_GIVE_ITEM;
+        break;
+    case GEN5_PARTY_GIVE_FROM_BAG:
+        sListParam.mode = POKELIST_MODE_GIVE_FROM_BAG;
+        break;
+    default:
+        sListParam.mode = POKELIST_MODE_FIELD;
+    }
+    sListParam.item = party->item;
     sListParam.party = sListParty;
     sListParam.bag = sListBag;
     sListParam.mailbox = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, MailBox_GetSize(), TRUE, __FILE__, __LINE__));
@@ -699,6 +718,14 @@ enum Gen5PartyResult Gen5_PartyEnd(Gen5Party *party)
             }
         }
     }
+    for (int i = 0; i < party->itemCount; i++) {
+        if (sListItemInBag[i]) {
+            party->items[i].count = BagSave_GetItemCountByID(sListBag, party->items[i].item, HEAPID_PORT_BATTLE);
+        }
+    }
+    for (int i = 0; i < party->partyCount; i++) {
+        party->heldAfter[party->order[i]] = PokeParty_GetParam(PokeParty_GetPkm(sListParty, i), PKM_PARAM_ITEM, NULL);
+    }
     const s32 index = (s32)sListParam.index;
     party->picked = index;
     // A field move ends the list with its result (11 and on: Cut, Surf... in the order of the check's kinds)
@@ -712,6 +739,12 @@ enum Gen5PartyResult Gen5_PartyEnd(Gen5Party *party)
     GFL_HeapDelete(HEAPID_PORT_BATTLE);
     if (party->fieldMove >= 0) {
         return GEN5_PARTY_FIELD_MOVE;
+    }
+    if (sListParam.result == POKELIST_RESULT_GIVE_ITEM) {
+        return GEN5_PARTY_GIVE_ITEM_REQUEST;
+    }
+    if (sListParam.result == POKELIST_RESULT_READ_MAIL) {
+        return GEN5_PARTY_READ_MAIL;
     }
     return index >= 0 && index < party->partyCount ? GEN5_PARTY_PICKED : GEN5_PARTY_CANCEL;
 }

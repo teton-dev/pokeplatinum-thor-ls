@@ -185,12 +185,16 @@ typedef struct Gen5Summary {
 enum Gen5PartyMode {
     GEN5_PARTY_FIELD, // From the start menu: look at the party, open a Pokémon's summary, switch two
     GEN5_PARTY_SELECT, // Pick one Pokémon
+    GEN5_PARTY_GIVE_ITEM, // Pick the Pokémon to give `item` to
+    GEN5_PARTY_GIVE_FROM_BAG, // Give `item` to the Pokémon at cursor, then as GEN5_PARTY_FIELD
 };
 
 enum Gen5PartyResult {
     GEN5_PARTY_CANCEL,
     GEN5_PARTY_PICKED,
     GEN5_PARTY_FIELD_MOVE, // A field move was chosen for the Pokémon at picked
+    GEN5_PARTY_GIVE_ITEM_REQUEST, // The ITEM menu's GIVE: the player picks the item from the bag, for the Pokémon at picked
+    GEN5_PARTY_READ_MAIL, // The Pokémon at picked holds mail to read
     GEN5_PARTY_FAILED,
 };
 
@@ -207,6 +211,10 @@ typedef struct Gen5Party {
     int cursor; // The Pokémon the cursor starts on
     Gen5HMCheck hmCheck; // For GEN5_PARTY_FIELD: the field moves' availability (NULL: none can be used)
     unsigned short hmFree[GEN5_PARTY_MAX][4]; // Field moves lent to each Pokémon (HM-free: moves nobody knows), 0 none
+    unsigned item; // The item to give (GEN5_PARTY_GIVE_ITEM, GEN5_PARTY_GIVE_FROM_BAG)
+    Gen5Item items[GEN5_ITEMS_MAX]; // The bag's items the list can use; Out: what is left of each
+    int itemCount;
+    unsigned heldAfter[GEN5_PARTY_MAX]; // Out: each Pokémon's held item, by index in the party given
     int fieldMove; // Out: the field move chosen (kind above), or -1
     int picked; // The slot picked, in the new order
     int order[GEN5_PARTY_MAX]; // The new order: each slot's index in the party given

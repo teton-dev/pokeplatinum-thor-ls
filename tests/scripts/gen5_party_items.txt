@@ -1,0 +1,22 @@
+# Gen 5 screens: giving and taking held items in BW2's party list. From the turtwig fixture: three Potions in the bag, the
+# party opened as the bag opens it to give one (test command app party-give: pick the Pokemon), Turtwig picked, then the
+# party opened as the start menu opens it (app party-field), ITEM > TAKE from Turtwig. The log's lines (party) show the
+# held item and the Potions in the bag before, after the give (item 17, 2 Potions left) and after the take (3 again).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_party_items.txt --from turtwig
+gen5-import
+gen5-screens on
+mash A until free
+wait 30
+item 17 3
+party
+app party-give
+wait 300
+shot gen5-give-list
+press A
+wait 200
+shot gen5-give-done
+mash B for 120
+wait 60
+party
+exit 0
