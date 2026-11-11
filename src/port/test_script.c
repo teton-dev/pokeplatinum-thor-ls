@@ -31,6 +31,7 @@
 #include "savedata.h"
 #include "party.h"
 #include "pc_boxes.h"
+#include "applications/pc_boxes/pokemon_storage_session.h"
 #include "pokemon.h"
 #include "savedata/save_table.h"
 #include "pokedex.h"
@@ -327,7 +328,7 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         // with B, as the player would)
         command->op = OP_APP;
         command->x = strcmp(words[1], "bag") == 0 ? 1 : strcmp(words[1], "journal") == 0 ? 2
-            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : strcmp(words[1], "summary") == 0 ? 6 : 0;
+            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : strcmp(words[1], "summary") == 0 ? 6 : strcmp(words[1], "pc") == 0 ? 7 : 0;
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return command->x != 0;
@@ -752,6 +753,11 @@ static u16 Step(void)
                 FieldSystem_OpenBag(fieldSystem, &sItemUseCtx);
             } else if (command->x == 2) {
                 sub_0203D30C(fieldSystem, NULL);
+            } else if (command->x == 7) {
+                static PokemonStorageSession sPcSession;
+                sPcSession.saveData = fieldSystem->saveData;
+                sPcSession.boxMode = 0;
+                FieldSystem_OpenPokemonStorage(fieldSystem, &sPcSession);
             } else if (command->x == 6) {
                 FieldSystem_GetPartyMenuMonSummary(0, fieldSystem, 0);
             } else if (command->x == 5) {

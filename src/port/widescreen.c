@@ -16,6 +16,8 @@
 #include "applications/bag/application.h"
 #include "applications/journal_display/journal_controller.h"
 #include "applications/party_menu/main.h"
+#include "applications/pc_boxes/box_app_manager.h"
+#include "constdata/const_020F410C.h"
 #include "applications/town_map/main.h"
 #include "port/debug_field.h"
 #include "port/gear_data.h"
@@ -118,7 +120,8 @@ static BOOL WideApplication(u8 *edgeBgs, u8 *edgeMirrorBgs)
         return TRUE;
     }
     return init == gBagApplicationTemplate.init || init == (OverlayFunc)JournalController_Init
-        || init == TownMap_Init;
+        || init == TownMap_Init || init == BoxAppMan_Init
+        || init == gPokemonSummaryScreenApp.init;
 }
 
 // The HP box end cap (5x33, RGB, pure white is transparent): the enemy's box gets it at its left end, the player's
@@ -240,10 +243,13 @@ void Widescreen_Update(void)
     }
     UpdateHealthboxCaps(wideBattle);
     u8 edgeMirrorBgs = 0;
+    BOOL scale3D = FALSE;
     if (!wide && WideApplication(&edgeBgs, &edgeMirrorBgs)) {
         wide = TRUE;
+        // A screen's 3D sprites (the PC's and Summary's Pokemon) are placed as 2D: libntr keeps them in the 4:3 middle
+        scale3D = TRUE;
     }
-    SIM_SetWidescreenSceneOptions(FALSE, wideBgs);
+    SIM_SetWidescreenSceneOptions(scale3D, wideBgs);
     SIM_SetWidescreenObjWrap(objWrap);
     SIM_SetWidescreenBgMirror(mirrorBgs);
     // BW2's text box (BG1) reaches the edges of the wide screen; its text stays in the middle
