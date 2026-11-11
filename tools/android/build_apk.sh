@@ -74,8 +74,10 @@ objcopy = toolchain / 'llvm-objcopy'
 # DS compiler allowed), so optimize without strict aliasing or signed-overflow UB
 # libntr also writes across neighbouring hardware-register variables in places (like the
 # DS register file), which FORTIFY would abort on.
-c_args = ['-I' + prefix / 'include', '-fno-strict-aliasing', '-fwrapv', '-U_FORTIFY_SOURCE']
-cpp_args = ['-I' + prefix / 'include', '-fno-strict-aliasing', '-fwrapv', '-U_FORTIFY_SOURCE']
+# A plain char is unsigned on arm64 but was signed on the DS (mwcc's -char signed) and is on
+# the x86 desktop builds, so make it signed here too.
+c_args = ['-I' + prefix / 'include', '-fno-strict-aliasing', '-fwrapv', '-fsigned-char', '-U_FORTIFY_SOURCE']
+cpp_args = ['-I' + prefix / 'include', '-fno-strict-aliasing', '-fwrapv', '-fsigned-char', '-U_FORTIFY_SOURCE']
 c_link_args = ['-L' + prefix / 'lib']
 cpp_link_args = ['-L' + prefix / 'lib']
 

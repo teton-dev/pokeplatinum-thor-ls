@@ -1,0 +1,24 @@
+# Widescreen on Platinum's party menu as the start menu opens it (the field party: the top screen is the blue backdrop
+# with the Poke Ball). From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_party_menu.txt --from turtwig
+mash A until free
+wait 30
+press X
+wait 60
+press A
+wait 200
+shot party
+press A
+wait 60
+shot party-menu
+press B
+wait 60
+press RIGHT
+wait 30
+shot party-cursor-right
+press DOWN
+wait 30
+shot party-cursor-down
+exit 0
