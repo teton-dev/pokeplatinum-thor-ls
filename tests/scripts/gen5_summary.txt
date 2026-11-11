@@ -1,0 +1,17 @@
+# Gen 5 screens: the Pokémon Summary screen in Black 2 and White 2's own, with Settings > Gameplay > Gen 5 screens on.
+# From the turtwig fixture: opens the summary of the first Pokémon over the overworld (test command app summary),
+# shoots both screens, pages to the next page and leaves with B. The run ends in the app.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_summary.txt --from turtwig
+
+gen5-import
+gen5-screens on
+mash A until free
+wait 30
+app summary
+wait 240
+shot gen5-summary-info
+press RIGHT
+wait 120
+shot gen5-summary-skills
+exit 0

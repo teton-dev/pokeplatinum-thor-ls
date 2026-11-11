@@ -217,3 +217,25 @@ void *SaveControl_GetBlockPtr(SaveControl *save, u32 block) {
 
 void SaveControl_Free(void) {
 }
+
+// The summary screen's (overlay 207) own GameData: the same one, and no shortcut menu
+GameData *GameData_Create(HeapID heapId) {
+    (void)heapId;
+    return Gen5_GetGameData();
+}
+
+void GameData_Free(GameData *gameData) {
+    (void)gameData;
+}
+
+BOOL GameData_IsShortcutRegistered(GameData *gameData, u32 item) {
+    (void)gameData;
+    (void)item;
+    return FALSE;
+}
+
+void GameData_SetKeyItemRegistration(GameData *gameData, u32 item, BOOL registered) {
+    (void)gameData;
+    (void)item;
+    (void)registered;
+}

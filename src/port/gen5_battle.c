@@ -122,7 +122,7 @@ static ApplicationManager *sNamingApp;
 
 // Platinum's text to Unicode, for BW2: the letters, digits and punctuation the ASCII table knows, and the accented e
 // of Pokémon. Other characters (Japanese, symbols) are left out for now
-static void TextToGen5(const charcode_t *src, int srcLength, unsigned short *dest, int destLength)
+void Gen5_TextToGen5(const charcode_t *src, int srcLength, unsigned short *dest, int destLength)
 {
     int n = 0;
     // Room for the terminator (0xFFFF), and for a page break's three where one goes
@@ -206,7 +206,7 @@ static u32 StatusFromGen5(unsigned status, u32 before)
     }
 }
 
-static void PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest)
+void Gen5_PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest)
 {
     charcode_t name[MON_NAME_LEN + 1];
     charcode_t otName[TRAINER_NAME_LEN + 1];
@@ -240,9 +240,9 @@ static void PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest)
     dest->isEgg = Pokemon_GetValue(mon, MON_DATA_IS_EGG, NULL);
     dest->hasNickname = Pokemon_GetValue(mon, MON_DATA_HAS_NICKNAME, NULL);
     Pokemon_GetValue(mon, MON_DATA_NICKNAME, name);
-    TextToGen5(name, MON_NAME_LEN + 1, dest->nickname, GEN5_NAME_LENGTH);
+    Gen5_TextToGen5(name, MON_NAME_LEN + 1, dest->nickname, GEN5_NAME_LENGTH);
     Pokemon_GetValue(mon, MON_DATA_OT_NAME, otName);
-    TextToGen5(otName, TRAINER_NAME_LEN + 1, dest->otName, 8);
+    Gen5_TextToGen5(otName, TRAINER_NAME_LEN + 1, dest->otName, 8);
 }
 
 // What the battle changed. TRUE if the Pokémon gained a level (for evolving after the battle)
@@ -293,18 +293,18 @@ static void TrainerToGen5(FieldBattleDTO *dto, Gen5Trainer *dest)
     String_Clear(text);
     String_ConcatTrainerName(text, packed);
     String_Free(packed);
-    TextToGen5(String_GetData(text), String_Length(text) + 1, dest->name, 16);
+    Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->name, 16);
 
     MessageLoader *loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG,
         TEXT_BANK_TRAINER_CLASS_NAMES, HEAP_ID_APPLICATION);
     MessageLoader_GetString(loader, dest->platinumClass, text);
     MessageLoader_Free(loader);
-    TextToGen5(String_GetData(text), String_Length(text) + 1, dest->className, 32);
+    Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->className, 32);
 
     dest->defeatText[0] = 0xFFFF;
     if (Trainer_HasMessageType(id, TRMSG_DEFEAT, HEAP_ID_APPLICATION)) {
         Trainer_LoadMessage(id, TRMSG_DEFEAT, text, HEAP_ID_APPLICATION);
-        TextToGen5(String_GetData(text), String_Length(text) + 1, dest->defeatText, GEN5_TEXT_LENGTH);
+        Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->defeatText, GEN5_TEXT_LENGTH);
     }
     String_Free(text);
 
@@ -314,7 +314,7 @@ static void TrainerToGen5(FieldBattleDTO *dto, Gen5Trainer *dest)
         dest->partyCount = GEN5_PARTY_MAX;
     }
     for (int i = 0; i < dest->partyCount; i++) {
-        PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &dest->party[i]);
+        Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &dest->party[i]);
     }
 }
 
@@ -437,7 +437,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     TrainerInfo *trainerInfo = dto->trainerInfo[BATTLER_PLAYER_1];
 
     memset(&sBattle, 0, sizeof(sBattle));
-    TextToGen5(TrainerInfo_Name(trainerInfo), TRAINER_NAME_LEN + 1, sBattle.player.name, 8);
+    Gen5_TextToGen5(TrainerInfo_Name(trainerInfo), TRAINER_NAME_LEN + 1, sBattle.player.name, 8);
     ArenaFromDTO(dto, &sBattle.arenaBg, &sBattle.arenaTerrain);
     sBattle.textSpeed = Options_TextSpeed(dto->options);
     sBattle.setStyle = Options_BattleStyle(dto->options) == OPTIONS_BATTLE_STYLE_SET;
@@ -450,14 +450,14 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         sBattle.partyCount = GEN5_PARTY_MAX;
     }
     for (int i = 0; i < sBattle.partyCount; i++) {
-        PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &sBattle.party[i]);
+        Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &sBattle.party[i]);
     }
     Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
     sBattle.isTrainer = (dto->battleType & BATTLE_TYPE_TRAINER) != 0;
     if (sBattle.isTrainer) {
         TrainerToGen5(dto, &sBattle.trainer);
     } else {
-        PokemonToGen5(wild, &sBattle.wild);
+        Gen5_PokemonToGen5(wild, &sBattle.wild);
     }
     // The pockets with what a battle can use. The DTO's bag goes back into the save after the battle
     const struct {
