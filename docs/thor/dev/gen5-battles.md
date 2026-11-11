@@ -557,7 +557,12 @@ head and feet likewise: **each part moves during the first cycle after the Poké
 
 ## Widescreen: Platinum's own battles (2026-11-09)
 
-The backdrop (BG3, `battle_main.c`) is drawn wide and mirrored at the sides (`SIM_SetWidescreenBgMirror`); the Pokemon,
+The backdrop (BG3, `battle_main.c`) is drawn wide with its edge columns continued across the sides (not mirrored,
+which repeated the bases the Pokemon stand on, 2026-11-11). The Pokemon are 3D quads: the scene is narrowed
+(`SIM_SetWidescreenSceneOptions(scale3D)`) so they keep their 4:3 shape (they were stretched 1.33x wide, and
+Bidoof's squash animation looked doubled). In a double battle the pairs stand 14 DS pixels further apart each
+(`Widescreen_BattleSpreadX`, used where `battle_display.c` places a sent-out Pokemon and for the slide-in target;
+move animations aimed at fixed coordinates may be a few pixels off); the Pokemon,
 bases, HP boxes and text box stay in the 4:3 middle. The HP boxes' end caps (the owner's 5x33 texture, pure white
 transparent; enemy: at the box's left end, player: mirrored at its right end) are stamped onto BG3's wide picture each
 frame at the boxes' sprite positions (`UpdateHealthboxCaps`, `SIM_SetWidescreenStamps`, `libntr_wide_mirror.patch`), so

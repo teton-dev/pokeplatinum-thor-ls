@@ -29,6 +29,10 @@ extern "C" {
 // Once per main loop iteration: tells libntr whether this scene may be wide
 void Widescreen_Update(void);
 
+// Platinum's battles: how far (DS pixels) a Pokemon in a double battle's slot stands from where the 4:3 screen puts it,
+// so the pairs are spaced out more on a wide screen; 0 for a single battle or without widescreen
+int Widescreen_BattleSpreadX(int battlerType);
+
 // Camera_ComputeProjectionMatrix: the aspect ratio to project the camera with
 fx32 Widescreen_AspectRatio(const Camera *camera, fx32 aspectRatio);
 
