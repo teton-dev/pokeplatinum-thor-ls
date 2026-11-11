@@ -4,11 +4,13 @@ Working notes for replacing Platinum's Pokémon Summary, PC (box) and party scre
 the way the Gen 5 battles replace Platinum's battles (`gen5-battles.md`: read it first for the `gen5/` layer, the
 renamed `bw2_` symbols, the ROM import and widescreen). Fork-only for the same reason (pokebw2 is GPLv3).
 
-The owner's decisions (2026-11-10): **the Summary and the party menu are replaced by BW2's, widescreen supported**; the
-**PC is not replaced**: Platinum's own PC box screen gets widescreen by extending its edges (`WideApplication`,
-below), so the Gen 5 PC plan is dropped (the notes on it below stay as the reasoning, in case it comes back).
-Setting: **Settings > Gameplay > Gen 5 screens** (`gen5Screens`, off by default, offered once a BW2 ROM is imported; one
-switch for both screens: where BW2's list can't do a request yet, Platinum's own opens).
+The owner's decisions (2026-11-10): **only the Summary is replaced by BW2's, with widescreen**. The PC is not replaced
+(Platinum's own PC box gets widescreen by extending its edges, `WideApplication` below). **The party menu is not
+replaced either**: BW2's party list was built and worked (field and select modes, field moves with Platinum's checks and
+HM-free, held items with the bag kept in step; it is in the git history of this branch, commits `293e6a1d8` to
+`79cdd4c7d`), but items BW2 doesn't have can't be handled there and it has inconsistencies with Platinum's own
+logic, so it was removed again. Setting: **Settings > Gameplay > Gen 5 screens** (`gen5Screens`, off by default, offered once
+a BW2 ROM is imported); it now means the Summary.
 
 ## Where BW2's screens are (pokebw2, `src/ovNNN`)
 
