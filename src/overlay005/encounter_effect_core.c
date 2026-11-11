@@ -3249,6 +3249,15 @@ static u32 FieldSystem_GetTrainerGender(FieldSystem *fieldSystem)
     return TrainerInfo_Gender(SaveData_GetTrainerInfo(fieldSystem->saveData));
 }
 
+#ifdef SDK_PORT
+static BOOL sPortEliteFourEffect = FALSE;
+
+BOOL EncounterEffect_PortEliteFourPlaying(void)
+{
+    return sPortEliteFourEffect;
+}
+#endif
+
 static BOOL EncounterEffect_EliteFourChampion(EncounterEffect *encEffect, enum HeapID heapID, const EliterFourChampionEncounterParam *param)
 {
     UnkStruct_ov5_021E5890 *v0 = encEffect->param;
@@ -3262,6 +3271,9 @@ static BOOL EncounterEffect_EliteFourChampion(EncounterEffect *encEffect, enum H
 
     switch (encEffect->state) {
     case 0:
+#ifdef SDK_PORT
+        sPortEliteFourEffect = TRUE;
+#endif
         encEffect->param = Heap_Alloc(heapID, sizeof(UnkStruct_ov5_021E5890));
         memset(encEffect->param, 0, sizeof(UnkStruct_ov5_021E5890));
         v0 = encEffect->param;
@@ -3310,6 +3322,13 @@ static BOOL EncounterEffect_EliteFourChampion(EncounterEffect *encEffect, enum H
             Sprite_SetDrawFlag(v0->unk_2CC[v5], FALSE);
             Sprite_SetAnim(v0->unk_2CC[v5], v8);
             Sprite_SetExplicitPriority(v0->unk_2CC[v5], 1);
+#ifdef SDK_PORT
+            // The band's halves (2 and 3) get a priority of their own, 2, which widescreen continues to the screen's edges (the
+            // portraits, priority 1, keep their place above the 3D effect and below the name; their edge pixels must not smear)
+            if (v5 >= 2) {
+                Sprite_SetExplicitPriority(v0->unk_2CC[v5], 2);
+            }
+#endif
         }
 
         if (v0->unk_368) {
@@ -3612,6 +3631,9 @@ static BOOL EncounterEffect_EliteFourChampion(EncounterEffect *encEffect, enum H
 
         ov5_021DF084();
 
+#ifdef SDK_PORT
+        sPortEliteFourEffect = FALSE;
+#endif
         G2_BlendNone();
 
         return 1;
