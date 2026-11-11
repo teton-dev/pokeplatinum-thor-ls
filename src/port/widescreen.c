@@ -196,7 +196,8 @@ static void UpdateHealthboxCaps(BOOL wideBattle)
             case HEALTHBOX_TYPE_ENEMY_SOLO:
             case HEALTHBOX_TYPE_ENEMY_SLOT_1:
             case HEALTHBOX_TYPE_ENEMY_SLOT_2:
-                stamps[count].x = x - 58 - CAP_WIDTH;
+                // a double battle's first enemy box is 6 pixels wider (its position is 64, the second's 58)
+                stamps[count].x = x - (healthbox->type == HEALTHBOX_TYPE_ENEMY_SLOT_1 ? 64 : 58) - CAP_WIDTH;
                 stamps[count].y = y - 16;
                 stamps[count].height = CAP_HEIGHT;
                 stamps[count].flipX = 0;
@@ -240,11 +241,11 @@ void Widescreen_Update(void)
     }
     u8 edgeBgs = Gen5BattleShown() ? (1 << 1) : 0;
     if (!wide && Gear_ActiveBattleSystem() != NULL) {
-        // Platinum's battle: its backdrop (BG3) mirrored across the sides; the HP boxes, bases and text box stay as
-        // they are, in the 4:3 middle
+        // Platinum's battle: its backdrop (BG3) continued across the sides by its edge columns (not mirrored: the
+        // bases the Pokémon stand on are part of it and would repeat); the HP boxes and text box stay as they are, in
+        // the 4:3 middle
         wide = TRUE;
         wideBgs = 1 << 3;
-        mirrorBgs = 1 << 3;
         wideBattle = TRUE;
     }
     UpdateHealthboxCaps(wideBattle);
@@ -255,7 +256,8 @@ void Widescreen_Update(void)
         // A screen's 3D sprites (the PC's and Summary's Pokemon) are placed as 2D: libntr keeps them in the 4:3 middle
         scale3D = TRUE;
     }
-    SIM_SetWidescreenSceneOptions(scale3D, wideBgs);
+    // Platinum's battle draws its Pokemon as 3D quads for a 4:3 screen: narrowed so they keep their shape
+    SIM_SetWidescreenSceneOptions(scale3D || wideBattle, wideBgs);
     SIM_SetWidescreenObjWrap(objWrap);
     SIM_SetWidescreenBgMirror(mirrorBgs);
     // BW2's text box (BG1) reaches the edges of the wide screen, its text staying in the middle; so do the ability
@@ -308,4 +310,23 @@ void Widescreen_BeforeFieldRender(FieldSystem *fieldSystem)
     if (sFieldCamera != camera || sFieldRatio != WantedRatio(camera)) {
         Camera_ComputeProjectionMatrix(camera->projection, camera);
     }
+}
+
+int Widescreen_BattleSpreadX(int battlerType)
+{
+    if (!SIM_IsWidescreenActive()) {
+        return 0;
+    }
+
+    // Slot 1 of each side is the one nearer the screen's edge... in the player's side the left one, in the enemy's the
+    // right one: they move outward, the other slot of the pair the other way
+    switch (battlerType) {
+    case BATTLER_TYPE_PLAYER_SIDE_SLOT_1:
+    case BATTLER_TYPE_ENEMY_SIDE_SLOT_2:
+        return -14;
+    case BATTLER_TYPE_PLAYER_SIDE_SLOT_2:
+    case BATTLER_TYPE_ENEMY_SIDE_SLOT_1:
+        return 14;
+    }
+    return 0;
 }
