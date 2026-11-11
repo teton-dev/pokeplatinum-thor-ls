@@ -206,6 +206,7 @@ typedef struct Gen5Party {
     int mode; // enum Gen5PartyMode
     int cursor; // The Pokémon the cursor starts on
     Gen5HMCheck hmCheck; // For GEN5_PARTY_FIELD: the field moves' availability (NULL: none can be used)
+    unsigned short hmFree[GEN5_PARTY_MAX][4]; // Field moves lent to each Pokémon (HM-free: moves nobody knows), 0 none
     int fieldMove; // Out: the field move chosen (kind above), or -1
     int picked; // The slot picked, in the new order
     int order[GEN5_PARTY_MAX]; // The new order: each slot's index in the party given

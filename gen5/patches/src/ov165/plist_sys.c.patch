@@ -9,7 +9,32 @@
  };
  
  BOOL PokeList_Init(PokeListWork *wk) {
-@@ -2540,6 +2542,12 @@
+@@ -2360,7 +2362,12 @@
+                 PokeList_ShowItemUseless(wk);
+             }
+         } else {
+-            u32 hm = PokeList_GetHMResult(wk->pkm, wk->menuItem - POKELIST_MENU_MOVE1);
++            // The party menu's list of field moves: the Pokemon's own and those the port lends it (HM-free)
++            extern u32 Gen5_FieldMenuMove(PartyPkm * pkm, u32 k);
++            extern u32 PokeList_GetHMResultOfMove(u32 move);
++            u32 hm = wk->param->mode == POKELIST_MODE_FIELD
++                         ? PokeList_GetHMResultOfMove(Gen5_FieldMenuMove(wk->pkm, wk->menuItem - POKELIST_MENU_MOVE1))
++                         : PokeList_GetHMResult(wk->pkm, wk->menuItem - POKELIST_MENU_MOVE1);
+ 
+             if (hm == POKELIST_RESULT_MILK_DRINK || hm == POKELIST_RESULT_SOFTBOILED) {
+                 if (IsZoneNormal(wk->param->zoneId) == FALSE) {
+@@ -2512,8 +2519,8 @@
+ }
+ 
+ // The result that a move used outside battle ends the list with, or 0 for a move that can't be
+-u32 PokeList_GetHMResult(PartyPkm *pkm, u8 slot) {
+-    switch (PokeParty_GetParam(pkm, PKM_PARAM_MOVE1 + slot, NULL)) {
++u32 PokeList_GetHMResultOfMove(u32 move) {
++    switch (move) {
+     case MOVE_CUT:
+         return POKELIST_RESULT_CUT;
+     case MOVE_FLY:
+@@ -2540,10 +2547,20 @@
          return POKELIST_RESULT_MILK_DRINK;
      case MOVE_SOFTBOILED:
          return POKELIST_RESULT_SOFTBOILED;
@@ -22,3 +47,11 @@
      }
      return POKELIST_RESULT_DONE;
  }
+ 
++u32 PokeList_GetHMResult(PartyPkm *pkm, u8 slot) {
++    return PokeList_GetHMResultOfMove(PokeParty_GetParam(pkm, PKM_PARAM_MOVE1 + slot, NULL));
++}
++
+ BOOL PokeList_IsBattle(PokeListWork *wk) {
+     if (wk->param->mode == POKELIST_MODE_BATTLE_TEAM || wk->param->mode == POKELIST_MODE_BATTLE_TEAM_CANCEL ||
+         wk->param->mode == POKELIST_MODE_BATTLE_INSTITUTE) {

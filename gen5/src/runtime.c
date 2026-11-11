@@ -556,6 +556,35 @@ static u32 sListIdentity[GEN5_PARTY_MAX][2]; // Each Pokémon's PID and OT ID, t
 static int sListCount;
 static Gen5HMCheck sHMCheck;
 
+static unsigned short sHMFree[GEN5_PARTY_MAX][4];
+u32 PokeList_GetHMResultOfMove(u32 move);
+
+// The k-th field move in the field menu of a Pokémon of the list: its own (in move order), then those lent to it
+u32 Gen5_FieldMenuMove(PartyPkm *pkm, u32 k)
+{
+    const u32 pid = PokeParty_GetParam(pkm, PKM_PARAM_PID, NULL);
+    const u32 otId = PokeParty_GetParam(pkm, PKM_PARAM_ID, NULL);
+    int original = -1;
+    for (int j = 0; j < sListCount; j++) {
+        if (sListIdentity[j][0] == pid && sListIdentity[j][1] == otId) {
+            original = j;
+        }
+    }
+    u32 n = 0;
+    for (int slot = 0; slot < 4; slot++) {
+        const u32 move = PokeParty_GetParam(pkm, PKM_PARAM_MOVE1 + slot, NULL);
+        if (PokeList_GetHMResultOfMove(move) != 0 && n++ == k) {
+            return move;
+        }
+    }
+    for (int i = 0; original >= 0 && i < 4; i++) {
+        if (sHMFree[original][i] != 0 && n++ == k) {
+            return sHMFree[original][i];
+        }
+    }
+    return 0;
+}
+
 int Gen5_HMCheck(unsigned kind)
 {
     return sHMCheck != NULL ? sHMCheck((int)kind) : 1;
@@ -635,6 +664,7 @@ int Gen5_PartyBegin(const Gen5Party *party, const char *gen5Dir)
     sListParam.playerInfo = info;
     sListParam.index = party->cursor;
     sHMCheck = party->hmCheck;
+    memcpy(sHMFree, party->hmFree, sizeof(sHMFree));
     sListParam.result = 0;
 
     NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);

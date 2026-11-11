@@ -6,10 +6,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "constants/moves.h"
+#include "constants/pokemon.h"
+
 #include "applications/party_menu/defs.h"
 #include "field_move_tasks.h"
 #include "charcode_convert.h"
 #include "gen5.h"
+#include "port/hm_free.h"
+#include "unk_02054884.h"
 #include "party.h"
 #include "pokemon.h"
 #include "port/gen5_rom.h"
@@ -85,7 +90,33 @@ BOOL Gen5Party_Begin(ApplicationManager *appMan)
     sParty.mode = args->mode == PARTY_MENU_MODE_FIELD ? GEN5_PARTY_FIELD : GEN5_PARTY_SELECT;
     sMoveContext = args->mode == PARTY_MENU_MODE_FIELD ? args->fieldMoveContext : NULL;
     sParty.hmCheck = HMCheck;
-    sParty.cursor = args->selectedMonSlot < sParty.partyCount ? args->selectedMonSlot : 0;
+    if (sMoveContext != NULL && HmFree_Enabled()) {
+        // Field moves without HMs: the moves nobody knows that a Pokemon does for the party (Fly anywhere, the others
+        // where they can be used right now), as Platinum's own list does it
+        static const struct {
+            u16 move;
+            int fieldMove;
+        } hmMoves[] = {
+            { MOVE_FLY, FIELD_MOVE_FLY }, { MOVE_SURF, FIELD_MOVE_SURF }, { MOVE_CUT, FIELD_MOVE_CUT },
+            { MOVE_STRENGTH, FIELD_MOVE_STRENGTH }, { MOVE_ROCK_SMASH, FIELD_MOVE_ROCK_SMASH },
+            { MOVE_WATERFALL, FIELD_MOVE_WATERFALL }, { MOVE_ROCK_CLIMB, FIELD_MOVE_ROCK_CLIMB },
+            { MOVE_DEFOG, FIELD_MOVE_DEFOG },
+        };
+        int lent[GEN5_PARTY_MAX] = { 0 };
+        for (int i = 0; i < (int)NELEMS(hmMoves); i++) {
+            if (hmMoves[i].move != MOVE_FLY && (sMoveContext->usableMoves & (1 << hmMoves[i].fieldMove)) == 0) {
+                continue;
+            }
+            if (Party_HasMonWithMove(args->party, hmMoves[i].move) != PARTY_SLOT_NONE) {
+                continue;
+            }
+            const int slot = HmFree_SubstituteSlot(args->party, hmMoves[i].move);
+            if (slot >= 0 && slot < sParty.partyCount && lent[slot] < 4) {
+                sParty.hmFree[slot][lent[slot]++] = hmMoves[i].move;
+            }
+        }
+    }
+    sParty.cursor =    sParty.cursor = args->selectedMonSlot < sParty.partyCount ? args->selectedMonSlot : 0;
 
     if (!Gen5_PartyBegin(&sParty, Gen5Rom_Dir())) {
         printf("Gen 5: the party list couldn't start\n");
