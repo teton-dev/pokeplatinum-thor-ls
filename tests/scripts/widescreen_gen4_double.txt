@@ -1,0 +1,41 @@
+# Platinum's own double battle (Starly twice) in widescreen: sprites keep their shape, both HP boxes per side. From turtwig:
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' tools/docker/desktop.sh test tests/scripts/widescreen_gen4_double.txt --from turtwig
+mash A until free
+give 396 5
+jump 342 114 854
+until free timeout 3000
+wait 30
+trainer 1 double
+until battle
+wait 8
+shot dbl-1
+wait 8
+shot dbl-2
+wait 8
+shot dbl-3
+wait 8
+shot dbl-4
+wait 8
+shot dbl-5
+wait 8
+shot dbl-6
+wait 8
+shot dbl-7
+wait 8
+shot dbl-8
+wait 8
+shot dbl-9
+wait 8
+shot dbl-10
+wait 8
+shot dbl-11
+wait 8
+shot dbl-12
+wait 8
+shot dbl-13
+wait 8
+shot dbl-14
+until command
+wait 90
+shot dbl-command
+exit 0
