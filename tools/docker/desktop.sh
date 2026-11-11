@@ -49,6 +49,12 @@ mounts() {
     GIT_COMMON=$(cd "$ROOT" && cd "$(git rev-parse --git-common-dir)" && pwd)
     case "$GIT_COMMON" in "$ROOT"/*) ;; *) echo "--mount type=bind,src=$GIT_COMMON,target=$GIT_COMMON" ;; esac
     [ -d "$POKEBW2" ] && echo "--mount type=bind,src=$POKEBW2,target=$POKEBW2"
+    # In a git worktree, .git is a file pointing into the main checkout's .git: mount that too, or git fails in the
+    # container (the build stamps the commit hash)
+    if [ -f "$ROOT/.git" ]; then
+        GITDIR=$(git -C "$ROOT" rev-parse --git-common-dir)
+        echo "--mount type=bind,src=$GITDIR,target=$GITDIR"
+    fi
     mkdir -p "$DATA"
     echo "--mount type=bind,src=$THOR_DEV,target=$THOR_DEV"
 }
