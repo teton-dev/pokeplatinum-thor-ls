@@ -50,6 +50,18 @@
 #define FREE_FRAMES 20 // The player counts as free once free this many frames in a row (events start a frame late)
 #define WALK_TIMEOUT 600 // Frames a walk may push without reaching a new tile before it's taken for blocked
 
+// A field task that runs the credits sequence as a script command does, and ends when it has
+static BOOL HallOfFameTask(FieldTask *task)
+{
+    int *state = FieldTask_GetState(task);
+    if (*state == 0) {
+        ClearGame(task);
+        (*state)++;
+        return FALSE;
+    }
+    return TRUE;
+}
+
 enum TestOp {
     OP_PRESS,
     OP_HOLD,
@@ -976,13 +988,13 @@ static u16 Step(void)
         }
         case OP_HALL_OF_FAME: {
             FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
-            if (!ConditionMet(command) || fieldSystem == NULL || fieldSystem->task == NULL) {
+            if (!ConditionMet(command) || fieldSystem == NULL) {
                 if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
                     Fail(command, "the player was never free for the Hall of Fame");
                 }
                 return 0;
             }
-            ClearGame(fieldSystem->task);
+            FieldSystem_CreateTask(fieldSystem, HallOfFameTask, NULL);
             sTest.freeFrames = 0;
             Next();
             return 0;

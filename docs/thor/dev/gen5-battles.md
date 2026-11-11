@@ -652,3 +652,22 @@ perspective-correct as on the DS; large polygons warp. Fix: each vertex carries 
 (`libntr_g3_perspective.patch`), the shader outputs `(xyz*w, w)`, and the fog depth is recovered as screen-linear in the
 fragment shader (`coordsW`; GLSL ES has no `noperspective`). Checked on the Thor: wild battle, no shader errors, sky and
 ground correct. Open: the stat raising and lowering particles look a bit off (not investigated).
+
+## Merging the sessions' work (2026-11-11)
+
+The parallel sessions' branches were merged into one (`gen5-battles-m5`), after each session confirmed its latest work.
+- Base: `claude/determined-bun-fe75c5` (the bridge, milestone 4 and 5, trainers, Elite Four, sound, sprite animation,
+  widescreen battles). `gen5-battles`' own milestone 4 (`8a63ef1b3`) was replaced by it.
+- Merged: `final-apk` (the Gen 5 Summary, widescreen PC and party menus, libntr wide patches, signed-char Android
+  fix), `claude/jolly-engelbart-5c2ba7` (widescreen Platinum double battles), the Hall of Fame crash fix and its
+  `hall-of-fame` test command (`claude/epic-grothendieck-360b0b`), and the note that the animation fix is confirmed
+  on the Thor.
+- Dropped: `e57e0ed9b` (near/far clipping: `ea8e8a554`'s six-plane clipper replaces it), `cfcb1e5a2` (the particle
+  patch is the same as `dfe62d2eb`), `369b291e2` (jingles through Platinum's sound: uncompiled, and the sound branch
+  has BW2's own), `pc-black-screen-test` (test-only).
+- Tested on the desktop: `first_battle` (from `before-starter`), `gen5_wild`, `gen5_trainer`, `gen5_roark`,
+  `gen5_gym` (`full100`), `gen5_summary_menu`, `hall_of_fame`, `widescreen_gen4_double`, `widescreen_weather`.
+- Open, from the sessions: BW2's victory music (`ProcWaitExit` waits for a button before the battle exits), Barry's
+  first-battle crit suppression, the Flamethrower stream, the stat raise/lower particles on the Thor, the 30 Hz
+  against 60 Hz timing assumption, the Summary's ribbons and markings, nothing from the Summary, widescreen or E4
+  work run on the Thor yet.
