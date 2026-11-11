@@ -307,6 +307,7 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         // A battle against trainer ID (Platinum's trainer numbers), as its encounter starts it, once the player is free
         command->op = OP_TRAINER;
         command->x = atoi(words[1]);
+        command->y = count >= 3 && strcmp(words[2], "double") == 0; // trainer N double: a double battle against N twice
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
@@ -812,7 +813,7 @@ static u16 Step(void)
                 }
                 return 0;
             }
-            if (!GUI_CreateMon_StartBattle(0, 0, command->x, FALSE)) {
+            if (!GUI_CreateMon_StartBattle(0, 0, command->x, command->y)) {
                 Fail(command, "the trainer battle couldn't start");
                 return 0;
             }
