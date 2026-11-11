@@ -190,8 +190,14 @@ enum Gen5PartyMode {
 enum Gen5PartyResult {
     GEN5_PARTY_CANCEL,
     GEN5_PARTY_PICKED,
+    GEN5_PARTY_FIELD_MOVE, // A field move was chosen for the Pokémon at picked
     GEN5_PARTY_FAILED,
 };
+
+// Whether the field move `kind` (BW2's order in its party list: Cut 0, Surf 1, Waterfall 2, Strength 3, Fly 4, Flash 5,
+// Teleport 6, Dig 7, Sweet Scent 8, Chatter 9, Dive 10, Rock Smash 13, Defog 14, Rock Climb 15) can be used now:
+// 0 yes, 1 not here, 2 a badge is missing, 3 not with a partner, 4 already surfing
+typedef int (*Gen5HMCheck)(int kind);
 
 typedef struct Gen5Party {
     Gen5Player player;
@@ -199,6 +205,8 @@ typedef struct Gen5Party {
     int partyCount;
     int mode; // enum Gen5PartyMode
     int cursor; // The Pokémon the cursor starts on
+    Gen5HMCheck hmCheck; // For GEN5_PARTY_FIELD: the field moves' availability (NULL: none can be used)
+    int fieldMove; // Out: the field move chosen (kind above), or -1
     int picked; // The slot picked, in the new order
     int order[GEN5_PARTY_MAX]; // The new order: each slot's index in the party given
 } Gen5Party;

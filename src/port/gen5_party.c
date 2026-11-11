@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "applications/party_menu/defs.h"
+#include "field_move_tasks.h"
 #include "charcode_convert.h"
 #include "gen5.h"
 #include "party.h"
@@ -23,6 +24,25 @@ void Gen5_TextToGen5(const charcode_t *src, int srcLength, unsigned short *dest,
 void Gen5_PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest);
 
 static Gen5Party sParty;
+static const FieldMoveContext *sMoveContext;
+
+// BW2's field move kinds (gen5.h's Gen5HMCheck) as Platinum's; -1: Platinum has none (Dive)
+static const int sPlatinumMove[16] = {
+    FIELD_MOVE_CUT, FIELD_MOVE_SURF, FIELD_MOVE_WATERFALL, FIELD_MOVE_STRENGTH, FIELD_MOVE_FLY, FIELD_MOVE_FLASH,
+    FIELD_MOVE_TELEPORT, FIELD_MOVE_DIG, FIELD_MOVE_SWEET_SCENT, FIELD_MOVE_CHATTER, -1, -1, -1,
+    FIELD_MOVE_ROCK_SMASH, FIELD_MOVE_DEFOG, FIELD_MOVE_ROCK_CLIMB,
+};
+
+// Whether the move can be used here: Platinum's own check of it, whose answers (0 yes, 1 not here, 2 badge, 3 partner,
+// 4 already surfing) are the ones BW2's list takes
+static int HMCheck(int kind)
+{
+    if (sMoveContext == NULL || kind < 0 || kind >= 16 || sPlatinumMove[kind] < 0) {
+        return 1;
+    }
+    FieldMoveErrContext check = (FieldMoveErrContext)FieldMove_GetTaskOrError(FIELD_MOVE_ERROR, sPlatinumMove[kind]);
+    return check != NULL ? (int)check(sMoveContext) : 1;
+}
 static BOOL sActive;
 
 static void VBlank(void *data)
@@ -63,6 +83,8 @@ BOOL Gen5Party_Begin(ApplicationManager *appMan)
         Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(args->party, i), &sParty.party[i]);
     }
     sParty.mode = args->mode == PARTY_MENU_MODE_FIELD ? GEN5_PARTY_FIELD : GEN5_PARTY_SELECT;
+    sMoveContext = args->mode == PARTY_MENU_MODE_FIELD ? args->fieldMoveContext : NULL;
+    sParty.hmCheck = HMCheck;
     sParty.cursor = args->selectedMonSlot < sParty.partyCount ? args->selectedMonSlot : 0;
 
     if (!Gen5_PartyBegin(&sParty, Gen5Rom_Dir())) {
@@ -110,6 +132,12 @@ void Gen5Party_Exit(ApplicationManager *appMan)
         }
     }
     args->menuSelectionResult = PARTY_MENU_EXIT_CODE_DONE;
+    if (result == GEN5_PARTY_FIELD_MOVE && sPlatinumMove[sParty.fieldMove] >= 0) {
+        // The start menu then runs the move for the Pokemon (as it does for Platinum's list)
+        args->menuSelectionResult = PARTY_MENU_EXIT_CODE_CUT + sPlatinumMove[sParty.fieldMove];
+        args->selectedMonSlot = sParty.picked;
+        return;
+    }
     // The slot, as Platinum's list reports a pick (7: cancelled)
     args->selectedMonSlot = result == GEN5_PARTY_PICKED ? sParty.picked : 7;
 }

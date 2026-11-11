@@ -554,6 +554,12 @@ static BagSave *sListBag;
 static BOOL sListInSummary;
 static u32 sListIdentity[GEN5_PARTY_MAX][2]; // Each Pokémon's PID and OT ID, to find it again in the new order
 static int sListCount;
+static Gen5HMCheck sHMCheck;
+
+int Gen5_HMCheck(unsigned kind)
+{
+    return sHMCheck != NULL ? sHMCheck((int)kind) : 1;
+}
 
 static BOOL PartyNext(void)
 {
@@ -628,6 +634,7 @@ int Gen5_PartyBegin(const Gen5Party *party, const char *gen5Dir)
     sListParam.trainerCard = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, 0x400, TRUE, __FILE__, __LINE__));
     sListParam.playerInfo = info;
     sListParam.index = party->cursor;
+    sHMCheck = party->hmCheck;
     sListParam.result = 0;
 
     NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);
@@ -664,11 +671,17 @@ enum Gen5PartyResult Gen5_PartyEnd(Gen5Party *party)
     }
     const s32 index = (s32)sListParam.index;
     party->picked = index;
+    // A field move ends the list with its result (11 and on: Cut, Surf... in the order of the check's kinds)
+    party->fieldMove = sListParam.result >= POKELIST_RESULT_CUT && sListParam.result != POKELIST_RESULT_MILK_DRINK
+        && sListParam.result != POKELIST_RESULT_SOFTBOILED ? (int)sListParam.result - POKELIST_RESULT_CUT : -1;
     printf("Gen 5: the party list ended (result %lu, index %d)\n", (unsigned long)sListParam.result, (int)index);
     sListParty = NULL;
     while (sBattleBlockCount > 0) {
         GFL_HeapFree(sBattleBlocks[--sBattleBlockCount]);
     }
     GFL_HeapDelete(HEAPID_PORT_BATTLE);
+    if (party->fieldMove >= 0) {
+        return GEN5_PARTY_FIELD_MOVE;
+    }
     return index >= 0 && index < party->partyCount ? GEN5_PARTY_PICKED : GEN5_PARTY_CANCEL;
 }
