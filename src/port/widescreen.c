@@ -187,7 +187,8 @@ static void UpdateHealthboxCaps(BOOL wideBattle)
             case HEALTHBOX_TYPE_ENEMY_SOLO:
             case HEALTHBOX_TYPE_ENEMY_SLOT_1:
             case HEALTHBOX_TYPE_ENEMY_SLOT_2:
-                stamps[count].x = x - 58 - CAP_WIDTH;
+                // a double battle's first enemy box is 6 pixels wider (its position is 64, the second's 58)
+                stamps[count].x = x - (healthbox->type == HEALTHBOX_TYPE_ENEMY_SLOT_1 ? 64 : 58) - CAP_WIDTH;
                 stamps[count].y = y - 16;
                 stamps[count].height = CAP_HEIGHT;
                 stamps[count].flipX = 0;
