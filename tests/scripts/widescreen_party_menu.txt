@@ -13,4 +13,12 @@ shot party
 press A
 wait 60
 shot party-menu
+press B
+wait 60
+press RIGHT
+wait 30
+shot party-cursor-right
+press DOWN
+wait 30
+shot party-cursor-down
 exit 0
