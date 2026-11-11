@@ -14,6 +14,7 @@
 #include "field_move_tasks.h"
 #include "field_system.h"
 #include "game_options.h"
+#include "clear_game.h"
 #include "save_player.h"
 #include "field_task.h"
 #include "player_avatar.h"
@@ -61,6 +62,7 @@ enum TestOp {
     OP_SAVE,
     OP_GEN5_IMPORT,
     OP_GEN5_BATTLE,
+    OP_HALL_OF_FAME,
     OP_GEN5_SETTING,
     OP_BATTLE_STYLE,
     OP_WILD,
@@ -414,6 +416,12 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_GEN5_BATTLE;
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if (strcmp(words[0], "hall-of-fame") == 0) {
+        // The credits sequence as the Champion's room starts it (the Hall of Fame screen, the save), once free
+        command->op = OP_HALL_OF_FAME;
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
@@ -965,6 +973,19 @@ static u16 Step(void)
             }
             Next();
             continue;
+        }
+        case OP_HALL_OF_FAME: {
+            FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+            if (!ConditionMet(command) || fieldSystem == NULL || fieldSystem->task == NULL) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free for the Hall of Fame");
+                }
+                return 0;
+            }
+            ClearGame(fieldSystem->task);
+            sTest.freeFrames = 0;
+            Next();
+            return 0;
         }
         case OP_GEN5_SETTING:
             if (command->x == 1) {
