@@ -1,0 +1,31 @@
+# Gen 5 screens: the Summary from Platinum's own start menu, as the player gets there. From the turtwig fixture: X opens
+# the menu, POKEMON (the first entry) the party, A on Turtwig and SUMMARY open BW2's summary, B goes back to the party
+# (the cursor still on Turtwig), B and B again to the overworld, where the player is free.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_summary_menu.txt --from turtwig
+gen5-import
+gen5-screens on
+mash A until free
+wait 30
+press X
+wait 60
+shot menu
+press A
+wait 200
+shot party
+press A
+wait 60
+shot party-menu
+press A
+wait 200
+shot summary
+press B
+wait 200
+shot back-in-party
+press B
+wait 120
+press B
+wait 200
+until free
+shot field
+exit 0
