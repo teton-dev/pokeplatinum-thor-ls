@@ -144,8 +144,19 @@ Done on the desktop (`tests/scripts/gen5_summary.txt`, `gen5_party.txt`, widescr
   which moves nobody knows that each Pokemon does for the party (`Gen5Party.hmFree`), and BW2's field-move menu takes
   them after the Pokemon's own (`plist_menu.c` and `plist_sys.c` patches, `Gen5_FieldMenuMove`): Fly shows in the
   Pokemon's menu with only HM02 in the bag (`gen5_party_hmfree.txt`). At most four entries, as BW2's menu has four.
-  **Not yet:** items from the bag and giving items (the bag is empty), the other modes (items, TMs, evolution items,
-  daycare, trade, contests, Frontier).
+  **Items (2026-11-10):** the player's bag (the five pockets the battle takes) goes into BW2's bag stand-in, so the list's
+  ITEM menu works on it: GIVE, TAKE and MOVE ITEM between Pokemon. The list gives, takes and swaps as BW2 does, with
+  BW2's messages; afterwards `Gen5Party_Exit` writes back what changed: each Pokemon's held item (by PID, so a
+  switched party is right) and the bag's counts by difference (`Bag_TryAddItem`/`Bag_TryRemoveItem`). GIVE ends the list
+  with `PARTY_MENU_EXIT_CODE_GIVE_ITEM`, and Platinum's start menu opens the bag (`BAG_EXIT_CODE_GIVE_FROM_MON_MENU`
+  then reopens the party as `PARTY_MENU_MODE_GIVE_ITEM_DONE`, which the Gen 5 list takes as `POKELIST_MODE_GIVE_FROM_BAG`: it
+  gives the item at once and goes on as the field list). The bag's "give" (`PARTY_MENU_MODE_GIVE_ITEM`: pick the Pokemon)
+  is the Gen 5 list too. Tests: `gen5_party_items.txt` (Potion given: held item 17, bag 3 to 2), `gen5_party_take.txt`
+  (taken: held item 0, bag 2 to 3; the test commands `hold ITEM`, `app party-give`). Mail is not done: a mail item
+  given or held, and the mail menu, use Platinum's list (reading held mail ends the Gen 5 list with the read-mail
+  code, which was not tried). Items BW2 doesn't have aren't in its bag and can't be given there.
+  **Not yet:** using items on a Pokemon from the bag (`PARTY_MENU_MODE_USE_ITEM`, TMs, evolution items), daycare,
+  trade, contests, Frontier.
 - **Widescreen** (`tests/scripts/widescreen_gen5_summary.txt`, `widescreen_gen5_party.txt`, `widescreen_pc.txt`): BW2's
   screens draw their top screen with the **sub** engine, which libntr's wide scene didn't support (it needed the main
   engine on top). `libntr_wide_subtop.patch` lets a wide scene have the sub engine on top (2D only; the 3D stays 4:3 on

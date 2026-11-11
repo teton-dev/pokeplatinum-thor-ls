@@ -1,0 +1,34 @@
+# Gen 5 screens: taking a held item in BW2's party list (the start menu's party: ITEM > TAKE). From the turtwig fixture:
+# Turtwig holds a Potion, the bag has two; after TAKE the log shows no held item and three Potions.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_party_take.txt --from turtwig
+gen5-import
+gen5-screens on
+mash A until free
+wait 30
+item 17 2
+hold 17
+party
+app party-field
+wait 300
+press A
+wait 90
+press DOWN
+wait 10
+press DOWN
+wait 10
+shot gen5-take-menu
+press A
+wait 90
+shot gen5-take-sub
+press DOWN
+wait 10
+press A
+wait 200
+shot gen5-take-done
+press A
+wait 100
+mash B for 200
+wait 60
+party
+exit 0

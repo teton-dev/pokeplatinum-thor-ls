@@ -11,7 +11,11 @@
 
 #include "applications/party_menu/defs.h"
 #include "field_move_tasks.h"
+#include "constants/heap.h"
+
+#include "bag.h"
 #include "charcode_convert.h"
+#include "item.h"
 #include "gen5.h"
 #include "port/hm_free.h"
 #include "unk_02054884.h"
@@ -30,6 +34,8 @@ void Gen5_PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest);
 
 static Gen5Party sParty;
 static const FieldMoveContext *sMoveContext;
+static Gen5Item sItemsBefore[GEN5_ITEMS_MAX];
+static int sItemCountBefore;
 
 // BW2's field move kinds (gen5.h's Gen5HMCheck) as Platinum's; -1: Platinum has none (Dive)
 static const int sPlatinumMove[16] = {
@@ -68,10 +74,15 @@ BOOL Gen5Party_Begin(ApplicationManager *appMan)
     if (sActive || !SIM_Config_prj_GetConfig()->gen5Screens || Gen5Rom_GameName() == NULL) {
         return FALSE;
     }
-    // What the Gen 5 list does for now: look at the party from the start menu, and pick a Pokemon. The other modes
-    // (items, moves, contests, the Battle Frontier...) stay Platinum's
+    // What the Gen 5 list does for now: look at the party from the start menu, pick a Pokemon, take items and give
+    // them (not mail). The other modes (using items, contests, the Battle Frontier...) stay Platinum's
     if (args->type != PARTY_MENU_TYPE_BASIC
-        || (args->mode != PARTY_MENU_MODE_FIELD && args->mode != PARTY_MENU_MODE_SELECT_NO_PROMPT)) {
+        || (args->mode != PARTY_MENU_MODE_FIELD && args->mode != PARTY_MENU_MODE_SELECT_NO_PROMPT
+            && args->mode != PARTY_MENU_MODE_GIVE_ITEM && args->mode != PARTY_MENU_MODE_GIVE_ITEM_DONE)) {
+        return FALSE;
+    }
+    if ((args->mode == PARTY_MENU_MODE_GIVE_ITEM || args->mode == PARTY_MENU_MODE_GIVE_ITEM_DONE)
+        && Item_IsMail(args->usedItemID)) {
         return FALSE;
     }
 
@@ -87,8 +98,36 @@ BOOL Gen5Party_Begin(ApplicationManager *appMan)
     for (int i = 0; i < sParty.partyCount; i++) {
         Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(args->party, i), &sParty.party[i]);
     }
-    sParty.mode = args->mode == PARTY_MENU_MODE_FIELD ? GEN5_PARTY_FIELD : GEN5_PARTY_SELECT;
-    sMoveContext = args->mode == PARTY_MENU_MODE_FIELD ? args->fieldMoveContext : NULL;
+    sParty.mode = args->mode == PARTY_MENU_MODE_FIELD ? GEN5_PARTY_FIELD
+        : args->mode == PARTY_MENU_MODE_GIVE_ITEM ? GEN5_PARTY_GIVE_ITEM
+        : args->mode == PARTY_MENU_MODE_GIVE_ITEM_DONE ? GEN5_PARTY_GIVE_FROM_BAG : GEN5_PARTY_SELECT;
+    sParty.item = args->usedItemID;
+    // The bag's items the list can use (the pockets the battle takes)
+    {
+        const struct {
+            BagItem *items;
+            int size;
+        } pockets[] = {
+            { args->bag->items, ITEM_POCKET_SIZE },
+            { args->bag->medicine, MEDICINE_POCKET_SIZE },
+            { args->bag->pokeballs, POKEBALL_POCKET_SIZE },
+            { args->bag->berries, BERRY_POCKET_SIZE },
+            { args->bag->battleItems, BATTLE_ITEM_POCKET_SIZE },
+        };
+        for (int p = 0; p < (int)NELEMS(pockets); p++) {
+            for (int i = 0; i < pockets[p].size && sParty.itemCount < GEN5_ITEMS_MAX; i++) {
+                if (pockets[p].items[i].item != ITEM_NONE && pockets[p].items[i].quantity != 0) {
+                    sParty.items[sParty.itemCount].item = pockets[p].items[i].item;
+                    sParty.items[sParty.itemCount].count = pockets[p].items[i].quantity;
+                    sParty.itemCount++;
+                }
+            }
+        }
+        memcpy(sItemsBefore, sParty.items, sizeof(sItemsBefore));
+        sItemCountBefore = sParty.itemCount;
+    }
+    sMoveContext = args->mode == PARTY_MENU_MODE_FIELD || args->mode == PARTY_MENU_MODE_GIVE_ITEM_DONE
+        ? args->fieldMoveContext : NULL;
     sParty.hmCheck = HMCheck;
     if (sMoveContext != NULL && HmFree_Enabled()) {
         // Field moves without HMs: the moves nobody knows that a Pokemon does for the party (Fly anywhere, the others
@@ -162,7 +201,40 @@ void Gen5Party_Exit(ApplicationManager *appMan)
             current[from] = moved;
         }
     }
+    // The bag and the held items as the list left them: the player's bag gets what it changed (an item taken from a
+    // Pokemon, one given and the one it replaced). A held mail stays where it is
+    for (int i = 0; i < sItemCountBefore; i++) {
+        const int before = sItemsBefore[i].count;
+        const int after = sParty.items[i].count;
+        if (after > before) {
+            Bag_TryAddItem(args->bag, sItemsBefore[i].item, after - before, HEAP_ID_FIELD2);
+        } else if (after < before) {
+            Bag_TryRemoveItem(args->bag, sItemsBefore[i].item, before - after, HEAP_ID_FIELD2);
+        }
+    }
+    for (int i = 0; i < sParty.partyCount; i++) {
+        Pokemon *mon = Party_GetPokemonBySlotIndex(args->party, i);
+        const u32 held = Pokemon_GetValue(mon, MON_DATA_HELD_ITEM, NULL);
+        if (sParty.heldAfter[i] != held && !Item_IsMail(held)) {
+            Pokemon_SetValue(mon, MON_DATA_HELD_ITEM, &sParty.heldAfter[i]);
+        }
+    }
+    if (args->mode == PARTY_MENU_MODE_GIVE_ITEM_DONE) {
+        // As Platinum's own list goes on as the field list once the item is given
+        args->mode = PARTY_MENU_MODE_FIELD;
+    }
     args->menuSelectionResult = PARTY_MENU_EXIT_CODE_DONE;
+    if (result == GEN5_PARTY_GIVE_ITEM_REQUEST) {
+        args->menuSelectionResult = PARTY_MENU_EXIT_CODE_GIVE_ITEM;
+        args->selectedMonSlot = sParty.picked;
+        return;
+    }
+    if (result == GEN5_PARTY_READ_MAIL) {
+        args->menuSelectionResult = PARTY_MENU_EXIT_CODE_READ_MAIL;
+        args->selectedMonSlot = sParty.picked;
+        args->usedItemID = Pokemon_GetValue(Party_GetPokemonBySlotIndex(args->party, sParty.picked), MON_DATA_HELD_ITEM, NULL);
+        return;
+    }
     if (result == GEN5_PARTY_FIELD_MOVE && sPlatinumMove[sParty.fieldMove] >= 0) {
         // The start menu then runs the move for the Pokemon (as it does for Platinum's list)
         args->menuSelectionResult = PARTY_MENU_EXIT_CODE_CUT + sPlatinumMove[sParty.fieldMove];
