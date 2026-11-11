@@ -105,8 +105,12 @@ static BOOL Gen5BattleShown(void)
 // the page that opens on loading a save) and the Town Map (and the Fly map). They are drawn for 256 pixels; their
 // layers' edge columns continue across the sides, so the backgrounds reach the edges of the window and the
 // contents (text, lists, the map) stay in the 4:3 middle
+// The layers of the wide application whose sides repeat a pixel column of the picture (its background's stripes)
+static u8 sStripeBgs;
+
 static BOOL WideApplication(u8 *edgeBgs, u8 *edgeMirrorBgs)
 {
+    sStripeBgs = 0;
     *edgeBgs = 0x0F;
     *edgeMirrorBgs = 0;
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
@@ -115,8 +119,10 @@ static BOOL WideApplication(u8 *edgeBgs, u8 *edgeMirrorBgs)
     }
     const OverlayFunc init = fieldSystem->processManager->child->template.init;
     if (init == gPokemonPartyAppTemplate.init) {
-        // Its background (BG3, lines) is mirrored across the sides, so the lines continue
-        *edgeMirrorBgs = (1 << 2) | (1 << 3);
+        // Only its panels in the 4:3 middle; the background's stripes (BG3) continue evenly to each side by repeating its
+        // edge columns, so nothing that moves with the cursor is copied there
+        *edgeBgs = 1 << 3;
+        sStripeBgs = 1 << 3;
         return TRUE;
     }
     return init == gBagApplicationTemplate.init || init == (OverlayFunc)JournalController_Init
@@ -255,6 +261,7 @@ void Widescreen_Update(void)
     // BW2's text box (BG1) reaches the edges of the wide screen; its text stays in the middle
     SIM_SetWidescreenBgEdgeExtend(edgeBgs);
     SIM_SetWidescreenBgEdgeMirror(edgeMirrorBgs);
+    SIM_SetWidescreenBgStripe(wide ? sStripeBgs : 0, 255.0f / 256.0f);
     // and its black bars (the party balls', the ability's), sprites that touch the picture's edges
     SIM_SetWidescreenObjEdgeExtend(Gen5BattleShown() ? 0x0F : 0);
     SIM_SetWidescreenScene(wide);

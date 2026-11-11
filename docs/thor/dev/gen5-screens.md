@@ -168,3 +168,13 @@ Done on the desktop (`tests/scripts/gen5_summary.txt`, `gen5_party.txt`, widescr
   Summary's frame is extended, which reads well on the desktop. **Platinum's PC** (`BoxAppMan_Init`) is wide the same
   way: its layers' edges continue, its panels and Pokemon stay in the middle.
 - Not done: markings written back from the Summary, Platinum's ribbons and contest data in BW2's Summary, the Thor.
+
+## Platinum's party menu in widescreen (2026-11-11)
+
+Chosen with the owner: the panels stay in the 4:3 middle and the background's stripes (BG3) continue **evenly** to both
+sides, with nothing from the panel layers copied there (mirroring BG2 repeated the panels, the occupied slot's blue one
+included, and moved with the cursor). BG3's own edge columns differ (the left is a dark frame), so libntr's
+`SIM_SetWidescreenBgStripe` (`libntr_wide_stripe.patch`) repeats one pixel column of the layer, for each row, on both
+sides: here column 255 (the stripes' own). `WideApplication` sets it for the party menu (`src/port/widescreen.c`).
+`tests/scripts/widescreen_party_menu.txt` shoots the start menu's party and the cursor on other slots: the sides are the
+same in each.
