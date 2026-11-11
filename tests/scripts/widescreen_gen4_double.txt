@@ -1,11 +1,11 @@
-# Platinum's own double battle (Starly twice) in widescreen: sprites keep their shape, both HP boxes per side. From turtwig:
+# Platinum's own double battle (Double Team Jo and Pat) in widescreen: sprites keep their shape, both HP boxes per side. From turtwig:
 #   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' tools/docker/desktop.sh test tests/scripts/widescreen_gen4_double.txt --from turtwig
 mash A until free
 give 396 5
 jump 342 114 854
 until free timeout 3000
 wait 30
-trainer 1 double
+trainer 236 double
 until battle
 wait 8
 shot dbl-1
