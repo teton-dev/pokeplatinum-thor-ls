@@ -1,0 +1,15 @@
+# Widescreen on BW2's Summary screen (Settings > Gameplay > Gen 5 screens). From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_gen5_summary.txt --from turtwig
+gen5-import
+gen5-screens on
+mash A until free
+wait 30
+app summary
+wait 300
+shot summary
+press RIGHT
+wait 120
+shot summary-stats
+exit 0

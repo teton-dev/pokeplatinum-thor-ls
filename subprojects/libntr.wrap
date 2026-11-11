@@ -26,7 +26,7 @@ directory = libntr
 # 0x20000, was written over the page's tiles at 0: black pages)
 # libntr_wide_mirror.patch: SIM_SetWidescreenBgMirror, a wide BG layer's sides mirror the 256-pixel picture (the HM
 # cut-in's rings) instead of repeating it
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch
 
 [provide]
 dependency_names = NitroSDK
