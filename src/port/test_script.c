@@ -68,6 +68,7 @@ enum TestOp {
     OP_LEADER,
     OP_ITEM,
     OP_GIVE,
+    OP_LEAD,
     OP_PARTY,
     OP_TRAINER,
     OP_SHOT,
@@ -296,6 +297,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = strcmp(words[0], "item") == 0 ? OP_ITEM : OP_GIVE;
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "lead") == 0 && count >= 2) {
+        // lead SLOT: swaps the party's slot SLOT into the first place
+        command->op = OP_LEAD;
+        command->x = atoi(words[1]);
         return TRUE;
     } else if (strcmp(words[0], "trainer") == 0 && count >= 2) {
         // A battle against trainer ID (Platinum's trainer numbers), as its encounter starts it, once the player is free
@@ -827,6 +833,10 @@ static u16 Step(void)
                 return 0;
             }
             printf("[test] gave species %d at level %d\n", command->x, command->y);
+            Next();
+            continue;
+        case OP_LEAD:
+            Party_SwapSlots(SaveData_GetParty(SaveData_Ptr()), 0, command->x);
             Next();
             continue;
         case OP_PARTY: {
