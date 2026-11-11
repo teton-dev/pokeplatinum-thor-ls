@@ -231,11 +231,11 @@ void Widescreen_Update(void)
     }
     u8 edgeBgs = Gen5BattleShown() ? (1 << 1) : 0;
     if (!wide && Gear_ActiveBattleSystem() != NULL) {
-        // Platinum's battle: its backdrop (BG3) mirrored across the sides; the HP boxes, bases and text box stay as
-        // they are, in the 4:3 middle
+        // Platinum's battle: its backdrop (BG3) continued across the sides by its edge columns (not mirrored: the
+        // bases the Pokémon stand on are part of it and would repeat); the HP boxes and text box stay as they are, in
+        // the 4:3 middle
         wide = TRUE;
         wideBgs = 1 << 3;
-        mirrorBgs = 1 << 3;
         wideBattle = TRUE;
     }
     UpdateHealthboxCaps(wideBattle);

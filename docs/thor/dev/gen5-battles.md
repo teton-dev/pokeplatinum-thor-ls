@@ -508,7 +508,8 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
 
 ## Widescreen: Platinum's own battles (2026-11-09)
 
-The backdrop (BG3, `battle_main.c`) is drawn wide and mirrored at the sides (`SIM_SetWidescreenBgMirror`); the Pokemon,
+The backdrop (BG3, `battle_main.c`) is drawn wide with its edge columns continued across the sides (not mirrored,
+which repeated the bases the Pokemon stand on, 2026-11-11); the Pokemon,
 bases, HP boxes and text box stay in the 4:3 middle. The HP boxes' end caps (the owner's 5x33 texture, pure white
 transparent; enemy: at the box's left end, player: mirrored at its right end) are stamped onto BG3's wide picture each
 frame at the boxes' sprite positions (`UpdateHealthboxCaps`, `SIM_SetWidescreenStamps`, `libntr_wide_mirror.patch`), so
