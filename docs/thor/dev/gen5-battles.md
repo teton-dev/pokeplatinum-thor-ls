@@ -457,6 +457,24 @@ build's battles were silent: no move sounds, no cries, no menu sounds. Done on t
 - **Next:** hear it on the Thor; perhaps the victory music and fanfares as Platinum's (`GFL_SndBGMPlay` with BW2's
   win BGM).
 
+## The Elite Four's animated Platinum sprites (2026-11-11)
+
+The Elite Four's Platinum front sprites (BW2 has no Sinnoh Elite Four) were drawn in their first cell only. Platinum keeps
+a trainer as a cell bank (Aaron 9 cells, Bertha 3, Flint 4, Lucian 5, Cynthia 5) over a character file whose tiles are
+copied into place cell by cell (the bank's VRAM transfer table: a source offset and size for each cell, the tile numbers
+of an OBJ relative to that block), and an animation bank: sequence 0 holds one pose, sequence 1 plays through the poses
+once (Lucian: cells 0, 1, 2, 3, 4 for 30, 20, 2, 2 and 50 ticks) and ends on the pose the sprite stays in.
+- **Conversion** (`TrainerArtToGen5`, `src/port/gen5_battle.c`, for each battle): every pose becomes a list of quads;
+  rectangles with the same pixels are shared, and the distinct ones (10 to 12 for the five trainers, about half the
+  texture) are packed in rows into the 256x128 texture. A quad is placed as Platinum places it, from the cell's centre
+  with the feet 40 below it (anchoring on the union of the poses made Aaron float: one of his poses reaches lower).
+- **Playing it** (`mcss.c`'s patch, `Gen5BackSprite.seqPose/seqTicks`): the first sprite of the trainer that is added
+  (the introduction) plays sequence 1 by time (`Gen5_ArtTicks`, one a VBlank; Platinum's ticks of its 30 Hz logic count
+  as two), then stands in the last pose; the later ones (the trainer slides in again for his words after the battle) show
+  the last pose only (`useFixed`). Checked on the desktop (`tests/scripts/gen5_elite_four_anim.txt`; Lucian's win
+  through his defeat words: the same last pose as the end of the introduction). Not seen on the Thor yet. Open: whether
+  Platinum's ticks are 30 Hz as assumed.
+
 ## Pokémon sprite animations (2026-11-10)
 
 Reported on the Thor: a foe Bronzong's far arm still after the first cycle; a foe Houndoom's tail tip, the player's Suicune's
