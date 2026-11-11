@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "app/p_status.h"
 #include "battle/battle_proc.h"
 #include "battle/btl_result.h"
 #include "battle/btl_setup.h"
@@ -470,4 +471,80 @@ u32 Gen5_PortTrainerPrizeBase(u32 trainerId)
 {
     (void)trainerId;
     return sPrizeBase;
+}
+
+// The summary screen (BW2's overlay 207) on the same systems: a proc of its own in place of the battle's
+static PStatusParam sSummaryParam;
+static PokeParty *sSummaryParty;
+static BOOL sSummaryRunning;
+
+int Gen5_SummaryBegin(const Gen5Summary *summary, const char *gen5Dir)
+{
+    if (sRunning || !Start(gen5Dir) || summary->partyCount < 1) {
+        return FALSE;
+    }
+    GFL_HeapCreateChild(HEAPID_USER, HEAPID_PORT_BATTLE, HEAP_PORT_BATTLE_SIZE);
+    sBattleBlockCount = 0;
+
+    PlayerInfo *info = Keep(PlayerInfo_Create(HEAPID_PORT_BATTLE));
+    copyTrainerName(info, summary->player.name);
+    setIDAsUInt(info, summary->player.id);
+    setTrainerGender(info, summary->player.gender);
+    PlayerInfo_SetVersion(info, VERSION_PLATINUM);
+    Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
+    Config_SetTextSpeed(config, 1);
+    Config_SetTextSpeed(&getTrainerDataBlkAddress(SaveControl_GetInstance())->config, 1);
+    sSummaryParty = NewParty(summary->party, summary->partyCount);
+    Gen5_SetBattleGameData(sSummaryParty, info, config, NULL, NULL, NULL, NULL);
+
+    memset(&sSummaryParam, 0, sizeof(sSummaryParam));
+    sSummaryParam.party = sSummaryParty;
+    sSummaryParam.dataType = PSTATUS_DATA_PARTY;
+    sSummaryParam.partyCount = summary->partyCount;
+    sSummaryParam.partyIndex = summary->index;
+    sSummaryParam.trainerData = getTrainerDataBlkAddress(SaveControl_GetInstance());
+    sSummaryParam.gameData = Gen5_GetGameData();
+    sSummaryParam.isNationalDex = TRUE;
+    sSummaryParam.fromFieldMenu = FALSE;
+    sSummaryParam.page = PSTATUS_PAGE_INFO;
+    sSummaryParam.result = PSTATUS_RESULT_BACK;
+    if (summary->mode == GEN5_SUMMARY_FORGET_MOVE) {
+        sSummaryParam.mode = PSTATUS_MODE_FORGET_MOVE;
+        sSummaryParam.move = summary->move;
+        sSummaryParam.page = PSTATUS_PAGE_SKILL;
+    }
+    NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);
+    Gen5_SoundBattleBegin();
+    GCTX_ProcMgrQueueProc(OVERLAY_NONE, &PSTATUS_PROC_FUNCTIONS, &sSummaryParam);
+    sRunning = TRUE;
+    sSummaryRunning = TRUE;
+    printf("Gen 5: the summary screen, %d Pokémon, from %d\n", summary->partyCount, summary->index);
+    return TRUE;
+}
+
+enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary)
+{
+    if (!sSummaryRunning) {
+        return GEN5_SUMMARY_FAILED;
+    }
+    sSummaryRunning = FALSE;
+    Gen5_SoundBattleEnd();
+    summary->index = sSummaryParam.partyIndex;
+    summary->slot = sSummaryParam.slot;
+    printf("Gen 5: the summary screen ended (result %d, Pokémon %d, slot %d)\n", sSummaryParam.result,
+        summary->index, summary->slot);
+    const u8 result = sSummaryParam.result;
+    sSummaryParty = NULL;
+    while (sBattleBlockCount > 0) {
+        GFL_HeapFree(sBattleBlocks[--sBattleBlockCount]);
+    }
+    GFL_HeapDelete(HEAPID_PORT_BATTLE);
+    switch (result) {
+    case PSTATUS_RESULT_FORGET:
+        return GEN5_SUMMARY_FORGET;
+    case PSTATUS_RESULT_CLOSE:
+        return GEN5_SUMMARY_CLOSE;
+    default:
+        return GEN5_SUMMARY_BACK;
+    }
 }

@@ -1016,7 +1016,7 @@ pokeplatinum_c = files(
 if(build_target != 'arm')
 # Gen 5 battles (teton-dev fork): the Black 2 / White 2 ROM's import, with the Gen 5 code (-Dpokebw2)
 if get_option('pokebw2') != ''
-pokeplatinum_c += files('port/gen5_rom.cpp', 'port/gen5_battle.c')
+pokeplatinum_c += files('port/gen5_rom.cpp', 'port/gen5_battle.c', 'port/gen5_summary.c')
 endif
 pokeplatinum_c += files(
     'port/charcode_convert.c',

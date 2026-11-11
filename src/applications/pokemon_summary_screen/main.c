@@ -17,6 +17,9 @@
 #include "applications/pokemon_summary_screen/sprites.h"
 #include "applications/pokemon_summary_screen/subscreen.h"
 #include "applications/pokemon_summary_screen/window.h"
+#ifdef GEN5_BATTLES
+#include "port/gen5_summary.h"
+#endif
 
 #include "bg_window.h"
 #include "font.h"
@@ -190,12 +193,26 @@ static u8 HideRibbonInfo(PokemonSummaryScreen *summaryScreen);
 static void ChangeSelectedRibbon(PokemonSummaryScreen *summaryScreen, s8 delta);
 static int TryFeedPoffin(PokemonSummaryScreen *summaryScreen);
 
+#ifdef GEN5_BATTLES
+// Settings > Gameplay > Gen 5 screens: BW2's summary screen runs in place of this one (port/gen5_summary.c)
+static int PortSummary_Init(ApplicationManager *appMan, int *state);
+static int PortSummary_Main(ApplicationManager *appMan, int *state);
+static int PortSummary_Exit(ApplicationManager *appMan, int *state);
+
+const ApplicationManagerTemplate gPokemonSummaryScreenApp = {
+    PortSummary_Init,
+    PortSummary_Main,
+    PortSummary_Exit,
+    FS_OVERLAY_ID_NONE
+};
+#else
 const ApplicationManagerTemplate gPokemonSummaryScreenApp = {
     PokemonSummaryScreen_Init,
     PokemonSummaryScreen_Main,
     PokemonSummaryScreen_Exit,
     FS_OVERLAY_ID_NONE
 };
+#endif
 
 BOOL PokemonSummaryScreen_ShowContestData(SaveData *saveData)
 {
@@ -2222,3 +2239,28 @@ u32 PokemonSummaryScreen_StatusIconAnimIdx(Pokemon *mon)
 
     return SUMMARY_CONDITION_NONE;
 }
+
+#ifdef GEN5_BATTLES
+static int PortSummary_Init(ApplicationManager *appMan, int *state)
+{
+    // A frame of the Gen 5 screen runs in Main; Platinum's Init has several states and is called until it is done
+    if (*state == 0 && Gen5Summary_Begin(appMan)) {
+        return TRUE;
+    }
+    return Gen5Summary_IsActive() ? TRUE : PokemonSummaryScreen_Init(appMan, state);
+}
+
+static int PortSummary_Main(ApplicationManager *appMan, int *state)
+{
+    return Gen5Summary_IsActive() ? Gen5Summary_Main(appMan) : PokemonSummaryScreen_Main(appMan, state);
+}
+
+static int PortSummary_Exit(ApplicationManager *appMan, int *state)
+{
+    if (Gen5Summary_IsActive()) {
+        Gen5Summary_Exit(appMan);
+        return TRUE;
+    }
+    return PokemonSummaryScreen_Exit(appMan, state);
+}
+#endif
