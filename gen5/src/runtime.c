@@ -288,9 +288,9 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         }
         GFL_StrBufLoadString(trainer->name, src->name);
         if (src->hasArt) {
-            Gen5_SetTrainerArt(trainer->trainerClass, src->artTexture, src->artPalette, src->artWidth, src->artHeight);
+            Gen5_SetTrainerArt(trainer->trainerClass, src);
         } else {
-            Gen5_SetTrainerArt(0, NULL, NULL, 0, 0);
+            Gen5_SetTrainerArt(0, NULL);
         }
         sSetup->trainers[1] = trainer;
         // Platinum's class name in BW2's messages, in place of the class's
@@ -418,8 +418,16 @@ int Gen5_BattleFrame(void)
     return sRunning;
 }
 
+static u32 sArtTicks;
+
+u32 Gen5_ArtTicks(void)
+{
+    return sArtTicks;
+}
+
 void Gen5_BattleVBlank(void)
 {
+    sArtTicks++;
     // BW2's VBlank interrupt and the work after it (GFLAppIRQVBlank, GameUpdateVBlank). libntr's VCOUNT stays 0; on
     // the DS it reads 192 when the VBlank starts, and BW2's VBlank tasks check it (the Pokémon sprites' loads wait for
     // lines 192 to 200)

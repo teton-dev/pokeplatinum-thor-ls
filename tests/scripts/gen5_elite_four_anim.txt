@@ -1,0 +1,85 @@
+# Gen 5 battles: the Elite Four's Platinum sprites animate (Platinum's own sequence, once, ending on its last pose) in
+# BW2's engine. Edit the trainer to 261 (Aaron), 262 (Bertha), 263 (Flint) or 264 (Lucian), from the turtwig fixture;
+# the shots follow the introduction 8 frames apart (a trainer's art holds its last pose when it slides in again).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_elite_four_anim.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+trainer 264
+until battle
+shot t00
+wait 8
+shot t01
+wait 8
+shot t02
+wait 8
+shot t03
+wait 8
+shot t04
+wait 8
+shot t05
+wait 8
+shot t06
+wait 8
+shot t07
+wait 8
+shot t08
+wait 8
+shot t09
+wait 8
+shot t10
+wait 8
+shot t11
+wait 8
+shot t12
+wait 8
+shot t13
+wait 8
+shot t14
+wait 8
+shot t15
+wait 8
+shot t16
+wait 8
+shot t17
+wait 8
+shot t18
+wait 8
+shot t19
+wait 8
+shot t20
+wait 8
+shot t21
+wait 8
+shot t22
+wait 8
+shot t23
+wait 8
+shot t24
+wait 8
+shot t25
+wait 8
+shot t26
+wait 8
+shot t27
+wait 8
+shot t28
+wait 8
+shot t29
+wait 8
+shot t30
+wait 8
+shot t31
+wait 8
+shot t32
+wait 8
+shot t33
+wait 8
+shot t34
+wait 8
+shot t35
+wait 8
+until command timeout 6000
+exit 0
