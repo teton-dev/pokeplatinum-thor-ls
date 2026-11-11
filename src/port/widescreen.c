@@ -243,7 +243,8 @@ void Widescreen_Update(void)
     if (!wide && WideApplication(&edgeBgs, &edgeMirrorBgs)) {
         wide = TRUE;
     }
-    SIM_SetWidescreenSceneOptions(FALSE, wideBgs);
+    // Platinum's battle draws its Pokemon as 3D quads for a 4:3 screen: narrowed so they keep their shape
+    SIM_SetWidescreenSceneOptions(wideBattle, wideBgs);
     SIM_SetWidescreenObjWrap(objWrap);
     SIM_SetWidescreenBgMirror(mirrorBgs);
     // BW2's text box (BG1) reaches the edges of the wide screen; its text stays in the middle
