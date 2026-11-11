@@ -671,3 +671,11 @@ The parallel sessions' branches were merged into one (`gen5-battles-m5`), after 
   first-battle crit suppression, the Flamethrower stream, the stat raise/lower particles on the Thor, the 30 Hz
   against 60 Hz timing assumption, the Summary's ribbons and markings, nothing from the Summary, widescreen or E4
   work run on the Thor yet.
+
+Owner's decisions on the open items (2026-11-11):
+- Twinleaf is 16:9 on the Thor now (no longer open).
+- The Pokémon Center healing glitch can wait.
+- Barry's first-battle crit suppression: not needed; he may crit.
+- Flamethrower's stream is still bugged (open).
+- The stat raise/lower particles look mostly fine; slightly off, probably alpha or transparency (low priority).
+- Summary ribbons can be ignored; turn Gen 5 screens off to see them.
