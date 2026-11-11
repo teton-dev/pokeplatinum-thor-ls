@@ -1,0 +1,20 @@
+--- a/src/ov165/pokelist.c
++++ b/src/ov165/pokelist.c
+@@ -1,5 +1,4 @@
+ #include "app/pokelist.h"
+-#include "dsprot/dsprot.h"
+ #include "gfl/heap.h"
+ #include "gfl/proc.h"
+ 
+@@ -79,8 +78,9 @@
+     GFL_ProcReleaseSubsystem(proc);
+     heapId = HEAPID_POKELIST;
+     result = TRUE;
+-    DSPROT_CHECKED_RUN(ret, DSProt_CallRunChecks, DSProt_CallCrash, PokeListProc_DeleteHeap, &heapId, &result);
+-    return *ret;
++    // No DS Protect (an anti-piracy check): the heap is deleted directly
++    PokeListProc_DeleteHeap(&heapId, &result);
++    return result;
+ }
+ 
+ static BOOL PokeListProc_Main(GameProc *proc, u32 *state, void *param, void *work) {

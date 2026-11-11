@@ -1,3 +1,6 @@
+#ifdef GEN5_BATTLES
+#include "port/gen5_party.h"
+#endif
 #include "applications/party_menu/main.h"
 
 #include <nitro.h>
@@ -181,12 +184,27 @@ u8 PartyMenu_CheckBattleCastleEligibility(PartyMenuApplication *application, u8 
 static u8 CheckCanUseHPTransferFieldMove(PartyMenuApplication *application);
 static BOOL PartyMenu_HPTransferUpdateHP(PartyMenuApplication *application, u8 param1, s8 param2);
 
+#ifdef GEN5_BATTLES
+// Settings > Gameplay > Gen 5 screens: BW2's party list runs in place of this one for the modes it can do
+// (port/gen5_party.c)
+static BOOL PortParty_Init(ApplicationManager *appMan, int *state);
+static BOOL PortParty_Main(ApplicationManager *appMan, int *state);
+static BOOL PortParty_Exit(ApplicationManager *appMan, int *state);
+
+const ApplicationManagerTemplate gPokemonPartyAppTemplate = {
+    .init = PortParty_Init,
+    .main = PortParty_Main,
+    .exit = PortParty_Exit,
+    .overlayID = FS_OVERLAY_ID_NONE
+};
+#else
 const ApplicationManagerTemplate gPokemonPartyAppTemplate = {
     .init = PartyMenu_Init,
     .main = PartyMenu_Main,
     .exit = PartyMenu_Exit,
     .overlayID = FS_OVERLAY_ID_NONE
 };
+#endif
 
 // clang-format off
 static const MemberPanelTemplate sMemberPanelTemplates[2][MAX_PARTY_SIZE] = {
@@ -3118,3 +3136,27 @@ void PartyMenu_TeardownFormChangeAnim(PartyMenuApplication *application)
 {
     Overlay_UnloadByID(FS_OVERLAY_ID(party_menu_form_change));
 }
+
+#ifdef GEN5_BATTLES
+static BOOL PortParty_Init(ApplicationManager *appMan, int *state)
+{
+    if (*state == 0 && Gen5Party_Begin(appMan)) {
+        return TRUE;
+    }
+    return Gen5Party_IsActive() ? TRUE : PartyMenu_Init(appMan, state);
+}
+
+static BOOL PortParty_Main(ApplicationManager *appMan, int *state)
+{
+    return Gen5Party_IsActive() ? Gen5Party_Main(appMan) : PartyMenu_Main(appMan, state);
+}
+
+static BOOL PortParty_Exit(ApplicationManager *appMan, int *state)
+{
+    if (Gen5Party_IsActive()) {
+        Gen5Party_Exit(appMan);
+        return TRUE;
+    }
+    return PartyMenu_Exit(appMan, state);
+}
+#endif
