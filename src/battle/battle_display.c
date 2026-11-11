@@ -1,8 +1,16 @@
 #include "battle/battle_display.h"
 
 #ifdef SDK_PORT
+// A double battle's pairs stand a little further apart on a wide screen
+#define BATTLE_MON_SHOW_X(type) (gBattlerEncounterX[type][0] + Widescreen_BattleSpreadX(type))
+#else
+#define BATTLE_MON_SHOW_X(type) gBattlerEncounterX[type][0]
+#endif
+
+#ifdef SDK_PORT
 #include "port/gear_data.h"
 #include "port/test_script.h"
+#include "port/widescreen.h"
 #endif
 
 #include <nitro.h>
@@ -291,6 +299,9 @@ void BattleDisplay_InitTaskSetEncounter(BattleSystem *battleSys, BattlerData *ba
         monEncounterData->targetPos = spriteYCenter;
     } else {
         monEncounterData->targetPos = gBattlerEncounterX[battlerData->battlerType][0];
+#ifdef SDK_PORT
+        monEncounterData->targetPos += Widescreen_BattleSpreadX(battlerData->battlerType);
+#endif
     }
 
     monEncounterData->battleSys = battleSys;
@@ -2051,7 +2062,7 @@ static void Task_ShowEncounter(SysTask *task, void *data)
             monShowData->battlerData->monSprite = BattleDisplay_NewPokemonSprite(monShowData->battleSys,
                 monSpriteMan,
                 &monShowData->spriteTemplate,
-                gBattlerEncounterX[monShowData->battlerType][0],
+                BATTLE_MON_SHOW_X(monShowData->battlerType),
                 gEncounterCoords[monShowData->battlerType][1],
                 gEncounterCoords[monShowData->battlerType][2],
                 monShowData->yOffset,
@@ -2275,7 +2286,7 @@ static void Task_ShowPokemon(SysTask *task, void *data)
         monShowData->battlerData->monSprite = BattleDisplay_NewPokemonSprite(monShowData->battleSys,
             monSpriteMan,
             &monShowData->spriteTemplate,
-            gBattlerEncounterX[monShowData->battlerType][0],
+            BATTLE_MON_SHOW_X(monShowData->battlerType),
             gEncounterCoords[monShowData->battlerType][1],
             gEncounterCoords[monShowData->battlerType][2],
             monShowData->yOffset,
