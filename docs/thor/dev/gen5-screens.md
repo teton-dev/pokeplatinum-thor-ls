@@ -131,9 +131,18 @@ Done on the desktop (`tests/scripts/gen5_summary.txt`, `gen5_party.txt`, widescr
   QUIT), and its summary. The party's new order after switching is mapped back by PID and OT ID and applied to
   Platinum's party with `Party_SwapSlots`. The stand-ins the list reads are zero blocks (mailbox, shortcut, trainer
   card, Kyurem fusion) and an empty bag; `gen5/src/field.c` answers the field, network and musical calls.
-  **Not yet:** field moves (BW2's list shows them from `PlayerActionPossibilities`, which is empty: none listed; Platinum's
-  start menu would need the choice mapped to its `PARTY_MENU_EXIT_CODE_*`), items from the bag and giving items
-  (the bag is empty), the other modes (items, TMs, evolution items, daycare, trade, contests, Frontier).
+  **Field moves (2026-11-10):** the list's FIELD MOVES entry lists the Pokemon's own field moves, as in BW2. Whether one
+  can be used comes from **Platinum's own check** (`FieldMove_GetTaskOrError(FIELD_MOVE_ERROR, ...)` with the start menu's
+  `FieldMoveContext`; its answers 0 to 4 are numbered as BW2's `POKELIST_HM_CHECK_*`), through `Gen5HMCheck`
+  (`gen5/api/gen5.h`) and `CheckAllowHMEvent` (`gen5/src/field.c`), so BW2's messages show for each refusal ("This can't
+  be used until a new Badge is obtained" was seen for Cut with no badge: `gen5_party_moves.txt`). Rock Smash, Defog and
+  Rock Climb, which BW2's list doesn't know, are added by a patch of `plist_sys.c` (results 24 to 26). When one is
+  allowed the list ends with it, and `Gen5Party_Exit` hands Platinum's start menu `PARTY_MENU_EXIT_CODE_CUT + move` and
+  the slot, which then runs the move as for Platinum's own list. Not seen run to the end: the test command has no start
+  menu behind it, and Dive (BW2 only) is always refused. **Gap: "Field moves without HMs"** (`hm_free`, on by default)
+  lists a Pokemon's moves only from what it knows in BW2's list; the Pokemon that could learn the move don't get it.
+  **Not yet:** items from the bag and giving items (the bag is empty), the other modes (items, TMs, evolution items,
+  daycare, trade, contests, Frontier).
 - **Widescreen** (`tests/scripts/widescreen_gen5_summary.txt`, `widescreen_gen5_party.txt`, `widescreen_pc.txt`): BW2's
   screens draw their top screen with the **sub** engine, which libntr's wide scene didn't support (it needed the main
   engine on top). `libntr_wide_subtop.patch` lets a wide scene have the sub engine on top (2D only; the 3D stays 4:3 on

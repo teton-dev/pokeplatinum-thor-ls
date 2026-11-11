@@ -1,0 +1,24 @@
+--- a/src/ov165/plist_sys.c
++++ b/src/ov165/plist_sys.c
+@@ -146,6 +146,8 @@
+ static const u16 sHMMoves[] = {
+     MOVE_CUT, MOVE_SURF,        MOVE_WATERFALL, MOVE_STRENGTH, MOVE_FLY,        MOVE_FLASH,      MOVE_TELEPORT,
+     MOVE_DIG, MOVE_SWEET_SCENT, MOVE_CHATTER,   MOVE_DIVE,     MOVE_MILK_DRINK, MOVE_SOFTBOILED,
++    // Platinum's moves BW2 does not list (the port's results 24 to 26)
++    MOVE_ROCK_SMASH, MOVE_DEFOG, MOVE_ROCK_CLIMB,
+ };
+ 
+ BOOL PokeList_Init(PokeListWork *wk) {
+@@ -2540,6 +2542,12 @@
+         return POKELIST_RESULT_MILK_DRINK;
+     case MOVE_SOFTBOILED:
+         return POKELIST_RESULT_SOFTBOILED;
++    case MOVE_ROCK_SMASH:
++        return 24;
++    case MOVE_DEFOG:
++        return 25;
++    case MOVE_ROCK_CLIMB:
++        return 26;
+     }
+     return POKELIST_RESULT_DONE;
+ }

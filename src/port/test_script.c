@@ -69,6 +69,7 @@ enum TestOp {
     OP_LEADER,
     OP_ITEM,
     OP_GIVE,
+    OP_TEACH,
     OP_PARTY,
     OP_TRAINER,
     OP_SHOT,
@@ -295,6 +296,12 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
     } else if ((strcmp(words[0], "item") == 0 || strcmp(words[0], "give") == 0) && count >= 3) {
         // item ITEM COUNT: into the bag; give SPECIES LEVEL: a new Pokémon into the party (port/gui_createmon_utils)
         command->op = strcmp(words[0], "item") == 0 ? OP_ITEM : OP_GIVE;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "teach") == 0 && count >= 3) {
+        // teach MOVE SLOT: the party's first Pokemon knows MOVE in move slot SLOT (a field move to try in the party)
+        command->op = OP_TEACH;
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
         return TRUE;
@@ -755,6 +762,7 @@ static u16 Step(void)
                 sub_0203D30C(fieldSystem, NULL);
             } else if (command->x == 8) {
                 static FieldMoveContext sMoveContext;
+                FieldMoves_SetUsableMoves(fieldSystem, &sMoveContext);
                 FieldSystem_OpenPartyMenu(fieldSystem, &sMoveContext, 0);
             } else if (command->x == 7) {
                 static PokemonStorageSession sPcSession;
@@ -846,6 +854,16 @@ static u16 Step(void)
             printf("[test] gave species %d at level %d\n", command->x, command->y);
             Next();
             continue;
+        case OP_TEACH: {
+            Pokemon *mon = Party_GetPokemonBySlotIndex(SaveData_GetParty(SaveData_Ptr()), 0);
+            u32 move = command->x;
+            u32 pp = 20;
+            Pokemon_SetValue(mon, MON_DATA_MOVE1 + command->y, &move);
+            Pokemon_SetValue(mon, MON_DATA_MOVE1_PP + command->y, &pp);
+            printf("[test] taught move %d in slot %d\n", command->x, command->y);
+            Next();
+            continue;
+        }
         case OP_PARTY: {
             SaveData *save = SaveData_Ptr();
             Party *party = SaveData_GetParty(save);

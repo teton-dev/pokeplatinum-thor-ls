@@ -135,10 +135,12 @@ u32 getWifiIconNarcIdxNum(void) {
 #include "gfl/net_sync.h"
 #include "save/trainer_card.h"
 
+// Whether a field move can be used where the player stands: Platinum's answer, through the party list's caller (runtime.c)
+int Gen5_HMCheck(unsigned kind);
+
 u32 CheckAllowHMEvent(u32 kind, PlayerActionPossibilities *context) {
-    (void)kind;
     (void)context;
-    return FALSE;
+    return Gen5_HMCheck(kind);
 }
 
 BOOL MusicalSystem_CanJoin(PartyPkm *pkm) {
