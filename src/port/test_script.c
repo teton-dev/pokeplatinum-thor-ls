@@ -328,7 +328,7 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         // with B, as the player would)
         command->op = OP_APP;
         command->x = strcmp(words[1], "bag") == 0 ? 1 : strcmp(words[1], "journal") == 0 ? 2
-            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : strcmp(words[1], "summary") == 0 ? 6 : strcmp(words[1], "pc") == 0 ? 7 : 0;
+            : strcmp(words[1], "townmap") == 0 ? 3 : strcmp(words[1], "flymap") == 0 ? 4 : strcmp(words[1], "party") == 0 ? 5 : strcmp(words[1], "summary") == 0 ? 6 : strcmp(words[1], "pc") == 0 ? 7 : strcmp(words[1], "party-field") == 0 ? 8 : 0;
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return command->x != 0;
@@ -753,6 +753,9 @@ static u16 Step(void)
                 FieldSystem_OpenBag(fieldSystem, &sItemUseCtx);
             } else if (command->x == 2) {
                 sub_0203D30C(fieldSystem, NULL);
+            } else if (command->x == 8) {
+                static FieldMoveContext sMoveContext;
+                FieldSystem_OpenPartyMenu(fieldSystem, &sMoveContext, 0);
             } else if (command->x == 7) {
                 static PokemonStorageSession sPcSession;
                 sPcSession.saveData = fieldSystem->saveData;

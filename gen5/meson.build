@@ -72,6 +72,19 @@ gen5_sources = [
     'src/ov169/condition_effects.c',
     'src/ov169/field_handlers.c',
     # The trainer AI (overlay 170)
+    # The party list (overlay 165; pokelist.c is patched, below)
+    'src/ov165/plist_battle.c',
+    'src/ov165/plist_demo.c',
+    'src/ov165/plist_item.c',
+    'src/ov165/plist_menu.c',
+    'src/ov165/plist_message.c',
+    'src/ov165/plist_plate.c',
+    'src/ov165/plist_sys.c',
+    'src/ov165/status_rcv.c',
+    'src/system/app_keycursor.c',
+    'src/system/app_printsys_common.c',
+    'src/system/app_taskmenu.c',
+    'src/system/time_icon.c',
     # The Pokémon summary screen (overlay 207)
     'src/ov207/p_sta_info.c',
     'src/ov207/p_sta_oam.c',
@@ -237,6 +250,7 @@ gen5_patched = [
     'src/gfl/g3d_system.c',           # NitroSystem's name for a G3D file's signature as a u32
     'src/gfl/key.c',                  # The keys the game read (runtime.c)
     'src/gfl/touchpanel.c',           # The touch the game read (runtime.c)
+    'src/ov165/pokelist.c',            # No DS Protect
     'src/ov168/btlv_effvm.c',         # The SDK's names of a matrix's translation; particle work for 64 bits
     'src/system/mcss.c',              # NitroSystem's names of a node's position; texture coordinates as commands;
                                       # the player's own back sprite (src/player_back.c)

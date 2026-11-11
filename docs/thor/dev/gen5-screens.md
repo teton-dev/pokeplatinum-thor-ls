@@ -4,11 +4,11 @@ Working notes for replacing Platinum's Pokémon Summary, PC (box) and party scre
 the way the Gen 5 battles replace Platinum's battles (`gen5-battles.md`: read it first for the `gen5/` layer, the
 renamed `bw2_` symbols, the ROM import and widescreen). Fork-only for the same reason (pokebw2 is GPLv3).
 
-The owner's decisions: **the Summary first, then the PC, then the party**; Gen 4's PC and Summary get **no widescreen
-work of their own**: the Gen 5 screens are how they get a wide-capable UI (BW2's 256x192 screens, centred in the 16:9
-top panel with their backgrounds continued across the sides, as the Gen 5 battle and the party screen's panels are).
-Setting: **Settings > Gameplay > Gen 5 screens** (`gen5Screens`, off by default, offered once a BW2 ROM is imported:
-one switch for all three screens as they arrive; while one isn't done yet the game's own opens).
+The owner's decisions (2026-11-10): **the Summary and the party menu are replaced by BW2's, widescreen supported**; the
+**PC is not replaced**: Platinum's own PC box screen gets widescreen by extending its edges (`WideApplication`,
+below), so the Gen 5 PC plan is dropped (the notes on it below stay as the reasoning, in case it comes back).
+Setting: **Settings > Gameplay > Gen 5 screens** (`gen5Screens`, off by default, offered once a BW2 ROM is imported; one
+switch for both screens: where BW2's list can't do a request yet, Platinum's own opens).
 
 ## Where BW2's screens are (pokebw2, `src/ovNNN`)
 
@@ -114,17 +114,32 @@ the most 2D BG detail (the page background); look at it on the Thor first.
 
 ## Summary: where it stands (2026-11-10)
 
-Built: `gen5/meson.build` has overlay 207's eight files and `pokerus.c`; `gen5/src/game_data.c` the four `GameData`
-calls; `gen5/src/runtime.c` `Gen5_SummaryBegin`/`Gen5_SummaryEnd` (`gen5/api/gen5.h`'s `Gen5Summary`: the party, the
-index, the mode, the result), running `PSTATUS_PROC_FUNCTIONS` on the battle's systems, frame and VBlank
-(`Gen5_BattleFrame`, `Gen5_BattleVBlank`); `src/port/gen5_summary.c` and the hook in `main.c`; the setting
-(`gen5Screens`, `sim_config_prj`, `gui_settings.cpp`); the test command `gen5-screens on|off` and `app summary`;
-`tests/scripts/gen5_summary.txt`.
+Done on the desktop (`tests/scripts/gen5_summary.txt`, `gen5_party.txt`, widescreen ones below):
 
-Taken: a Pokémon or a party to look at, and the move-forgetting choice. Left to Platinum's: Poffin feeding, the contest
-condition page's mode, box Pokémon (until the PC is done), locked moves.
-
-Result (desktop, `gen5_summary.txt` passes): BW2's Summary opens from `app summary` and draws correctly: the info page (nature, memo, dex number, OT, ID, experience, ball, HP/EXP bars) and, with RIGHT, the stats and moves pages (Tackle 35/35 PP, Overgrow's text, the HP bar) from Platinum's Turtwig, in BW2's English text. **Known problem: the Pokémon's own picture (MCSS sprite, bottom right) is garbled** (green noise in the right shape); the battle's sprites are fine, so it is how the Summary loads the sprite (a different archive or texture layout in `ARCID_P_STATUS`/pokegra: next thing to look at). Not yet played through: the party menu's SUMMARY entry, the evolution's forget-move choice, B/X leaving.
-
-Not done: markings written back, widescreen, the Thor, ribbons from Platinum's data (Platinum's ribbon bits aren't
-mapped to BW2's), Platinum's contest and condition data, the Pokémon's cry on opening (BW2's, if the sound works).
+- **Summary:** BW2's overlay 207 (eight files and `pokerus.c`; `gen5/src/game_data.c` has its four `GameData` calls) runs
+  from `Gen5_SummaryBegin`/`Gen5_SummaryEnd` (`gen5/src/runtime.c`) through the hook in `gPokemonSummaryScreenApp`
+  (`src/applications/pokemon_summary_screen/main.c`, `src/port/gen5_summary.c`), for a Pokemon or party to look at and
+  for the move-forgetting choice. Poffin, the contest condition mode and box Pokemon stay Platinum's. The Pokemon's
+  picture was noise at first: libntr read the texture bank D slot from bank A (`libntr_tex_bank_d.patch`, which every
+  BW2 screen that sets `GX_VRAM_TEX_0_D` needed).
+- **Party:** BW2's overlay 165 (the nine `plist_*`/`status_rcv` files, `pokelist.c` without DS Protect, plus
+  `app_taskmenu`, `app_keycursor`, `app_printsys_common`, `time_icon`) runs through `Gen5_PartyBegin`/`Gen5_PartyEnd`
+  (`src/port/gen5_party.c`, the hook in `gPokemonPartyAppTemplate`) for the **start menu's party (field mode) and
+  "choose a Pokemon" (select without a prompt)**, in the Gen 4 `PartyMenu` handed to Platinum as always. As BW2's own
+  field does (`EventPokeList_Callback`), `Gen5_BattleFrame` runs the summary when the list asks for one and the list
+  again after it, so the whole chain is in the library. Checked: the list, a Pokemon's menu (SUMMARY, SWITCH, ITEM,
+  QUIT), and its summary. The party's new order after switching is mapped back by PID and OT ID and applied to
+  Platinum's party with `Party_SwapSlots`. The stand-ins the list reads are zero blocks (mailbox, shortcut, trainer
+  card, Kyurem fusion) and an empty bag; `gen5/src/field.c` answers the field, network and musical calls.
+  **Not yet:** field moves (BW2's list shows them from `PlayerActionPossibilities`, which is empty: none listed; Platinum's
+  start menu would need the choice mapped to its `PARTY_MENU_EXIT_CODE_*`), items from the bag and giving items
+  (the bag is empty), the other modes (items, TMs, evolution items, daycare, trade, contests, Frontier).
+- **Widescreen** (`tests/scripts/widescreen_gen5_summary.txt`, `widescreen_gen5_party.txt`, `widescreen_pc.txt`): BW2's
+  screens draw their top screen with the **sub** engine, which libntr's wide scene didn't support (it needed the main
+  engine on top). `libntr_wide_subtop.patch` lets a wide scene have the sub engine on top (2D only; the 3D stays 4:3 on
+  the bottom screen), with the edge extension, mirror and OBJ options. `WideApplication` (`src/port/widescreen.c`)
+  lists the Summary (both versions) and the PC, and keeps their 3D sprites in the 4:3 middle (`scale3D`: the PC's big
+  Pokemon was shifted left of its panel). The BW2 party's grid backdrop is mirrored across the sides (seamless); the
+  Summary's frame is extended, which reads well on the desktop. **Platinum's PC** (`BoxAppMan_Init`) is wide the same
+  way: its layers' edges continue, its panels and Pokemon stay in the middle.
+- Not done: markings written back from the Summary, Platinum's ribbons and contest data in BW2's Summary, the Thor.

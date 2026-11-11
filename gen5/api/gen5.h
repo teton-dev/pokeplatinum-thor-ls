@@ -179,6 +179,33 @@ typedef struct Gen5Summary {
     int result; // enum Gen5SummaryResult
 } Gen5Summary;
 
+// The party list (BW2's overlay 165): the player's party, to look at (and reorder, and open the summary of) or to pick
+// a Pokémon from. Runs on the same frame calls as a battle; the summary screen is run from inside it, as BW2's field
+// does. Gen5_PartyEnd gives what was chosen and the party's new order.
+enum Gen5PartyMode {
+    GEN5_PARTY_FIELD, // From the start menu: look at the party, open a Pokémon's summary, switch two
+    GEN5_PARTY_SELECT, // Pick one Pokémon
+};
+
+enum Gen5PartyResult {
+    GEN5_PARTY_CANCEL,
+    GEN5_PARTY_PICKED,
+    GEN5_PARTY_FAILED,
+};
+
+typedef struct Gen5Party {
+    Gen5Player player;
+    Gen5Pokemon party[GEN5_PARTY_MAX];
+    int partyCount;
+    int mode; // enum Gen5PartyMode
+    int cursor; // The Pokémon the cursor starts on
+    int picked; // The slot picked, in the new order
+    int order[GEN5_PARTY_MAX]; // The new order: each slot's index in the party given
+} Gen5Party;
+
+int Gen5_PartyBegin(const Gen5Party *party, const char *gen5Dir);
+enum Gen5PartyResult Gen5_PartyEnd(Gen5Party *party);
+
 int Gen5_SummaryBegin(const Gen5Summary *summary, const char *gen5Dir);
 enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary);
 

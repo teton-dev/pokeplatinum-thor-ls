@@ -8,6 +8,8 @@
 #include <string.h>
 
 #include "app/p_status.h"
+#include "app/pokelist.h"
+#include "pml/mail.h"
 #include "battle/battle_proc.h"
 #include "battle/btl_result.h"
 #include "battle/btl_setup.h"
@@ -70,6 +72,7 @@ static u32 sPrizeBase;
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
+static BOOL sPartyRunning;
 
 void Gen5_MemInit(void)
 {
@@ -376,6 +379,8 @@ void Gen5_SetWidescreen(float ratio)
     Gen5_G3DReproject();
 }
 
+static BOOL PartyNext(void);
+
 int Gen5_BattleFrame(void)
 {
     if (!sRunning) {
@@ -384,7 +389,10 @@ int Gen5_BattleFrame(void)
     // BW2's main loop: GFLAppUpdate and GameUpdate, then the 3D's swap. Its sound calls use its own sound archive
     Gen5_SoundEnter();
     GCTX_HIDUpdate();
-    const u32 state = GCTX_ProcMgrUpdate();
+    u32 state = GCTX_ProcMgrUpdate();
+    if (state == PROCMGR_DONE && sPartyRunning && PartyNext()) {
+        state = PROCMGR_RUNNING;
+    }
     BrightnessController_Update();
     GFL_WipeMain();
     Gen5_SoundUpdate();
@@ -535,4 +543,132 @@ enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary)
     default:
         return GEN5_SUMMARY_BACK;
     }
+}
+
+// The party list: BW2's field runs its proc, then the summary screen when the list asks for one, then the list again
+// (system/field_event.c's EventPokeList_Callback), which Gen5_BattleFrame does here when the proc manager is done
+static PokeListParam sListParam;
+static PStatusParam sListSummary;
+static PokeParty *sListParty;
+static BagSave *sListBag;
+static BOOL sListInSummary;
+static u32 sListIdentity[GEN5_PARTY_MAX][2]; // Each Pokémon's PID and OT ID, to find it again in the new order
+static int sListCount;
+
+static BOOL PartyNext(void)
+{
+    if (!sListInSummary) {
+        if (sListParam.result != 1) {
+            return FALSE;
+        }
+        // A summary was asked for: the screen on the party, from the Pokémon asked for
+        memset(&sListSummary, 0, sizeof(sListSummary));
+        sListSummary.party = sListParty;
+        sListSummary.dataType = PSTATUS_DATA_PARTY;
+        sListSummary.partyCount = PokeParty_GetPkmCount(sListParty);
+        sListSummary.partyIndex = sListParam.index;
+        sListSummary.trainerData = sListParam.trainerData;
+        sListSummary.gameData = Gen5_GetGameData();
+        sListSummary.isNationalDex = TRUE;
+        sListSummary.page = PSTATUS_PAGE_INFO;
+        GCTX_ProcMgrQueueProc(OVERLAY_NONE, &PSTATUS_PROC_FUNCTIONS, &sListSummary);
+        sListInSummary = TRUE;
+        return TRUE;
+    }
+    // Back from the summary: the list again, on the Pokémon it ended on
+    sListInSummary = FALSE;
+    sListParam.index = sListSummary.partyIndex;
+    sListParam.result = 0;
+    GCTX_ProcMgrQueueProc(OVERLAY_NONE, &POKELIST_PROC_FUNCTIONS, &sListParam);
+    return TRUE;
+}
+
+int Gen5_PartyBegin(const Gen5Party *party, const char *gen5Dir)
+{
+    if (sRunning || !Start(gen5Dir) || party->partyCount < 1) {
+        return FALSE;
+    }
+    GFL_HeapCreateChild(HEAPID_USER, HEAPID_PORT_BATTLE, HEAP_PORT_BATTLE_SIZE);
+    sBattleBlockCount = 0;
+
+    PlayerInfo *info = Keep(PlayerInfo_Create(HEAPID_PORT_BATTLE));
+    copyTrainerName(info, party->player.name);
+    setIDAsUInt(info, party->player.id);
+    setTrainerGender(info, party->player.gender);
+    PlayerInfo_SetVersion(info, VERSION_PLATINUM);
+    Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
+    Config_SetTextSpeed(config, 1);
+    Config_SetTextSpeed(&getTrainerDataBlkAddress(SaveControl_GetInstance())->config, 1);
+    sListParty = NewParty(party->party, party->partyCount);
+    sListCount = party->partyCount;
+    for (int i = 0; i < sListCount; i++) {
+        sListIdentity[i][0] = party->party[i].personality;
+        sListIdentity[i][1] = party->party[i].otId;
+    }
+    sListBag = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, BagSave_GetBlockSize(), TRUE, __FILE__, __LINE__));
+    BagSave_Init(sListBag);
+    BagCursor *bagCursor = Keep(BagCursor_Create(HEAPID_PORT_BATTLE));
+    PokeDexSave *pokedex =
+        Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, getSizeofPokedexData(), TRUE, __FILE__, __LINE__));
+    initPokedex(pokedex);
+    Gen5_SetBattleGameData(sListParty, info, config, sListBag, bagCursor, pokedex, NULL);
+
+    // What PokeListParam_Setup (system/plist_data_setup.c) takes from BW2's game data; the blocks BW2's field has that
+    // the list only reads when the player does things this port doesn't offer are zeroed
+    memset(&sListParam, 0, sizeof(sListParam));
+    sListParam.mode = party->mode == GEN5_PARTY_SELECT ? POKELIST_MODE_SELECT : POKELIST_MODE_FIELD;
+    sListParam.party = sListParty;
+    sListParam.bag = sListBag;
+    sListParam.mailbox = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, MailBox_GetSize(), TRUE, __FILE__, __LINE__));
+    MailBox_Clear(sListParam.mailbox);
+    sListParam.trainerData = getTrainerDataBlkAddress(SaveControl_GetInstance());
+    sListParam.reshZek = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, 0x400, TRUE, __FILE__, __LINE__));
+    sListParam.pokedex = pokedex;
+    sListParam.shortcut = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, 0x400, TRUE, __FILE__, __LINE__));
+    sListParam.trainerCard = Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, 0x400, TRUE, __FILE__, __LINE__));
+    sListParam.playerInfo = info;
+    sListParam.index = party->cursor;
+    sListParam.result = 0;
+
+    NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);
+    Gen5_SoundBattleBegin();
+    GCTX_ProcMgrQueueProc(OVERLAY_NONE, &POKELIST_PROC_FUNCTIONS, &sListParam);
+    sRunning = TRUE;
+    sPartyRunning = TRUE;
+    sListInSummary = FALSE;
+    printf("Gen 5: the party list, %d Pokémon, mode %d\n", party->partyCount, party->mode);
+    return TRUE;
+}
+
+enum Gen5PartyResult Gen5_PartyEnd(Gen5Party *party)
+{
+    if (!sPartyRunning) {
+        return GEN5_PARTY_FAILED;
+    }
+    sPartyRunning = FALSE;
+    Gen5_SoundBattleEnd();
+    // The new order: each Pokémon of the list's party found among those given by its PID and OT ID
+    for (int i = 0; i < party->partyCount; i++) {
+        party->order[i] = i;
+        if (i < PokeParty_GetPkmCount(sListParty)) {
+            PartyPkm *pkm = PokeParty_GetPkm(sListParty, i);
+            const u32 pid = PokeParty_GetParam(pkm, PKM_PARAM_PID, NULL);
+            const u32 otId = PokeParty_GetParam(pkm, PKM_PARAM_ID, NULL);
+            for (int j = 0; j < sListCount; j++) {
+                if (sListIdentity[j][0] == pid && sListIdentity[j][1] == otId) {
+                    party->order[i] = j;
+                    break;
+                }
+            }
+        }
+    }
+    const s32 index = (s32)sListParam.index;
+    party->picked = index;
+    printf("Gen 5: the party list ended (result %lu, index %d)\n", (unsigned long)sListParam.result, (int)index);
+    sListParty = NULL;
+    while (sBattleBlockCount > 0) {
+        GFL_HeapFree(sBattleBlocks[--sBattleBlockCount]);
+    }
+    GFL_HeapDelete(HEAPID_PORT_BATTLE);
+    return index >= 0 && index < party->partyCount ? GEN5_PARTY_PICKED : GEN5_PARTY_CANCEL;
 }
