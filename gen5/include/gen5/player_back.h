@@ -34,6 +34,13 @@ typedef struct {
     // One for each of BW2's multi-cells; a later one is drawn as the first
     const Gen5BackPose *poses;
     u8 poseCount;
+    // For a trainer's front art, instead of the multi-cell choosing the pose: a pose played in time (seqCount steps of
+    // seqPose, each seqTicks ticks of 1/60 s from the sprite's start, then lastPose), or one pose held (useFixed)
+    const u8 *seqPose;
+    const u16 *seqTicks;
+    u8 seqCount;
+    u8 lastPose;
+    u8 useFixed;
 } Gen5BackSprite;
 
 #define GEN5_BACK_TEXTURE_SIZE 0x4000
@@ -52,8 +59,13 @@ const Gen5BackSprite *PlayerBack_ForTrainerClass(u32 trainerClass);
 // sets up when the battle starts), or NULL for BW2's own sprite. One pose, drawn for each of the sprite's multi-cells
 const Gen5BackSprite *Gen5_TrainerFrontArt(u32 trainerClass);
 
-// runtime.c: the art for the battle about to start (the picture's size in pixels), or NULL to clear it
-void Gen5_SetTrainerArt(u32 trainerClass, const void *texture, const void *palette, int width, int height);
+// runtime.c: the art for the battle about to start (the opposing trainer's, Gen5Trainer's art fields), or NULL to clear
+// it. The first sprite of the trainer that is added plays the art's animation; the later ones hold its last pose
+struct Gen5Trainer;
+void Gen5_SetTrainerArt(u32 trainerClass, const struct Gen5Trainer *trainer);
+
+// Ticks of 1/60 s since the battle began (one for each VBlank), which time the art's animation
+u32 Gen5_ArtTicks(void);
 
 // mcss.c's patch: the next sprite MCSSSys_Add adds is drawn with this art (NULL: its own)
 void MCSSSys_SetNextBackSprite(struct MCSSSystem *system, const Gen5BackSprite *sprite);

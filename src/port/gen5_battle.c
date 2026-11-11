@@ -272,121 +272,267 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
     return Pokemon_GetValue(mon, MON_DATA_LEVEL, NULL) > level;
 }
 
-// A Platinum trainer for BW2's battle (milestone 5): its party as Platinum made it (Trainer_Encounter), its class
 // Platinum's own front sprite of a trainer class, which BW2 has no sprite for (Sinnoh's Elite Four), made into the art
-// the Gen 5 battle draws in its place. Platinum keeps it as an 80x80 picture of 8x8 tiles (4 bits a pixel), laid out
-// by the first cell of the class's cell bank (an NCER: OBJ rectangles over the tiles, the tile numbers in units of two
-// tiles, 1D mapping); its first 16 colors are the palette. Drawn into a 256x128 texture, in 4 bits a pixel with the
-// left pixel in the low nibble, as the DS's textures are. Nothing from the ROM is kept: this is done for each battle
+// the Gen 5 battle draws in its place. Platinum keeps it as a cell bank (an NCER) of poses, each OBJ rectangles
+// over the tiles of an 80x80 picture of 8x8 tiles (4 bits a pixel): the cell's tile data is a block of the character
+// file (NCGR) that Platinum copies into place when the cell shows (the bank's VRAM transfer table: a source offset and a
+// size for each cell), the tile numbers in units of two tiles, 1D mapping; its first 16 colors are the palette. The
+// animation bank (NANR) has a sequence that plays through the poses once (sequence 1) and one that holds a pose (0).
+// Every pose's rectangles that differ from another's are put into one 256x128 texture (in 4 bits a pixel, the left pixel
+// in the low nibble, as the DS's textures are), each pose being a list of quads of it. Nothing from the ROM is kept:
+// this is done for each battle
 static BOOL TrainerClassHasPlatinumArt(int trainerClass)
 {
     return trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_ELITE_FOUR_LUCIAN;
 }
 
+#define ART_MAX_RECTS 32
+#define ART_POOL_SIZE (48 * 1024)
+
+typedef struct ArtRect {
+    u8 width;
+    u8 height;
+    u8 *pixels; // one pixel (0 to 15) a byte, in the pool
+    int x;      // in the texture
+    int y;
+} ArtRect;
+
+static const u8 sArtObjWidth[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
+static const u8 sArtObjHeight[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
+
 static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
 {
-    static const u8 sObjWidth[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
-    static const u8 sObjHeight[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
     const int base = trainerClass * 5; // TRAINER_CLASS_NUM_FILETYPES: tiles, palette, cells, animations, scan
-    const u8 *tiles;
-    const u8 *palette;
-    const u8 *cells;
     const u32 tileSize = NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base);
+    const u8 *tiles = Heap_Alloc(HEAP_ID_APPLICATION, tileSize);
+    const u8 *palette = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1));
+    const u8 *cells = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2));
+    const u8 *anims = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 3));
+    ArtRect *rects = Heap_Alloc(HEAP_ID_APPLICATION, sizeof(ArtRect) * ART_MAX_RECTS);
+    u8 *pool = Heap_Alloc(HEAP_ID_APPLICATION, ART_POOL_SIZE);
+    int poolUsed = 0;
+    int rectCount = 0;
+    BOOL ok = TRUE;
     int left = 0, top = 0, right = 0, bottom = 0;
+    BOOL first = TRUE;
 
-    tiles = Heap_Alloc(HEAP_ID_APPLICATION, tileSize);
-    palette = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1));
-    cells = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2));
     NARC_ReadWholeMemberByIndexPair((void *)tiles, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base);
     NARC_ReadWholeMemberByIndexPair((void *)palette, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1);
     NARC_ReadWholeMemberByIndexPair((void *)cells, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2);
+    NARC_ReadWholeMemberByIndexPair((void *)anims, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 3);
 
-    // NCGR: "RGCN" header 16 bytes, "RAHC" section: tiles from 0x30 (0x18 after the section's start at 0x10 + 8).
-    // NCLR: colors from 0x28. NCER: "KBEC" section at 0x10; cell entries (16 bytes each) from 0x30, OBJs (6 bytes) after
+    // NCGR: "RGCN" header 16 bytes, "RAHC" section: tiles from 0x30. NCLR: colors from 0x28. NCER: "KBEC" body at 0x18:
+    // cell count (u16), attributes (u16), the cells' offset (u32), mapping, the VRAM transfer table's offset (u32) from
+    // the body; cell entries (16 bytes each) from 0x30, the OBJs (6 bytes each) after them
     const u8 *tileData = tiles + 0x30;
+    const u32 dataSize = tileSize - 0x30;
     const int cellCount = *(const u16 *)(cells + 0x18);
-    const u8 *cellEntry = cells + 0x30;
-    const u8 *objs = cells + 0x30 + cellCount * 16;
-    const int objCount = *(const u16 *)cellEntry;
-    objs += *(const u32 *)(cellEntry + 4);
+    const u32 transferOffset = *(const u32 *)(cells + 0x18 + 12);
+    const u8 *transfer = cells + 0x18 + transferOffset + 8; // after the maximum size and the count: (source, size) per cell
+    const u8 *objsBase = cells + 0x30 + cellCount * 16;
+    dest->artPoseCount = 0;
+    dest->artQuadCount = 0;
+    dest->artSeqCount = 0;
+    dest->artLastPose = 0;
+    if (cellCount <= 0 || cellCount > GEN5_ART_MAX_POSES) {
+        ok = FALSE;
+    }
 
     memset(dest->artTexture, 0, sizeof(dest->artTexture));
     for (int i = 0; i < 16; i++) {
         dest->artPalette[i] = *(const u16 *)(palette + 0x28 + i * 2);
     }
     dest->artPalette[0] = 0;
-    // The OBJs are placed from the cell's centre (-40..40 for 80x80); the picture starts at its top left
-    for (int k = 0; k < objCount; k++) {
-        const u16 attr0 = *(const u16 *)(objs + k * 6);
-        const u16 attr1 = *(const u16 *)(objs + k * 6 + 2);
-        const int shape = (attr0 >> 14) & 3;
-        const int size = (attr1 >> 14) & 3;
-        int x = attr1 & 0x1FF;
-        int y = attr0 & 0xFF;
-        if (shape > 2) {
-            continue;
+
+    // The picture's box: every OBJ of every pose (they are placed from the cell's centre, -40..40 for 80x80)
+    for (int c = 0; ok && c < cellCount; c++) {
+        const u8 *entry = cells + 0x30 + c * 16;
+        const int objCount = *(const u16 *)entry;
+        const u8 *objs = objsBase + *(const u32 *)(entry + 4);
+        for (int k = 0; k < objCount; k++) {
+            const u16 attr0 = *(const u16 *)(objs + k * 6);
+            const u16 attr1 = *(const u16 *)(objs + k * 6 + 2);
+            const int shape = (attr0 >> 14) & 3;
+            const int size = (attr1 >> 14) & 3;
+            int x = attr1 & 0x1FF;
+            int y = attr0 & 0xFF;
+            if (shape > 2) {
+                continue;
+            }
+            x = x >= 256 ? x - 512 : x;
+            y = y >= 128 ? y - 256 : y;
+            const int w = sArtObjWidth[shape][size];
+            const int h = sArtObjHeight[shape][size];
+            if (first) {
+                left = x;
+                top = y;
+                right = x + w;
+                bottom = y + h;
+                first = FALSE;
+            }
+            left = x < left ? x : left;
+            top = y < top ? y : top;
+            right = x + w > right ? x + w : right;
+            bottom = y + h > bottom ? y + h : bottom;
         }
-        if (x >= 256) {
-            x -= 512;
-        }
-        if (y >= 128) {
-            y -= 256;
-        }
-        if (k == 0) {
-            left = x;
-            top = y;
-            right = x;
-            bottom = y;
-        }
-        left = x < left ? x : left;
-        top = y < top ? y : top;
-        right = x + sObjWidth[shape][size] > right ? x + sObjWidth[shape][size] : right;
-        bottom = y + sObjHeight[shape][size] > bottom ? y + sObjHeight[shape][size] : bottom;
     }
     const int width = right - left;
     const int height = bottom - top;
-    for (int k = 0; k < objCount && width <= 256 && height <= 128; k++) {
-        const u16 attr0 = *(const u16 *)(objs + k * 6);
-        const u16 attr1 = *(const u16 *)(objs + k * 6 + 2);
-        const u16 attr2 = *(const u16 *)(objs + k * 6 + 4);
-        const int shape = (attr0 >> 14) & 3;
-        const int size = (attr1 >> 14) & 3;
-        int x = attr1 & 0x1FF;
-        int y = attr0 & 0xFF;
-        if (shape > 2) {
-            continue;
-        }
-        if (x >= 256) {
-            x -= 512;
-        }
-        if (y >= 128) {
-            y -= 256;
-        }
-        const int w = sObjWidth[shape][size];
-        const int h = sObjHeight[shape][size];
-        const int firstTile = (attr2 & 0x3FF) * 2;
-        for (int py = 0; py < h; py++) {
-            for (int px = 0; px < w; px++) {
-                const int tile = firstTile + (py / 8) * (w / 8) + px / 8;
-                const u32 offset = tile * 32 + (py % 8) * 4 + (px % 8) / 2;
-                if (offset >= tileSize - 0x30) {
-                    continue;
+    ok = ok && !first && width > 0 && height > 0 && width <= 256 && height <= 128;
+
+    // Each pose's OBJs as quads, each OBJ's pixels taken from its cell's block of tiles and shared with an earlier
+    // rectangle of the same pixels
+    for (int c = 0; ok && c < cellCount; c++) {
+        const u8 *entry = cells + 0x30 + c * 16;
+        const int objCount = *(const u16 *)entry;
+        const u8 *objs = objsBase + *(const u32 *)(entry + 4);
+        const u32 source = *(const u32 *)(transfer + c * 8);
+        dest->artPoseFirst[c] = dest->artQuadCount;
+        dest->artPoseQuads[c] = 0;
+        for (int k = 0; ok && k < objCount; k++) {
+            const u16 attr0 = *(const u16 *)(objs + k * 6);
+            const u16 attr1 = *(const u16 *)(objs + k * 6 + 2);
+            const u16 attr2 = *(const u16 *)(objs + k * 6 + 4);
+            const int shape = (attr0 >> 14) & 3;
+            const int size = (attr1 >> 14) & 3;
+            int x = attr1 & 0x1FF;
+            int y = attr0 & 0xFF;
+            if (shape > 2) {
+                continue;
+            }
+            x = x >= 256 ? x - 512 : x;
+            y = y >= 128 ? y - 256 : y;
+            const int w = sArtObjWidth[shape][size];
+            const int h = sArtObjHeight[shape][size];
+            const int firstTile = (attr2 & 0x3FF) * 2;
+            if (dest->artQuadCount >= GEN5_ART_MAX_QUADS || rectCount >= ART_MAX_RECTS || poolUsed + w * h > ART_POOL_SIZE) {
+                ok = FALSE;
+                break;
+            }
+            ArtRect *rect = &rects[rectCount];
+            rect->width = w;
+            rect->height = h;
+            rect->pixels = pool + poolUsed;
+            for (int py = 0; py < h; py++) {
+                for (int px = 0; px < w; px++) {
+                    const int tile = firstTile + (py / 8) * (w / 8) + px / 8;
+                    const u32 offset = source + tile * 32 + (py % 8) * 4 + (px % 8) / 2;
+                    u8 pixel = 0;
+                    if (offset < dataSize) {
+                        const u8 pair = tileData[offset];
+                        pixel = (px & 1) ? pair >> 4 : pair & 15;
+                    }
+                    rect->pixels[py * w + px] = pixel;
                 }
-                const u8 pair = tileData[offset];
-                const u8 pixel = (px & 1) ? pair >> 4 : pair & 15;
-                const int tx = x - left + px;
-                const int ty = y - top + py;
+            }
+            int index = rectCount;
+            for (int r = 0; r < rectCount; r++) {
+                if (rects[r].width == w && rects[r].height == h && memcmp(rects[r].pixels, rect->pixels, w * h) == 0) {
+                    index = r;
+                    break;
+                }
+            }
+            if (index == rectCount) {
+                rectCount++;
+                poolUsed += w * h;
+            }
+            // The quad is placed as Platinum places it: from the cell's centre, whose feet are at 40 below it (a pose
+            // that jumps leaves the ground, as it does there; the bottom of the union of the poses isn't the ground).
+            // The origin is under the feet; its texture place is set below
+            dest->artQuad[dest->artQuadCount][0] = x;
+            dest->artQuad[dest->artQuadCount][1] = 40 - y;
+            dest->artQuad[dest->artQuadCount][2] = w;
+            dest->artQuad[dest->artQuadCount][3] = h;
+            dest->artQuad[dest->artQuadCount][4] = index; // the rectangle for now
+            dest->artQuad[dest->artQuadCount][5] = 0;
+            dest->artQuadCount++;
+            dest->artPoseQuads[c]++;
+        }
+    }
+
+    // The rectangles into the texture, in rows, the tallest first
+    int order[ART_MAX_RECTS];
+    for (int r = 0; ok && r < rectCount; r++) {
+        order[r] = r;
+    }
+    for (int i = 1; ok && i < rectCount; i++) {
+        const int v = order[i];
+        int j = i - 1;
+        while (j >= 0 && rects[order[j]].height < rects[v].height) {
+            order[j + 1] = order[j];
+            j--;
+        }
+        order[j + 1] = v;
+    }
+    int cursorX = 0, cursorY = 0, rowHeight = 0;
+    for (int i = 0; ok && i < rectCount; i++) {
+        ArtRect *rect = &rects[order[i]];
+        if (cursorX + rect->width > 256) {
+            cursorX = 0;
+            cursorY += rowHeight;
+            rowHeight = 0;
+        }
+        if (cursorY + rect->height > 128) {
+            ok = FALSE;
+            break;
+        }
+        rect->x = cursorX;
+        rect->y = cursorY;
+        cursorX += rect->width;
+        rowHeight = rect->height > rowHeight ? rect->height : rowHeight;
+        for (int py = 0; py < rect->height; py++) {
+            for (int px = 0; px < rect->width; px++) {
+                const int tx = rect->x + px;
+                const int ty = rect->y + py;
                 u8 *out = &dest->artTexture[(ty * 256 + tx) / 2];
-                *out |= (tx & 1) ? pixel << 4 : pixel;
+                *out |= (tx & 1) ? rect->pixels[py * rect->width + px] << 4 : rect->pixels[py * rect->width + px];
             }
         }
     }
+    for (int q = 0; ok && q < dest->artQuadCount; q++) {
+        const ArtRect *rect = &rects[dest->artQuad[q][4]];
+        dest->artQuad[q][4] = rect->x;
+        dest->artQuad[q][5] = rect->y;
+    }
+
+    // The animation: sequence 1 plays through the poses once, ending on the pose that stays (sequence 0, one pose, if
+    // there is no other). NANR's "KNBA" body at 0x18: sequence count (u16), frame count (u16), the sequences' offset,
+    // the frames' and the frame data's (u32 each); a sequence (16 bytes): frame count (u16), ..., its frames' offset (u32
+    // at 12); a frame (8 bytes): its data's offset (u32), its length in ticks (u16); the data: the cell (u16)
+    if (ok) {
+        const u8 *body = anims + 0x18;
+        const int sequenceCount = *(const u16 *)body;
+        const u32 sequenceOffset = *(const u32 *)(body + 4);
+        const u32 frameOffset = *(const u32 *)(body + 8);
+        const u32 dataOffset = *(const u32 *)(body + 12);
+        const int wanted = sequenceCount > 1 ? 1 : 0;
+        if (sequenceCount > 0) {
+            const u8 *sequence = body + sequenceOffset + wanted * 16;
+            const int frameCount = *(const u16 *)sequence;
+            const u8 *frames = body + frameOffset + *(const u32 *)(sequence + 12);
+            for (int f = 0; f < frameCount && f < GEN5_ART_MAX_SEQ; f++) {
+                const u32 data = *(const u32 *)(frames + f * 8);
+                const int cell = *(const u16 *)(body + dataOffset + data);
+                // Platinum's battle ticks its animations once a logic frame (30 a second): two ticks of 1/60
+                dest->artSeqPose[f] = cell < cellCount ? cell : 0;
+                dest->artSeqTicks[f] = *(const u16 *)(frames + f * 8 + 4) * 2;
+                dest->artSeqCount = f + 1;
+            }
+            if (dest->artSeqCount > 0) {
+                dest->artLastPose = dest->artSeqPose[dest->artSeqCount - 1];
+            }
+        }
+    }
+    dest->artPoseCount = ok ? cellCount : 0;
     dest->artWidth = width;
     dest->artHeight = height;
-    dest->hasArt = width > 0 && height > 0 && width <= 256 && height <= 128;
+    dest->hasArt = ok && dest->artQuadCount > 0;
     Heap_Free((void *)tiles);
     Heap_Free((void *)palette);
     Heap_Free((void *)cells);
+    Heap_Free((void *)anims);
+    Heap_Free(rects);
+    Heap_Free(pool);
 }
 
 // name and the line it says when beaten from Platinum's messages, and its class's prize (battle_script.c's table)

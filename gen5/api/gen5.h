@@ -79,6 +79,10 @@ typedef struct Gen5Item {
 // A trainer the player battles (milestone 5): Platinum's trainer, whose party is made as Platinum makes it. Its class
 // name is Platinum's; BW2 shows the sprite of its nearest class (gen5/src/trainers.c).
 #define GEN5_TEXT_LENGTH 400
+#define GEN5_ART_MAX_POSES 12
+#define GEN5_ART_MAX_QUADS 64
+#define GEN5_ART_MAX_SEQ 24
+
 typedef struct Gen5Trainer {
     unsigned id; // Platinum's trainer ID
     unsigned platinumClass;
@@ -99,6 +103,18 @@ typedef struct Gen5Trainer {
     unsigned short artPalette[16];
     int artWidth;
     int artHeight;
+    // The art is a list of poses (Platinum's cells), each some quads of the texture, and the animation Platinum plays
+    // once (its sequence 1: pose and duration in ticks of 1/60 s for each step), after which the last pose stays.
+    // A quad is its top left from the picture's origin (under the feet, y up), its size and its place in the texture
+    int artPoseCount;
+    unsigned char artPoseFirst[GEN5_ART_MAX_POSES];
+    unsigned char artPoseQuads[GEN5_ART_MAX_POSES];
+    int artQuadCount;
+    short artQuad[GEN5_ART_MAX_QUADS][6];
+    int artSeqCount;
+    unsigned char artSeqPose[GEN5_ART_MAX_SEQ];
+    unsigned short artSeqTicks[GEN5_ART_MAX_SEQ];
+    int artLastPose;
 } Gen5Trainer;
 
 // A single battle: the player's party and bag against one wild Pokémon, or a trainer (isTrainer). Gen5_BattleEnd writes back the party as
