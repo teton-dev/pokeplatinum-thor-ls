@@ -139,8 +139,11 @@ Done on the desktop (`tests/scripts/gen5_summary.txt`, `gen5_party.txt`, widescr
   Rock Climb, which BW2's list doesn't know, are added by a patch of `plist_sys.c` (results 24 to 26). When one is
   allowed the list ends with it, and `Gen5Party_Exit` hands Platinum's start menu `PARTY_MENU_EXIT_CODE_CUT + move` and
   the slot, which then runs the move as for Platinum's own list. Not seen run to the end: the test command has no start
-  menu behind it, and Dive (BW2 only) is always refused. **Gap: "Field moves without HMs"** (`hm_free`, on by default)
-  lists a Pokemon's moves only from what it knows in BW2's list; the Pokemon that could learn the move don't get it.
+  menu behind it, and Dive (BW2 only) is always refused. **Field moves without HMs** (`hm_free`, on by default) work in the list: the port
+  works out, as Platinum's own list does (`HmFree_SubstituteSlot`, the context's usable moves, the HM in the bag),
+  which moves nobody knows that each Pokemon does for the party (`Gen5Party.hmFree`), and BW2's field-move menu takes
+  them after the Pokemon's own (`plist_menu.c` and `plist_sys.c` patches, `Gen5_FieldMenuMove`): Fly shows in the
+  Pokemon's menu with only HM02 in the bag (`gen5_party_hmfree.txt`). At most four entries, as BW2's menu has four.
   **Not yet:** items from the bag and giving items (the bag is empty), the other modes (items, TMs, evolution items,
   daycare, trade, contests, Frontier).
 - **Widescreen** (`tests/scripts/widescreen_gen5_summary.txt`, `widescreen_gen5_party.txt`, `widescreen_pc.txt`): BW2's

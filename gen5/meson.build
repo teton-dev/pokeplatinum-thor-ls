@@ -76,7 +76,6 @@ gen5_sources = [
     'src/ov165/plist_battle.c',
     'src/ov165/plist_demo.c',
     'src/ov165/plist_item.c',
-    'src/ov165/plist_menu.c',
     'src/ov165/plist_message.c',
     'src/ov165/plist_plate.c',
     'src/ov165/status_rcv.c',
@@ -250,6 +249,7 @@ gen5_patched = [
     'src/gfl/key.c',                  # The keys the game read (runtime.c)
     'src/gfl/touchpanel.c',           # The touch the game read (runtime.c)
     'src/ov165/pokelist.c',            # No DS Protect
+    'src/ov165/plist_menu.c',          # The field moves' list: the Pokemon's own and those HM-free lends
     'src/ov165/plist_sys.c',           # Platinum's Rock Smash, Defog and Rock Climb as field moves
     'src/ov168/btlv_effvm.c',         # The SDK's names of a matrix's translation; particle work for 64 bits
     'src/system/mcss.c',              # NitroSystem's names of a node's position; texture coordinates as commands;
