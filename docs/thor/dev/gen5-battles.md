@@ -492,8 +492,8 @@ head and feet likewise: **each part moves during the first cycle after the Poké
   stop after its first cycle exactly as on the Thor; with the fix below, the same run moves both arms.
 - **Fix:** `subprojects/packagefiles/libntrsystem_anim_edge.patch` (the wrap's `diff_files`): the guard stops only a
   sequence in which no frame lasts any time (the case it was written for: it would loop forever). Platinum uses the same
-  library: its animations behave as before wherever the old read was non-zero. To check on the Thor with a build that
-  has it.
+  library: its animations behave as before wherever the old read was non-zero. **Checked on the Thor by the owner (2026-11-10): the
+  Bronzong, Suicune and Houndoom parts keep moving after the first cycle.**
 - **Not defects** (checked, for the record): BW2's sprites have one multi-cell sequence each in the ROM, so
   `BtlvMcss_OnAnimationEnd`'s alternate animation (sequence 1) never exists for them; their `.bin` idle-node count is 0, so
   BW2's idle task freezes the whole sprite for about a second every two or three loops; Houndoom's loop is five frames
