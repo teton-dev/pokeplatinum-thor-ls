@@ -48,6 +48,17 @@ jobs:
       - name: Fetch Meson
         run: make meson
 
+      # Gen 5 battles (gen5/, -Dpokebw2): Black 2 and White 2's battle engine, compiled from the pokebw2
+      # decompilation (GPLv3) at the commit the port was tested with; the player's own BW2 ROM supplies its data
+      - name: Fetch pokebw2
+        env:
+          POKEBW2_COMMIT: 2c3961614d0fe1971ad0535e6edbbf3a6078e7b2
+        run: |
+          git init -q "$RUNNER_TEMP/pokebw2"
+          git -C "$RUNNER_TEMP/pokebw2" fetch -q --depth 1 https://github.com/fuddlesworth/pokebw2 "$POKEBW2_COMMIT"
+          git -C "$RUNNER_TEMP/pokebw2" checkout -q FETCH_HEAD
+          echo "POKEBW2=$RUNNER_TEMP/pokebw2" >> "$GITHUB_ENV"
+
       - name: Build APK
         env:
           VERSION_CODE: 90000${{ github.run_number }}
