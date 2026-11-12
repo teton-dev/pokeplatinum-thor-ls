@@ -1,0 +1,41 @@
+# Gen 5 battles, milestone 7: double battles in Black 2 and White 2's engine, from the turtwig fixture, with a level 50 Empoleon
+# given for the player's second place. Three battles, each fought with A (FIGHT, the first move, the
+# first target) until it's over:
+#   - Twins Liv & Liz (trainer 15): one trainer, two Pokémon at once (Platinum's TRAINER_DOUBLES)
+#   - Youngster Tristan (1) and Camper Jacob (16): two trainers, one Pokémon each at a time (TAG_DOUBLES; BW2's 1v2)
+#   - the same two beside Cheryl (608): a partner whom BW2's AI plays (TRAINER_WITH_AI_PARTNER; BW2's 2v2)
+# The log has each battle's setup line and the party after; the shots each battle's first command and the overworld.
+# Losses pass too: the test checks the battles run to the end.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_doubles.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+give 395 50
+party
+trainer 15
+until battle
+until command timeout 6000
+wait 30
+shot gen5-doubles-twins
+mash A until free timeout 15000
+shot gen5-doubles-twins-back
+party
+trainers 1 16
+until battle
+until command timeout 6000
+wait 30
+shot gen5-doubles-two
+mash A until free timeout 15000
+shot gen5-doubles-two-back
+party
+trainers 1 16 608
+until battle
+until command timeout 6000
+wait 30
+shot gen5-doubles-partner
+mash A until free timeout 15000
+shot gen5-doubles-partner-back
+party
+exit 0

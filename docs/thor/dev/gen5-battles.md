@@ -83,6 +83,8 @@ redistributed. Done in milestone 2; see "Milestone 2" below.
 7. **The rest:** doubles, tag battles (Cheryl, Riley, Buck, Barry...: the partner's back sprite is Platinum's
    sprite of that trainer for now; the owner will supply Gen 5 style back sprites for them later), multi battles, the catching tutorial, the Safari Zone,
    Pal Park, legendaries and roamers, the Battle Frontier; items from the bag; weather and terrain arenas.
+   *In progress:* double battles against one or two trainers and beside a partner run on the desktop (see
+   "Milestone 7").
 8. **Renegade Platinum:** the game's own Pokémon, move and item data in the Gen 5 engine, and Fairy.
 9. **HeartGold and SoulSilver:** the same app for the owner's HGSS ROM (from the HGSS decompilation, as this port
    is from Platinum's), with the same Gen 5 battles: wild and trainer battles, catching, the AI and its levels,
@@ -565,6 +567,37 @@ removed):
   desktop in real time (these tests run the game faster than real time). Also: the battle runs at Platinum's 30 Hz
   logic rate (`FrameRate`, unless 60 FpsEverywhere), where BW2 runs its own at 60 Hz: every BW2 animation's timing is
   half-speed in game time if BW2's durations (7 frames per cell step...) assume 60 Hz; not measured against a real BW2.
+
+## Milestone 7: double battles (2026-11-12, done on the desktop)
+
+`Gen5Battle_Wants` takes Platinum's trainer battles of the four kinds `Encounter_NewVsTrainer` makes, and wild battles
+beside a partner; `Gen5Battle` (`gen5/api/gen5.h`) carries `doubles`, a second trainer (`trainer2`), a partner
+(`partner`) and a second wild Pokémon (`wild2`), and `runtime.c` sets BW2's setup as its own `BtlSetup_SetTrainer*`
+functions do (`src/system/btl_setup.c`):
+
+| Platinum | What it is | BW2 |
+| --- | --- | --- |
+| `BATTLE_TYPE_TRAINER_DOUBLES` | one trainer, two Pokémon at once (twins; a trainer whose data says double) | style double, client 1 |
+| `BATTLE_TYPE_TAG_DOUBLES` | two trainers who saw the player at once | style double, multi mode 4: clients 1 and 3 |
+| `BATTLE_TYPE_TRAINER_WITH_AI_PARTNER` | two trainers, a partner beside the player | multi mode 3: the partner client 2 |
+| `BATTLE_TYPE_AI_PARTNER` (wild) | two wild Pokémon (Platinum's slots 1 and 3), a partner | multi mode 5, both wild Pokémon in client 1's party |
+
+- A trainer who is in both of Platinum's enemy slots (the same ID twice) is one double battle's trainer, as Platinum
+  treats it.
+- **Each trainer's prize and defeat line:** both were one value for the battle. `Gen5_PortTrainerPrizeBase` and
+  `Gen5_PortTrainerDefeatText` (`runtime.c`) look the trainer up by its ID (`btlv_core.c`'s patch calls the second), so
+  two trainers each say their own line, and the prize is BW2's sum of both (Tristan 80 and Jacob 224: 304).
+- **Art:** the opponents' Platinum art (`Gen5_SetTrainerArt`, `player_back.c`) has two slots, one per opposing trainer,
+  keyed by BW2 class.
+- **The partner** is drawn with BW2's back sprite of its nearest class (Barry as Hugh); Platinum's own back sprites of
+  the partners, or the owner's Gen 5 style ones, are still to do. Its party isn't written back (Platinum doesn't either).
+- Test: `gen5_doubles.txt` (`turtwig`, with a level 50 Empoleon given) plays Twins Liv & Liz (trainer 15), Tristan and
+  Jacob (1 and 16, the test command `trainers A B [PARTNER]`), then the same two beside Cheryl (608), to the end; each
+  shot at the first command shows both sides right.
+- **Not tested:** a wild battle beside a partner (it needs the partner's variable set and tall grass; catching there
+  is for the second wild Pokémon too, `caughtWild2`); the defeat lines and the second trainer's slide-in on screen;
+  widescreen with four Pokémon; the scripted partner battles (Spear Pillar, Iron Island...) and their scripts after;
+  the Thor.
 
 ## Risks
 
