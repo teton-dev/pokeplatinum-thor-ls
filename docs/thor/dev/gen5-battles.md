@@ -391,6 +391,10 @@ field 46 has one (the arena table's file 1 lists each field's variants), so the 
   Four (Aaron, Bertha, Flint, Lucian), Barry, Cyrus or the Galactic commanders: they show another class's sprite for
   now (Unova's Elite Four, Plasma's grunts) and need Sinnoh-style sprites made for them, as the player's back sprite
   was (the owner will supply them).
+- **Lucas and Dawn as opponents** (2026-11-12, from the Thor: a black square, Following Renegade's trainer 930): they map
+  to BW2's hero and heroine classes, which have no front sprite that draws; Platinum's own art is used for them now
+  (`TrainerClassHasPlatinumArt`, the player classes and Diamond and Pearl's). Test: `gen5_lucas_dawn.txt` (trainers
+  616 and 613).
 - **Still to do for the story's trainers:** the Thor (an APK built with these changes), critical hits in the first
   battle, Cynthia and the Galactic bosses' own texts and sprites (the nearest class is used).
 - **Next:** the trainer's items in battle (BW2's AI uses them: Potions), evolutions and new moves after the battle
