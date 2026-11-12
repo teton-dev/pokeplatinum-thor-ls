@@ -118,6 +118,9 @@
 #include "field_script_context.h"
 #include "field_system.h"
 #include "field_task.h"
+#ifdef SDK_PORT
+#include <stdio.h>
+#endif
 #include "field_transition.h"
 #include "game_records.h"
 #include "great_marsh_lookout.h"
@@ -233,6 +236,9 @@ typedef struct {
     SysTask *unk_04;
     MapObjectAnimCmd *unk_08;
     FieldSystem *fieldSystem;
+#ifdef SDK_PORT
+    u8 *movementCount; // the script's, from when the movement started
+#endif
 } UnkStruct_02040F28;
 
 static BOOL ScrCmd_Noop(ScriptContext *ctx);
@@ -2175,6 +2181,9 @@ static void sub_02040F28(FieldSystem *fieldSystem, SysTask *param1, MapObjectAni
     v0->fieldSystem = fieldSystem;
     v0->unk_04 = param1;
     v0->unk_08 = param2;
+#ifdef SDK_PORT
+    v0->movementCount = FieldSystem_GetScriptMemberPtr(fieldSystem, SCRIPT_MANAGER_MOVEMENT_COUNT);
+#endif
     v0->unk_00 = SysTask_Start(sub_02040F5C, v0, 0);
 
     return;
@@ -2183,9 +2192,25 @@ static void sub_02040F28(FieldSystem *fieldSystem, SysTask *param1, MapObjectAni
 static void sub_02040F5C(SysTask *task, void *param1)
 {
     UnkStruct_02040F28 *v0 = (UnkStruct_02040F28 *)param1;
+#ifdef SDK_PORT
+    // The script's own count, not the one of whatever field task is on top when the movement ends: in Following
+    // Renegade Platinum's lab scene (after Rowan's Pokedex) the script waited forever on the Thor for a movement
+    // that had ended, the count never lowered. The line below logs when the top task isn't the script's
+    u8 *v1 = v0->movementCount;
+#else
     u8 *v1 = FieldSystem_GetScriptMemberPtr(v0->fieldSystem, SCRIPT_MANAGER_MOVEMENT_COUNT);
+#endif
 
     if (MapObject_HasAnimationEnded(v0->unk_04) == 1) {
+#ifdef SDK_PORT
+        {
+            FieldTask *top = v0->fieldSystem->task;
+            ScriptManager *manager = top != NULL ? FieldTask_GetEnv(top) : NULL;
+            if (manager == NULL || manager->magic != SCRIPT_MANAGER_MAGIC_NUMBER || &manager->movementCount != v1) {
+                printf("Script movements: a movement ended while the top field task wasn't its script's (count %d)\n", *v1);
+            }
+        }
+#endif
         MapObject_FinishAnimation(v0->unk_04);
         SysTask_Done(v0->unk_00);
 
