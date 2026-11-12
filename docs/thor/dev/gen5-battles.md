@@ -358,6 +358,28 @@ Cynthia keeps her room (16) in every fight. The tournament arena's coloured ligh
 (`BtlvField_Create`'s `alternateFieldVariant`, set by `BtlSetup.unkDD_6`, which the World Tournament's final uses): only
 field 46 has one (the arena table's file 1 lists each field's variants), so the lights can't go on the other rooms. Terrain 7 has no floor in the
   dark backgrounds and crashes: never use it. Not every combination was looked at.
+- **Team Galactic's arena (2026-11-11):** Galactic Grunts, Commanders and Cyrus (`IsGalacticClass`) battle in an edited
+  copy of BW2's Champion room, background 16 terrain 1 (Platinum never uses that terrain there). `src/port/gen5_galactic.c`
+  changes a copy of the room's model resource (member 115 of archive 11, a BMD0 with its textures) made from the
+  player's own ROM at the first Gen 5 battle (nothing of BW2's is stored): the streaks are ribbons (shapes `polygon3` and
+  `polygon4`, whose vertex colours give each its rainbow; the texture `batt_field21n` is white) and each ribbon gets Crobat
+  purple or Team Galactic's hair blue, alternating, at the brightness its vertices had; the sky's texture `batt_sky21n`
+  (A3I5, 128x64, sharing its palette with the streaks') is redrawn with gleaming four-armed sparkles and a scatter of
+  fainter points (fixed places, so the sky is always the same). The background is darker (`DarkenBackground`): the sky's and
+  the ground's palettes (`batt_sky21_pl`, `batt_field21_pl`) have their levels stretched per channel (the darkest colour
+  is black, the brightest stays) and squared, so the mids fall toward black. The stars' shape (`polygon2`) has its bluish
+  vertex colours made grey and brighter (`WhitenSky`) so the stars shine at full contrast. Jupiter and Saturn (pixel art,
+  `Jupiter` and `Saturn`, after the Commanders) are in the same texture, in colours 2, 5, 6 and 7 of its 8-colour palette;
+  the texture is stretched about 1.8 times wider than high and wraps around the room twice, so they are drawn narrow and
+  each shows twice in widescreen; only the texture's top 22 rows or so are visible. The platforms (the stage's ground
+  model, member 38, `batt_stage21_pl`) are dark indigo (`Gen5Galactic_MakeStage`), a stage of their own (35). `Gen5Data_PrepareGalacticArena` (`gen5_data.c`) puts the
+  models in a copy of archive 11 as new members (572, 573) and, in a copy of archive 151, adds field 47 (row of file 1: the
+  Champion room's, with the new model) and points the Champion background's terrain 1 at them (field and stage); Cynthia's room (terrain 0) is untouched; the animations (the
+  scrolling, found by material name) are the Champion room's. The copies are in
+  `gen5_data/`, redone when the ROM's archive changes size or `GALACTIC_VERSION` is raised. Test:
+  `gen5_galactic_arena.txt` (`turtwig`; or `POKEPLATINUM_GEN5_ARENA=16,1` with `gen5_arena.txt`). Not done: the stars
+  don't twinkle (a static texture; a twinkle needs a second texture or a palette animation); the colours are constants in
+  `gen5_galactic.c` (`RecolorRibbons`, the stars' `COLOR_ICE` and `COLOR_WHITE`). Not checked on the Thor.
 - **Options:** Platinum's Text Speed goes to BW2's config (`Gen5Battle.textSpeed`: BW2's 0, 1, 2 are slow, normal,
   fast too), both the battle's own and the save's the text printing reads; the first was forced to 0 before.
 - **Sprites of Sinnoh's special trainers:** BW2 has its own for the eight Sinnoh Gym Leaders (Roark to Volkner) and
@@ -679,3 +701,62 @@ Owner's decisions on the open items (2026-11-11):
 - Flamethrower's stream is still bugged (open).
 - The stat raise/lower particles look mostly fine; slightly off, probably alpha or transparency (low priority).
 - Summary ribbons can be ignored; turn Gen 5 screens off to see them.
+
+## Renegade Platinum (2026-11-11, milestone 8, first part)
+
+A game whose Pokémon and move files aren't vanilla Platinum's (the hash of `pl_personal.narc` and `pl_waza_tbl.narc`:
+Renegade Platinum, Complete or Classic, and Following Renegade Platinum) battles with its own numbers, and Fairy.
+
+- **Data** (`src/port/gen5_data.c`, `Gen5Data_Prepare`, called before each Gen 5 battle): copies of BW2's
+  `a/0/1/6` (Pokémon) and `a/0/2/1` (moves) go into the game's folder (`gen5_data/`, rewritten when the game's files
+  change: Classic and Complete differ in `pl_personal.narc`) and BW2 reads them through `Gen5_FilesOverride`
+  (`gen5/src/files.c`). The Pokémon's base stats, types (Platinum's "???" 9 becomes Fairy, 17; the types after it
+  shift down by one, as BW2 has no "???") and abilities (two slots; BW2's hidden one stays) come from the game, forms
+  of Deoxys, Wormadam, Giratina, Shaymin and Rotom too. The moves' type, category (Platinum's physical/special/status
+  is 0/1/2, BW2's 1/2/0), power, accuracy, PP and priority likewise. Kept from BW2: the experience a Pokémon gives,
+  its catch rate, EV yields, and every move's effect (BW2's code decides what a move does from its ID: Renegade's
+  changes to what moves do are not carried over, nor are its learnsets and evolutions, which Platinum's side keeps).
+  Abilities are BW2's code: Sturdy and the like work as in Gen 5, as decided.
+- **Fairy** (`gen5/patches/src/ov167/btl_calc.c.patch`, `gen5/tools/gen_headers.py`): BW2's types become 18: Fairy is
+  type 17 and the "no type" `TYPE_NULL` 18 (the header generator rewrites `constants/types.h`). `TYPE_CHART` is
+  18 by 18, filled by `Gen5_PortTypeChart` from the ROM's own chart (`RomPatches_TypeChart`: Renegade's has Fairy
+  and its changes; Following Renegade's is in the hack's code blob, which `rom_patches.c` now reads); BW2's own
+  chart, with Fairy neutral, until it is called. Checked: Fairy on Dragon double, Dragon on Fairy none, Poison and
+  Steel on Fairy double. `gen5/tools/amend_patch.py` adds changes to an existing patch.
+- **Fairy's icon** (2026-11-11, `MakeFairyIcon` in `gen5_data.c`): BW2's type icons are 32 by 16 pixels in the menus'
+  common archive (`a/0/8/2`, members 0x22 + type; the colors are member 0x21). "FAIRY" is made at the first battle from
+  the letters of FIRE (F, I, R), GRASS (A) and FLYING (Y), pink with colors 8 and 9 of the third palette, which no icon
+  uses, and put into that archive's copy (`gen5_data/a/0/8/2`, read through `Gen5_FilesOverride`) as member 0x33,
+  Cool's, which BW2's battle never shows. `app_menu_common.c.patch` gives type 17 that file and palette. The move
+  buttons' own pink is Psychic's palette. Seen in a battle with a Fairy move.
+- **The replaced moves** (found while doing the icon): Renegade Platinum replaces eleven moves in their slots: Barrage
+  (140) is Draining Kiss, Submission (66) Play Rough, Luster Purge (295) Dazzling Gleam, Mist Ball (296) Disarming
+  Voice, Lunar Dance (461) Moonblast (all Fairy, none in BW2), and Brine, Constrict, Horn Drill, Sand Tomb, Twister and
+  Volt Tackle become Scald, Icicle Crash, Drill Run, Bulldoze, Hurricane and Wild Charge (all in BW2); Charm (204),
+  Moonlight (236) and Sweet Kiss (186) are only retyped Fairy. BW2 knows a move by its number, so for now the
+  replaced slots keep the old move's name, effect and animation with the new numbers (Moonblast shows as "Lunar
+  Dance" and heals the party). To do: map the six that BW2 has to its numbers (and back after the battle); for the
+  five Fairy moves, a BW2 move with the same effect (the effect is data for the plain ones: damage and a chance of a
+  stat drop, spread targets) and their own animation and name, which BW2 lacks (a ROM that has them: the move's
+  script in `ARCID_BTLV_EFFVM_MOVE_SCRIPTS` and its particle files could be copied; handlers are code and would be
+  written here).
+- **Not done:** Fairy's name in battle text, the Pokémon's types on BW2's own screens, Hidden Power
+  and Natural Gift never give Fairy (as Gen 5), Gen 5's Arceus plates and Judgment have no Fairy form; Renegade's move
+  effect changes; the experience and catch rate from the game's data.
+- **Tests:** `DATA=~/thor-dev/desktop-renegade tools/docker/desktop.sh test tests/scripts/gen5_battle.txt --from
+  rn-turtwig` (fixtures made with `new_game.txt --keep rn-before-starter` and `turtwig.txt --from rn-before-starter
+  --keep rn-turtwig`, in that data folder) passes; the log says "the game's own Pokemon and move data made" and the
+  chart's Fairy values. A battle against a Clefairy (species 35, Fairy in Complete) runs.
+
+### Moon Black 2 as a source of the Fairy moves (2026-11-11, findings; not used yet)
+
+`~/thor-dev/Pokemon Moon Black 2 (v4.2.3).nds` is Black 2 with 51 files changed (same file system, same move count).
+Its Fairy moves replace Gen 5 slots: Play Rough 285 (Skill Swap's), Moonblast 461 (Lunar Dance's, with Lunar Dance's
+animation unchanged), Disarming Voice 545 (Searing Shot's), Dazzling Gleam 552 (Fiery Dance's), Geomancy 554; its
+type is 17. Their animation scripts (`a/0/6/5`, member = move number) reuse existing particle resources (e.g. 474, 317,
+231, which BW2 has): copying members 285, 545 and 552 into the proxy slots' scripts should be enough, no new
+resources. `pokebw2/tools/script/btlv_effvm_script.py disasm` (Python 3.11+, run it in Docker) shows them. Handlers
+are code: the moves' slots in `move_handlers.c` keep the old moves' handlers (Lunar Dance's, Searing Shot's), so a
+slot used for a Fairy move needs its handler dropped when the game is Renegade (a hook in the handler lookup).
+Renegade's own slots 285 (Skill Swap) and 461 conflict: Play Rough needs a free slot (above 467) whose script is
+Moon's 285. Moon's type icon (`a/0/8/2`) and names (`a/0/0/2`) could replace the generated ones.

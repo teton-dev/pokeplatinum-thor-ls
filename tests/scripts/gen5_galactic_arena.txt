@@ -1,0 +1,15 @@
+# Gen 5 battles: the Team Galactic arena (BW2's Champion room with Crobat purple and Galactic blue streaks and
+# gleaming stars; src/port/gen5_galactic.c). A Galactic Grunt (trainer 296, Floaroma Meadow) fights in it with no
+# override; the shot is the battle's start. From the turtwig fixture:
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_galactic_arena.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+trainer 296
+until battle
+until command timeout 6000
+wait 90
+shot arena
+exit 0
