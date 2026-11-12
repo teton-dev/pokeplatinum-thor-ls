@@ -1,0 +1,24 @@
+# Gen 5 battles: Lucas and Dawn as opponents, drawn with Platinum's own sprites (BW2's hero and heroine classes drew a
+# black square, seen on the Thor). From the turtwig fixture: Dawn (trainer 616), then Lucas (613); a shot of each
+# trainer sliding in, then the battle mashed to its end.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_lucas_dawn.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+give 395 50
+lead 1
+trainer 616
+until battle
+wait 150
+shot dawn-intro
+until command timeout 6000
+mash A until free timeout 15000
+trainer 613
+until battle
+wait 150
+shot lucas-intro
+until command timeout 6000
+mash A until free timeout 15000
+exit 0
