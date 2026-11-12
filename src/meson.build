@@ -1022,6 +1022,7 @@ pokeplatinum_c += files(
     'port/charcode_convert.c',
     'port/debug_field.c',
     'port/frame_rate.c',
+    'port/stuck_report.c',
     'port/game_platinum.c',
     'port/rom_patches.c',
     'port/randomizer.c',
