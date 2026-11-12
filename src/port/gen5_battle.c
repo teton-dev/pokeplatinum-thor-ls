@@ -302,8 +302,13 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
 // this is done for each battle
 static BOOL TrainerClassHasPlatinumArt(int trainerClass)
 {
+    // Lucas and Dawn as opponents too: BW2's hero and heroine classes, which they map to, drew a black square (seen on
+    // the Thor, trainer 930)
     return (trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_ELITE_FOUR_LUCIAN)
-        || trainerClass == TRAINER_CLASS_RIVAL;
+        || trainerClass == TRAINER_CLASS_RIVAL || trainerClass == TRAINER_CLASS_PLAYER_MALE
+        || trainerClass == TRAINER_CLASS_PLAYER_FEMALE || trainerClass == TRAINER_CLASS_DP_PLAYER_MALE
+        || trainerClass == TRAINER_CLASS_DP_PLAYER_FEMALE || trainerClass == TRAINER_CLASS_DP_PLAYER_MALE_2
+        || trainerClass == TRAINER_CLASS_DP_PLAYER_FEMALE_2;
 }
 
 #define ART_MAX_RECTS 32
