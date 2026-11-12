@@ -550,7 +550,8 @@ void DrawGameplay()
     Section("Following Pokemon");
     ConfigToggle("Following Pokemon", "As in HeartGold and SoulSilver: your first Pokemon that can battle walks "
         "behind you. It goes back in its ball on a bike, surfing and with a partner. Talk to it to hear its cry. "
-        "Species without an overworld sprite in Platinum walk as their party icon.", &config->followerPokemon);
+        "Species without an overworld sprite in Platinum walk as their party icon. Off in Following Renegade "
+        "Platinum, which has followers of its own.", &config->followerPokemon);
 #ifdef GEN5_BATTLES
     Section("Gen 5 battles");
     ConfigToggle("Gen 5 battles", "Battles in Black 2 and White 2's engine: their 3D arenas, moving camera, "

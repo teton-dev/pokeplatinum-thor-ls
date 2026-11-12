@@ -1,4 +1,5 @@
 // Scripted test runs; see include/port/test_script.h and tests/README.md
+#include "port/following_hack.h"
 #include "port/test_script.h"
 
 #include <nitro.h>
@@ -90,6 +91,7 @@ enum TestOp {
     OP_TEACH,
     OP_PARTY,
     OP_TRAINER,
+    OP_FOLLOWER_BALL,
     OP_SHOT,
     OP_LOG,
     OP_EXIT,
@@ -436,6 +438,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_HALL_OF_FAME;
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if (strcmp(words[0], "follower-ball") == 0 && count >= 2) {
+        // Following Renegade Platinum: the follower comes out of its ball (0) or goes back (1), as its scripts do
+        command->op = OP_FOLLOWER_BALL;
+        command->x = atoi(words[1]);
         return TRUE;
     } else if (strcmp(words[0], "save") == 0) {
         command->op = OP_SAVE;
@@ -898,6 +905,10 @@ static u16 Step(void)
             sTest.freeFrames = 0;
             Next();
             return 0;
+        case OP_FOLLOWER_BALL:
+            FollowingHack_TestBall(DEBUG_GetFieldSystem(), command->x);
+            Next();
+            continue;
         case OP_ITEM:
             if (!Bag_TryAddItem(SaveData_GetBag(SaveData_Ptr()), command->x, command->y, HEAP_ID_APPLICATION)) {
                 Fail(command, "no room in the bag");

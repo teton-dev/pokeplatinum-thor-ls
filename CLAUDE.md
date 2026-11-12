@@ -56,6 +56,12 @@ sound effects and cries (from the imported ROM's sound data) over Platinum's mus
 changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this
 repository, not inside it.
 
+## Following Renegade Platinum
+
+The hack's followers are ARM code the port can't run; `src/port/following_hack.c` rewrites it in C. Read
+`docs/thor/dev/following-renegade.md` (the map of the hack, tooling, what is done and what isn't). Test it with
+`DATA=~/thor-dev/desktop-following tools/docker/desktop.sh test ...` (fixtures `fr-before-starter`, `fr-turtwig`).
+
 ## Roadmap after Gen 5 battles
 
 HeartGold/SoulSilver support, then Renegade Platinum, then **enhanced graphics** (custom shaders: cloud shadows,

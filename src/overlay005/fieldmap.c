@@ -1,5 +1,9 @@
 #include "overlay005/fieldmap.h"
 
+#ifdef SDK_PORT
+#include "port/following_hack.h"
+#endif
+
 #include <nitro.h>
 #include <string.h>
 
@@ -424,6 +428,9 @@ static BOOL FieldMap_ChangeZone(FieldSystem *fieldSystem)
     const ObjectEvent *objEventList = MapHeaderData_GetObjectEvents(fieldSystem);
 
     sub_0206184C(fieldSystem->mapObjMan, oldMapHeaderID, newMapHeaderID, objEventCount, objEventList);
+#ifdef SDK_PORT
+    FollowingHack_MapConnected(fieldSystem);
+#endif
 
     RadarChain_Clear(fieldSystem->chain);
     FieldBGM_TryFadeOut(fieldSystem, FieldBGM_GetEffective(fieldSystem, fieldSystem->location->mapHeaderID), 1);
@@ -463,6 +470,9 @@ void FieldMap_ChangeZoneDistortionWorld(FieldSystem *fieldSystem, enum MapHeader
     const ObjectEvent *objEventList = MapHeaderData_GetObjectEvents(fieldSystem);
 
     sub_0206184C(fieldSystem->mapObjMan, oldMapHeaderID, mapHeaderID, objEventCount, objEventList);
+#ifdef SDK_PORT
+    FollowingHack_MapConnected(fieldSystem);
+#endif
 
     FieldBGM_TryFadeOut(fieldSystem, FieldBGM_GetEffective(fieldSystem, fieldSystem->location->mapHeaderID), 1);
     sub_0203A418(fieldSystem);
@@ -718,6 +728,9 @@ static void ov5_021D15F4(FieldSystem *fieldSystem)
     }
 
     FieldEffectManager_Render(fieldSystem->fieldEffMan);
+#ifdef SDK_PORT
+    FollowingHack_FrameDrawn();
+#endif
     BillboardLists_Draw();
 
     if (FieldMap_InDistortionWorld(fieldSystem) == TRUE) {
@@ -808,7 +821,7 @@ static void FieldSystem_InitLandManager(FieldSystem *fieldSystem)
 
 static void ov5_021D1878(FieldSystem *fieldSystem)
 {
-    fieldSystem->fieldEffMan = FieldEffectManager_New(fieldSystem, FIELD_EFFECT_RENDERER_COUNT, HEAP_ID_FIELD1);
+    fieldSystem->fieldEffMan = FieldEffectManager_New(fieldSystem, FIELD_EFFECT_RENDERER_COUNT + 1, HEAP_ID_FIELD1);
 
     {
         int v0 = 80;
@@ -840,6 +853,9 @@ static void ov5_021D1878(FieldSystem *fieldSystem)
         }
 
         FieldEffectManager_InitRenderers(fieldSystem->fieldEffMan, v1);
+#ifdef SDK_PORT
+        FollowingHack_InitRenderer(fieldSystem->fieldEffMan);
+#endif
     }
 
     {
@@ -862,6 +878,9 @@ static void ov5_021D1878(FieldSystem *fieldSystem)
     }
 
     sub_02061C48(fieldSystem->mapObjMan);
+#ifdef SDK_PORT
+    FollowingHack_MapObjectsReady(fieldSystem);
+#endif
     CommPlayerMan_ForcePos();
     sub_02062C3C(fieldSystem->mapObjMan);
     LandDataManager_TrackTarget(PlayerAvatar_GetPos(fieldSystem->playerAvatar), fieldSystem->landDataMan);

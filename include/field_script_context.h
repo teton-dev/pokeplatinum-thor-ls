@@ -27,8 +27,14 @@ struct ScriptContext {
     FieldSystem *fieldSystem;
 };
 
+#ifdef SDK_PORT
+// Pointers in the port: the Following hack adds commands
+extern const ScrCmdFunc *gFieldScriptCommands;
+extern u32 gNumFieldScriptCommands;
+#else
 extern const ScrCmdFunc gFieldScriptCommands[];
 extern const u32 gNumFieldScriptCommands;
+#endif
 
 #define ScriptContext_ReadByte(ctx) (*(ctx->scriptPtr++))
 

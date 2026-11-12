@@ -1,5 +1,10 @@
 #include "script_manager.h"
 
+#ifdef SDK_PORT
+#include "port/following_hack.h"
+#endif
+#include <stdio.h>
+
 #include <nitro.h>
 #include <string.h>
 
@@ -235,6 +240,13 @@ static u16 ScriptContext_LoadAndOffsetID(FieldSystem *fieldSystem, ScriptContext
         ScriptContext_Load(fieldSystem, ctx, script, textbank); \
         retScriptID -= threshold; \
     }
+#ifdef SDK_PORT
+    // Following Renegade Platinum's scripts (talking to the follower...): one more script file and text bank
+    if (FollowingHack_IsActive() && retScriptID >= 10500) {
+        ScriptContext_Load(fieldSystem, ctx, 1124, 724);
+        retScriptID -= 10500;
+    } else
+#endif
     if (0) {}
     SCRIPT_RANGE_TABLE(SCRIPT_ENTRY)
 #undef SCRIPT_ENTRY

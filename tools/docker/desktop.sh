@@ -25,7 +25,7 @@ set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 THOR_DEV=${THOR_DEV:-$HOME/thor-dev}
 POKEBW2=${POKEBW2:-$(cd "$ROOT/.." && pwd)/pokebw2}
-DATA=$THOR_DEV/desktop
+DATA=${DATA:-$THOR_DEV/desktop}
 NAME=pokeplatinum-desktop
 IMAGE=pokeplatinum-desktop
 SCREEN=${SCREEN:-1280x800}

@@ -1,5 +1,9 @@
 #include "scrcmd.h"
 
+#ifdef SDK_PORT
+#include "port/following_hack.h"
+#endif
+
 #include <nitro.h>
 #include <nitro/code16.h>
 #include <string.h>
@@ -761,11 +765,20 @@ static const WindowTemplate sYesNoWindowTemplate = {
     .baseTile = 0x21F,
 };
 
+#ifdef SDK_PORT
+static const ScrCmdFunc sFieldScriptCommands[] = {
+#else
 const ScrCmdFunc gFieldScriptCommands[] = {
+#endif
 #include "data/scripts/scrcmd.h"
 };
 
+#ifdef SDK_PORT
+const ScrCmdFunc *gFieldScriptCommands = sFieldScriptCommands;
+u32 gNumFieldScriptCommands = NELEMS(sFieldScriptCommands);
+#else
 const u32 gNumFieldScriptCommands = NELEMS(gFieldScriptCommands);
+#endif
 
 static BOOL ScrCmd_Noop(ScriptContext *ctx)
 {
@@ -2116,6 +2129,10 @@ static MapObject *GetLocalMapObjByIndex(FieldSystem *fieldSystem, int localID)
 
     if (localID == LOCALID_FOLLOWER) {
         object = MapObjMan_GetLocalMapObjByMovementType(fieldSystem->mapObjMan, MOVEMENT_TYPE_FOLLOW_PLAYER);
+#ifdef SDK_PORT
+    } else if (localID == 0xFD && FollowingHack_IsActive()) {
+        object = FollowingHack_ScriptObject(fieldSystem, localID);
+#endif
     } else if (localID == LOCALID_CAMERA) {
         MapObject **cameraObject = FieldSystem_GetScriptMemberPtr(fieldSystem, SCRIPT_MANAGER_CAMERA_OBJECT);
         object = *cameraObject;

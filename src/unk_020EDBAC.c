@@ -627,7 +627,18 @@ const UnkStruct_020EDF0C *const Unk_020EE3A8[] = {
     &Unk_020EE2B8
 };
 
+#ifdef SDK_PORT
+// The hack's new actions (src/port/following_hack.c, unk_020655F4.c): the follower's hops, and the Pokemon's
+// emotes, which aren't done (they end at once)
+extern BOOL (*const gMovementActionFuncs_FollowerHopNorth[])(MapObject *);
+extern BOOL (*const gMovementActionFuncs_FollowerHopSouth[])(MapObject *);
+extern BOOL (*const gMovementActionFuncs_FollowerHopWest[])(MapObject *);
+extern BOOL (*const gMovementActionFuncs_FollowerHopEast[])(MapObject *);
+extern BOOL (*const gMovementActionFuncs_FollowerEmote[])(MapObject *);
+BOOL (*const *const gMovementActionFuncs[MAX_MOVEMENT_ACTION + 18])(MapObject *) = {
+#else
 BOOL (*const *const gMovementActionFuncs[MAX_MOVEMENT_ACTION])(MapObject *) = {
+#endif
     [MOVEMENT_ACTION_FACE_NORTH] = gMovementActionFuncs_FaceNorth,
     [MOVEMENT_ACTION_FACE_SOUTH] = gMovementActionFuncs_FaceSouth,
     [MOVEMENT_ACTION_FACE_WEST] = gMovementActionFuncs_FaceWest,
@@ -782,6 +793,13 @@ BOOL (*const *const gMovementActionFuncs[MAX_MOVEMENT_ACTION])(MapObject *) = {
     [MOVEMENT_ACTION_151] = gMovementActionFuncs_151,
     [MOVEMENT_ACTION_152] = gMovementActionFuncs_152,
     [MOVEMENT_ACTION_153] = gMovementActionFuncs_153,
+#ifdef SDK_PORT
+    [154] = gMovementActionFuncs_FollowerHopNorth,
+    [155] = gMovementActionFuncs_FollowerHopSouth,
+    [156] = gMovementActionFuncs_FollowerHopWest,
+    [157] = gMovementActionFuncs_FollowerHopEast,
+    [158 ... 171] = gMovementActionFuncs_FollowerEmote,
+#endif
 };
 
 static const int sMovementActionCodes_Face[] = {
@@ -1022,6 +1040,10 @@ static const int Unk_020EDBBC[] = {
     [DIR_EAST] = MOVEMENT_ACTION_144,
 };
 
+#ifdef SDK_PORT
+static const int sMovementActionCodes_FollowerHop[] = { 154, 155, 156, 157 };
+#endif
+
 const int *const gMovementActionCodes[] = {
     sMovementActionCodes_Face,
     sMovementActionCodes_WalkSlower,
@@ -1057,5 +1079,8 @@ const int *const gMovementActionCodes[] = {
     Unk_020EDBBC,
     Unk_020EDC1C,
     Unk_020EDD8C,
+#ifdef SDK_PORT
+    sMovementActionCodes_FollowerHop,
+#endif
     NULL
 };
