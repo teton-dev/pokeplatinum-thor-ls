@@ -1,0 +1,32 @@
+# Following Renegade Platinum: from the fixture `turtwig` of that ROM (DATA=~/thor-dev/desktop-following ...
+# new_game.txt --keep before-starter, then turtwig.txt --from before-starter --keep turtwig), out of the house and
+# on to the grass, where the follower comes out of its ball and goes back (the follower-ball command), with
+# screenshots. The ball shows for two frames only: use stillshot (one frame at a time) to see it.
+#
+#   DATA=$HOME/thor-dev/desktop-following tools/docker/desktop.sh test tests/scripts/following_ball.txt --from turtwig
+
+mash A until free
+walk DOWN 3
+wait 60
+walk RIGHT 3
+wait 60
+shot a0
+follower-ball 0
+wait 2
+shot b0
+wait 4
+shot b1
+wait 6
+shot b2
+wait 10
+shot b3
+wait 30
+shot b4
+follower-ball 1
+wait 4
+shot b5
+wait 6
+shot b6
+wait 30
+shot b7
+exit 0

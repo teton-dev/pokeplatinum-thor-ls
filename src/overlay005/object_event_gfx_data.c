@@ -203,7 +203,11 @@ static const UnkStruct_ov5_021FB0F0 Unk_ov5_021FB028 = {
     ov5_021EC9A0
 };
 
+#ifdef SDK_PORT
+static const ObjectEventGfxRendererEntry gObjectEventGfxRenderersTable_Vanilla[] = {
+#else
 const ObjectEventGfxRendererEntry gObjectEventGfxRenderersTable[] = {
+#endif
     { OBJ_EVENT_GFX_PLAYER_M, &Unk_ov5_021FB0F0 },
     { OBJ_EVENT_GFX_NINJA_BOY, &Unk_ov5_021FAFD8 },
     { OBJ_EVENT_GFX_TWIN, &Unk_ov5_021FAFD8 },
@@ -465,7 +469,15 @@ const ObjectEventGfxRendererEntry gObjectEventGfxRenderersTable[] = {
     { OBJ_EVENT_GFX_SENTINEL_ID, NULL }
 };
 
+#ifdef SDK_PORT
+const ObjectEventGfxRendererEntry *gObjectEventGfxRenderersTable = gObjectEventGfxRenderersTable_Vanilla;
+#endif
+
+#ifdef SDK_PORT
+static const ObjectEventGfxFileEntry gObjectEventGfxTexturesTable_Vanilla[] = {
+#else
 const ObjectEventGfxFileEntry gObjectEventGfxTexturesTable[] = {
+#endif
     { OBJ_EVENT_GFX_PLAYER_M, player_m_nsbtx },
     { OBJ_EVENT_GFX_NINJA_BOY, ninja_boy_nsbtx },
     { OBJ_EVENT_GFX_TWIN, twin_nsbtx },
@@ -909,6 +921,10 @@ const ObjectEventGfxFileEntry gObjectEventGfxTexturesTable[] = {
     { OBJ_EVENT_GFX_SENTINEL_ID, 0 }
 };
 
+#ifdef SDK_PORT
+const ObjectEventGfxFileEntry *gObjectEventGfxTexturesTable = gObjectEventGfxTexturesTable_Vanilla;
+#endif
+
 const ObjectEventGfxFileEntry gObjectEventGfxModelsTable[] = {
     { BILLBOARD_MODEL_GENERIC_32x32, generic_32x32_nsbmd },
     { BILLBOARD_MODEL_GENERIC_16x16, generic_16x16_nsbmd },
@@ -931,7 +947,11 @@ const ObjectEventGfxFileEntry gObjectEventGfxModelsTable[] = {
     { BILLBOARD_MODEL_SENTINEL_ID, 0 }
 };
 
+#ifdef SDK_PORT
+static const ObjectEventGfxFileEntry gObjectEventGfxFrameSeqsTable_Vanilla[] = {
+#else
 const ObjectEventGfxFileEntry gObjectEventGfxFrameSeqsTable[] = {
+#endif
     { BILLBOARD_FRAME_SEQ_GENERIC_WALK, generic_walk_bin },
     { BILLBOARD_FRAME_SEQ_WALK_AND_RUN, walk_and_run_bin },
     { BILLBOARD_FRAME_SEQ_BERRY_TREE, berry_tree_bin },
@@ -957,6 +977,10 @@ const ObjectEventGfxFileEntry gObjectEventGfxFrameSeqsTable[] = {
     { BILLBOARD_FRAME_SEQ_VS_SEEKER, vs_seeker_bin },
     { BILLBOARD_FRAME_SEQ_SENTINEL_ID, 0 }
 };
+
+#ifdef SDK_PORT
+const ObjectEventGfxFileEntry *gObjectEventGfxFrameSeqsTable = gObjectEventGfxFrameSeqsTable_Vanilla;
+#endif
 
 static const BillboardAnim sWalkRunBillboardAnims[] = {
     { .startFrame = 0, .endFrame = 15, .animType = BILLBOARD_ANIM_TYPE_LOOP },
@@ -1124,7 +1148,11 @@ const int gPreloadedBillboardFrameSeqs[] = {
     BILLBOARD_FRAME_SEQ_SENTINEL_ID
 };
 
+#ifdef SDK_PORT
+static const ObjectEventGfxModelAnimEntry gObjectEventGfxModelAnimsTable_Vanilla[] = {
+#else
 const ObjectEventGfxModelAnimEntry gObjectEventGfxModelAnimsTable[] = {
+#endif
     { OBJ_EVENT_GFX_PLAYER_M, BILLBOARD_MODEL_GENERIC_32x32, BILLBOARD_FRAME_SEQ_WALK_AND_RUN, sWalkRunBillboardAnims },
     { OBJ_EVENT_GFX_NINJA_BOY, BILLBOARD_MODEL_GENERIC_32x32, BILLBOARD_FRAME_SEQ_GENERIC_WALK, sWalkBillboardAnims },
     { OBJ_EVENT_GFX_TWIN, BILLBOARD_MODEL_GENERIC_32x32, BILLBOARD_FRAME_SEQ_GENERIC_WALK, sWalkBillboardAnims },
@@ -1568,12 +1596,20 @@ const ObjectEventGfxModelAnimEntry gObjectEventGfxModelAnimsTable[] = {
     { OBJ_EVENT_GFX_SENTINEL_ID, BILLBOARD_MODEL_SENTINEL_ID, BILLBOARD_FRAME_SEQ_SENTINEL_ID, NULL }
 };
 
+#ifdef SDK_PORT
+const ObjectEventGfxModelAnimEntry *gObjectEventGfxModelAnimsTable = gObjectEventGfxModelAnimsTable_Vanilla;
+#endif
+
 const int gFogIgnoredModels[] = {
     BILLBOARD_MODEL_HEARTHOME_GYM_PLAYER,
     BILLBOARD_MODEL_SENTINEL_ID,
 };
 
+#ifdef SDK_PORT
+static const ObjectEventGfxRenderDetailsEntry gObjectEventGfxRenderDetailsTable_Vanilla[] = {
+#else
 const ObjectEventGfxRenderDetailsEntry gObjectEventGfxRenderDetailsTable[] = {
+#endif
     { OBJ_EVENT_GFX_PLAYER_M, MODEL_TYPE_BILLBOARD, .hasShadow = TRUE, TRACK_TYPE_FOOTSTEPS, .hasReflection = TRUE },
     { OBJ_EVENT_GFX_NINJA_BOY, MODEL_TYPE_BILLBOARD, .hasShadow = TRUE, TRACK_TYPE_FOOTSTEPS, .hasReflection = TRUE },
     { OBJ_EVENT_GFX_TWIN, MODEL_TYPE_BILLBOARD, .hasShadow = TRUE, TRACK_TYPE_FOOTSTEPS, .hasReflection = TRUE },
@@ -1835,6 +1871,10 @@ const ObjectEventGfxRenderDetailsEntry gObjectEventGfxRenderDetailsTable[] = {
     { OBJ_EVENT_GFX_PLAYER_F_POKETCH_HEARTHOME_GYM, MODEL_TYPE_BILLBOARD, .hasShadow = FALSE, TRACK_TYPE_FOOTSTEPS, .hasReflection = TRUE },
     { OBJ_EVENT_GFX_SENTINEL_ID, 0, 0, 0, 0 }
 };
+
+#ifdef SDK_PORT
+const ObjectEventGfxRenderDetailsEntry *gObjectEventGfxRenderDetailsTable = gObjectEventGfxRenderDetailsTable_Vanilla;
+#endif
 
 const BerryGraphicsData gBerryGraphicsTable[NUM_BERRIES] = {
     [BERRY_ID(CHERI)] = { OBJ_EVENT_GRAPHICS_CHERI_GROWING, OBJ_EVENT_GRAPHICS_CHERI_BLOOMING, OBJ_EVENT_GRAPHICS_CHERI_FRUIT },

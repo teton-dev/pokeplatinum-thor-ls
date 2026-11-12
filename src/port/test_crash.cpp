@@ -41,6 +41,17 @@ static void OnCrash(int number, siginfo_t *info, void *context)
 {
     char what[32];
     snprintf(what, sizeof(what), "CRASH signal %d", number);
+#if defined(__x86_64__)
+    // Where it crashed first: the unwinder can crash in a corrupt stack, and nothing is printed then
+    {
+        const ucontext_t *early = (const ucontext_t *)context;
+        char line[128];
+        int length = snprintf(line, sizeof(line), "[test] CRASH signal %d at %#lx, base %#lx, address %p\n", number,
+                              (unsigned long)(early->uc_mcontext.gregs[REG_RIP] - (uintptr_t)&__executable_start),
+                              (unsigned long)(uintptr_t)&__executable_start, info->si_addr);
+        write(STDOUT_FILENO, line, length);
+    }
+#endif
     PrintBacktrace(what);
 #if defined(__x86_64__)
     // Where it crashed, and the return address on top of the stack: what's left of the backtrace when the crash is a

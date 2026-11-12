@@ -2,6 +2,7 @@
 
 #ifdef SDK_PORT
 #include "port/follower.h"
+#include "port/following_hack.h"
 #endif
 
 #include <nitro.h>
@@ -178,7 +179,12 @@ void sub_0206184C(MapObjectManager *mapObjMan, enum MapHeaderID oldMapHeaderID, 
     MapObject *mapObj = MapObjectMan_GetMapObject(mapObjMan);
 
     while (maxObjects) {
+#ifdef SDK_PORT
+        // Following Renegade Platinum's follower goes on to the next map (FollowingHack_MapConnected)
+        if (sub_02062CF8(mapObj) == TRUE && !FollowingHack_IsFollower(mapObj)) {
+#else
         if (sub_02062CF8(mapObj) == TRUE) {
+#endif
             int v0 = sub_0206244C(mapObj, newMapHeaderID, objEventCount, objectEvent);
 
             switch (v0) {
@@ -1664,6 +1670,14 @@ void MapObjectMan_PauseAllMovement(MapObjectManager *mapObjMan)
 
     do {
         if (sub_02062CF8(mapObj)) {
+#ifdef SDK_PORT
+            // Following Renegade Platinum's follower keeps moving (hk_23CBF3C)
+            if (FollowingHack_IsFollower(mapObj)) {
+                mapObj++;
+                maxObjects--;
+                continue;
+            }
+#endif
             MapObject_SetPauseMovementOn(mapObj);
         }
 
@@ -2354,8 +2368,12 @@ static const UnkStruct_020EDF0C *sub_0206320C(u32 param0)
 {
 #ifdef SDK_PORT
     // The following Pokemon (port/follower.h) moves like a partner trainer
-    if (param0 == MOVEMENT_TYPE_PORT_FOLLOWER) {
+    if (param0 == MOVEMENT_TYPE_PORT_FOLLOWER && !FollowingHack_IsActive()) {
         return Unk_020EE3A8[MOVEMENT_TYPE_FOLLOW_PLAYER];
+    }
+    // Following Renegade Platinum adds two movement types (0x44, 0x45) for its Pokemon (port/following_hack.c)
+    if (FollowingHack_MovementType(param0) != NULL) {
+        return FollowingHack_MovementType(param0);
     }
 #endif
     GF_ASSERT(param0 < 0x44);
@@ -2414,6 +2432,9 @@ static const UnkStruct_ov5_021FB0F0 *sub_02063244(u32 param0)
         v0++;
     } while (v0->graphicsID != 0xffff);
 
+#ifdef SDK_PORT
+    fprintf(stderr, "[assert] no renderer for object graphics ID 0x%x\n", param0);
+#endif
     GF_ASSERT(FALSE);
     return NULL;
 }

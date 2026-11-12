@@ -1,5 +1,6 @@
 // Tables and instructions of ROM hacks; see include/port/rom_patches.h
 #include "port/rom_patches.h"
+#include "port/following_hack.h"
 #include "port/randomizer.h"
 
 #include <nitro.h>
@@ -308,7 +309,12 @@ static void ApplyInstructions(RomPatchesInfo *info)
         u32 address = ReadU32(battle, 0x1A18C);
         u32 offset;
         const RomFile *file;
-        for (int candidate = 0; address != 0x0226ECD4 && !sHasTypeChart && (file = FileOfAddress(address, candidate, &offset)) != NULL; candidate++) {
+        // Following Renegade Platinum moved it into the hack's code (weather_sys.narc's member 65)
+        if (FollowingHack_Blob() != NULL && address >= FOLLOWING_HACK_BASE && address < FOLLOWING_HACK_BASE + FOLLOWING_HACK_SIZE) {
+            RomFile blob = { TRUE, (u8 *)FollowingHack_Blob(), FOLLOWING_HACK_SIZE };
+            sHasTypeChart = LoadTypeChart(&blob, address - FOLLOWING_HACK_BASE);
+        }
+        for (int candidate = 0; address != 0x0226ECD4 && address < FOLLOWING_HACK_BASE && !sHasTypeChart && (file = FileOfAddress(address, candidate, &offset)) != NULL; candidate++) {
             sHasTypeChart = LoadTypeChart(file, offset);
         }
         if (sHasTypeChart) {

@@ -105,12 +105,37 @@ typedef struct ObjectEventGfxFieldAnimsInitialPosEntry {
 
 extern const UnkStruct_ov5_021FB0F0 gInvisibleObjectEventGfxRenderer;
 
+#ifdef SDK_PORT
+// Pointers in the port: the Following Pokemon hack adds entries (port/following_hack.h)
+extern const ObjectEventGfxRendererEntry *gObjectEventGfxRenderersTable;
+#else
 extern const ObjectEventGfxRendererEntry gObjectEventGfxRenderersTable[];
+#endif
+#ifdef SDK_PORT
+// Pointers in the port: the Following Pokemon hack adds entries (port/following_hack.h)
+extern const ObjectEventGfxFileEntry *gObjectEventGfxTexturesTable;
+#else
 extern const ObjectEventGfxFileEntry gObjectEventGfxTexturesTable[];
+#endif
 extern const ObjectEventGfxFileEntry gObjectEventGfxModelsTable[];
+#ifdef SDK_PORT
+// Pointers in the port: the Following Pokemon hack adds entries (port/following_hack.h)
+extern const ObjectEventGfxFileEntry *gObjectEventGfxFrameSeqsTable;
+#else
 extern const ObjectEventGfxFileEntry gObjectEventGfxFrameSeqsTable[];
+#endif
+#ifdef SDK_PORT
+// Pointers in the port: the Following Pokemon hack adds entries (port/following_hack.h)
+extern const ObjectEventGfxModelAnimEntry *gObjectEventGfxModelAnimsTable;
+#else
 extern const ObjectEventGfxModelAnimEntry gObjectEventGfxModelAnimsTable[];
+#endif
+#ifdef SDK_PORT
+// Pointers in the port: the Following Pokemon hack adds entries (port/following_hack.h)
+extern const ObjectEventGfxRenderDetailsEntry *gObjectEventGfxRenderDetailsTable;
+#else
 extern const ObjectEventGfxRenderDetailsEntry gObjectEventGfxRenderDetailsTable[];
+#endif
 extern const BerryGraphicsData gBerryGraphicsTable[NUM_BERRIES];
 extern const ObjectEventGfxFieldAnimsInitialPosEntry gObjectEventGfxOverworldAnimsInitialPosTable[];
 
