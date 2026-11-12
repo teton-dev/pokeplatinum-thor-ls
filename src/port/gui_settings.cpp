@@ -567,6 +567,9 @@ void DrawGameplay()
     ConfigToggle("Field moves without HMs", "With the HM in your bag (and its badge), Cut, Fly, Surf, Strength, "
         "Rock Smash, Waterfall, Rock Climb and Defog work without teaching the move: a Pokemon that could learn "
         "it does it. Fly and the others show in that Pokemon's menu.", &config->hmFree);
+    ConfigToggle("Field moves without badges", "Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb and "
+        "Defog work before you have the badge they need. A cheat: it can take you past the story's order.",
+        &config->hmNoBadges);
     Section("Items and EXP");
     ConfigToggle("Use another Repel?", "When a Repel wears off and the bag has another, the game asks whether to use "
         "one (as in Black and White): the same kind as last time, or the weakest you have.", &config->repelPrompt);

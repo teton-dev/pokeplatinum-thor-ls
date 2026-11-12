@@ -17,6 +17,7 @@ typedef struct {
     BOOL instantText; // see port/speed_up.h
     BOOL instantBars;
     BOOL hmFree; // field moves without HMs: see port/hm_free.h
+    BOOL hmNoBadges; // field moves without their badges: see port/hm_free.h
     BOOL hardLevelCap; // no battle EXP past the level cap (Gear_LevelCap)
     BOOL repelPrompt;  // "Use another Repel?" (port/repel_prompt.h)
     BOOL expShareAll;  // the whole party gets EXP, Gen 6 style (port/cheats.h)

@@ -19,6 +19,12 @@ BOOL HmFree_Enabled(void)
     return config != NULL && config->hmFree;
 }
 
+BOOL HmFree_NoBadges(void)
+{
+    const SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+    return config != NULL && config->hmNoBadges;
+}
+
 // The HM item that teaches a move, ITEM_NONE if none does
 static u16 HmForMove(u16 move)
 {

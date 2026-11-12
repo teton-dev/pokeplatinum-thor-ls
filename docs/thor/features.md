@@ -268,3 +268,7 @@ isn't an Egg if none could), with the usual message and cut-in. Fly (and the oth
 where they can be used) shows in that Pokemon's menu in the party screen. Owning the HM
 is what keeps the story in order: places the game blocks until you have a move are
 opened by the same HM as before.
+
+*Settings > Gameplay > Field moves without badges* (off by default) also drops the badge
+each field move needs, with or without HMs: a cheat, since it can take you past the
+story's order. Story events that check for a badge still do.
