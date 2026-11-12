@@ -11,6 +11,7 @@
 #include "field/field_system.h"
 #include "port/debug_field.h"
 #include "port/sim_config_prj.h"
+#include "port/stuck_report.h"
 #include "port/widescreen.h"
 
 #include "field_task.h"
@@ -38,6 +39,7 @@ void FrameRate_Update(void)
     const SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
     Widescreen_Update();
     Follower_Update();
+    StuckReport_Update(FrameRate_PlayerIsFreeOnOverworld());
 
     if (config == NULL || !config->enable60fps) {
         s60Hz = FALSE;

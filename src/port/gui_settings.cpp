@@ -29,6 +29,7 @@
 #include "port/save_sync.h"
 #include "port/save_version.h"
 #include "port/sim_config_prj.h"
+#include "port/stuck_report.h"
 #include "port/soft_reset.h"
 
 extern "C" {
@@ -815,6 +816,11 @@ void DrawGBASlot()
 void DrawDebug()
 {
     SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+    Section("Stuck?");
+    {
+        const char *report = StuckReport_Text();
+        Note(report[0] != '\0' ? report : "The player is free (or was held for less than 10 seconds).");
+    }
     Section("Game checks");
     ConfigToggle("Check the game's assertions", "Report failed GF_ASSERTs as a communication error.",
         &config->enableAsserts);

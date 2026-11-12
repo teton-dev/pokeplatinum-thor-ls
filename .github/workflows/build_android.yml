@@ -99,6 +99,14 @@ jobs:
           name: pokeplatinum-android
           path: android/app/build/outputs/apk/release/app-release.apk
 
+      # The library before stripping: names the functions in a crash or a stuck report from this build
+      # (src/port/stuck_report.c prints functions as offsets from StuckReport_Update; nm resolves them)
+      - name: Upload symbols
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: pokeplatinum-android-symbols
+          path: build_android/meson/main.so
+
   # A fixed download link for the newest build, so it can be grabbed straight from
   # the device's browser without signing in to GitHub or unzipping an artifact.
   # Its own job so that only this step gets write access.
