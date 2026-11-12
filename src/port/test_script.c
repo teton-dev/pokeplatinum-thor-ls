@@ -349,6 +349,16 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
+    } else if (strcmp(words[0], "trainers") == 0 && count >= 3) {
+        // trainers A B [PARTNER]: a double battle against trainers A and B, as when both see the player, beside the
+        // partner trainer PARTNER (Cheryl 608, Riley 609...) if given, once the player is free
+        command->op = OP_TRAINER;
+        command->x = atoi(words[1]);
+        command->y = -atoi(words[2]);
+        command->map = count >= 4 ? atoi(words[3]) : 0;
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
     } else if (strcmp(words[0], "party") == 0) {
         // Logs the party (species, level, ball, OT ID, HP) and the Pokémon in the PC, for the checks
         command->op = OP_PARTY;
@@ -898,7 +908,9 @@ static u16 Step(void)
                 }
                 return 0;
             }
-            if (!GUI_CreateMon_StartBattle(0, 0, command->x, command->y)) {
+            // y < 0: trainers A B [PARTNER] (y is -B, map the partner)
+            if (!(command->y < 0 ? GUI_CreateMon_StartTrainerBattle(command->x, -command->y, command->map)
+                                 : GUI_CreateMon_StartBattle(0, 0, command->x, command->y))) {
                 Fail(command, "the trainer battle couldn't start");
                 return 0;
             }

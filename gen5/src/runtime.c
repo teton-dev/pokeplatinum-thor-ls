@@ -67,7 +67,6 @@ static void *sMemory;
 static BOOL sStarted;
 static NNSGfdVramTransferTask sVramTransferTasks[VRAM_TRANSFER_TASKS];
 static BtlSetup *sSetup;
-static u32 sPrizeBase;
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
@@ -213,6 +212,42 @@ static PokeParty *NewParty(const Gen5Pokemon *mons, int count)
     return party;
 }
 
+// The trainers of the battle by BW2 client (1 and 3 the opponents, 2 the partner): their prize and their defeat line
+static const Gen5Trainer *sTrainers[4];
+
+// A Platinum trainer as BW2 client `client`, with its party, and its art in art slot `artSlot` (-1: none)
+static void SetupTrainer(u32 client, const Gen5Trainer *src, int artSlot)
+{
+    BtlSetupTrainer *trainer = Keep(TrainerBattleSetup_Create(HEAPID_PORT_BATTLE));
+    Keep(trainer->name);
+    trainer->trainerId = PORT_TRAINER_ID_START + src->id;
+    trainer->trainerClass = Gen5_TrainerClass(src->platinumClass);
+    trainer->aiFlags = Gen5_TrainerAIFlags(src->aiFlags);
+    for (int i = 0; i < 4; i++) {
+        trainer->items[i] = src->items[i];
+    }
+    GFL_StrBufLoadString(trainer->name, src->name);
+    if (artSlot >= 0 && src->hasArt) {
+        Gen5_SetTrainerArt(artSlot, trainer->trainerClass, src);
+    }
+    sSetup->trainers[client] = trainer;
+    // Platinum's class name in BW2's messages, in place of the class's
+    sSetup->trainerNames[client] = Keep(GFL_StrBufCreate(32, HEAPID_PORT_BATTLE));
+    GFL_StrBufLoadString(sSetup->trainerNames[client], src->className);
+    sSetup->party[client] = NewParty(src->party, src->partyCount);
+    sTrainers[client] = src;
+}
+
+static const Gen5Trainer *TrainerById(u32 trainerId)
+{
+    for (int i = 0; i < 4; i++) {
+        if (sTrainers[i] != NULL && PORT_TRAINER_ID_START + sTrainers[i]->id == trainerId) {
+            return sTrainers[i];
+        }
+    }
+    return NULL;
+}
+
 int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
 {
     if (sRunning || !Start(gen5Dir)) {
@@ -276,39 +311,52 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sSetup->result = BTL_RESULT_VICTORY;
     sSetup->party[0] = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));
     PokeParty_Copy(party, sSetup->party[0]);
+    for (int i = 0; i < 4; i++) {
+        sTrainers[i] = NULL;
+    }
+    Gen5_SetTrainerArt(0, 0, NULL);
+    Gen5_SetTrainerArt(1, 0, NULL);
+    // Two Pokémon a side: one trainer's two, two trainers' one each (BW2's multi mode 4, the second trainer as client
+    // 3), or with a partner (mode 3 against two trainers, 5 in the wild: the partner is client 2)
+    sSetup->battleStyle = battle->doubles ? BTL_STYLE_DOUBLE : BTL_STYLE_SINGLE;
     if (battle->isTrainer) {
-        const Gen5Trainer *src = &battle->trainer;
-        BtlSetupTrainer *trainer = Keep(TrainerBattleSetup_Create(HEAPID_PORT_BATTLE));
-        Keep(trainer->name);
-        trainer->trainerId = PORT_TRAINER_ID_START + src->id;
-        trainer->trainerClass = Gen5_TrainerClass(src->platinumClass);
-        trainer->aiFlags = Gen5_TrainerAIFlags(src->aiFlags);
-        for (int i = 0; i < 4; i++) {
-            trainer->items[i] = src->items[i];
+        SetupTrainer(1, &battle->trainer, 0);
+        if (battle->hasTrainer2) {
+            SetupTrainer(3, &battle->trainer2, 1);
+            sSetup->fieldSituation.multiMode = 4;
         }
-        GFL_StrBufLoadString(trainer->name, src->name);
-        if (src->hasArt) {
-            Gen5_SetTrainerArt(trainer->trainerClass, src);
-        } else {
-            Gen5_SetTrainerArt(0, NULL);
+        if (battle->hasPartner) {
+            SetupTrainer(2, &battle->partner, -1);
+            sSetup->fieldSituation.multiMode = battle->hasTrainer2 ? 3 : 5;
         }
-        sSetup->trainers[1] = trainer;
-        // Platinum's class name in BW2's messages, in place of the class's
-        sSetup->trainerNames[1] = Keep(GFL_StrBufCreate(32, HEAPID_PORT_BATTLE));
-        GFL_StrBufLoadString(sSetup->trainerNames[1], src->className);
+        // The first trainer's defeat line, for BW2's code that reads it from here (btl_string.c); the port's patch of
+        // btlv_core.c takes each trainer's (Gen5_PortTrainerDefeatText)
         sSetup->trainerLoseMsg = Keep(GFL_StrBufCreate(GEN5_TEXT_LENGTH, HEAPID_PORT_BATTLE));
-        GFL_StrBufLoadString(sSetup->trainerLoseMsg, src->defeatText);
+        GFL_StrBufLoadString(sSetup->trainerLoseMsg, battle->trainer.defeatText);
         // Platinum's trainers say nothing when they win
         sSetup->trainerWinMsg = Keep(GFL_StrBufCreate(4, HEAPID_PORT_BATTLE));
-        sPrizeBase = src->prizeBase;
         sSetup->battleType = BTL_TYPE_TRAINER;
         sSetup->fieldSituation.bgm = SEQ_BGM_VS_TRAINER;
         sSetup->fieldSituation.winBgm = SEQ_BGM_WIN2;
-        sSetup->party[1] = NewParty(src->party, src->partyCount);
-        printf("Gen 5: a trainer battle against trainer %u (class %u, BW2's %lu), %d Pokémon\n", src->id,
-            src->platinumClass, (unsigned long)trainer->trainerClass, src->partyCount);
+        printf("Gen 5: a %s trainer battle against trainer %u (class %u, BW2's %lu), %d Pokémon", battle->doubles ? "double" : "single",
+            battle->trainer.id, battle->trainer.platinumClass, (unsigned long)sSetup->trainers[1]->trainerClass,
+            battle->trainer.partyCount);
+        if (battle->hasTrainer2) {
+            printf(", and trainer %u (class %u), %d Pokémon", battle->trainer2.id, battle->trainer2.platinumClass,
+                battle->trainer2.partyCount);
+        }
+        if (battle->hasPartner) {
+            printf(", beside trainer %u (class %u), %d Pokémon", battle->partner.id, battle->partner.platinumClass,
+                battle->partner.partyCount);
+        }
+        printf("\n");
     } else {
-        sSetup->party[1] = NewParty(&battle->wild, 1);
+        Gen5Pokemon wild[2] = { battle->wild, battle->wild2 };
+        sSetup->party[1] = NewParty(wild, battle->hasWild2 ? 2 : 1);
+        if (battle->hasPartner) {
+            SetupTrainer(2, &battle->partner, -1);
+            sSetup->fieldSituation.multiMode = 5;
+        }
     }
 
     if (!battle->isTrainer) {
@@ -461,7 +509,8 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
     // A caught Pokémon is in the wild party (BtlMain_StorePartiesToSetup), with the ball it was caught in
     battle->caught = result == BTL_RESULT_CAPTURE && sSetup->capturedSlot < PokeParty_GetPkmCount(sSetup->party[1]);
     if (battle->caught) {
-        battle->caughtMon = battle->wild;
+        battle->caughtWild2 = sSetup->capturedSlot == 1;
+        battle->caughtMon = battle->caughtWild2 ? battle->wild2 : battle->wild;
         ReadPkm(PokeParty_GetPkm(sSetup->party[1], sSetup->capturedSlot), &battle->caughtMon);
     }
     printf("Gen 5: the battle ended (BW2's result %lu, money %+d)\n", (unsigned long)result, battle->moneyChange);
@@ -486,8 +535,19 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
 // The prize money's base for a Platinum trainer (btl_calc.c's patch): Platinum's class multiplier
 u32 Gen5_PortTrainerPrizeBase(u32 trainerId)
 {
-    (void)trainerId;
-    return sPrizeBase;
+    const Gen5Trainer *trainer = TrainerById(trainerId);
+    return trainer != NULL ? trainer->prizeBase : 0;
+}
+
+// The line a Platinum trainer says when beaten (btlv_core.c's patch), into strbuf: FALSE if it has none
+BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId)
+{
+    const Gen5Trainer *trainer = TrainerById(trainerId);
+    if (trainer == NULL || trainer->defeatText[0] == 0xFFFF) {
+        return FALSE;
+    }
+    GFL_StrBufLoadString(strbuf, trainer->defeatText);
+    return TRUE;
 }
 
 // The summary screen (BW2's overlay 207) on the same systems: a proc of its own in place of the battle's

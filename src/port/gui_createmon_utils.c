@@ -65,7 +65,8 @@ typedef struct DebugBattle {
     int species;
     int level;
     int trainerID;
-    BOOL doubles;
+    int trainer2ID;
+    int partnerID;
     int resultMask;
 } DebugBattle;
 
@@ -76,7 +77,7 @@ static BOOL FieldTask_DebugBattle(FieldTask *task)
     switch (battle->state++) {
     case 0:
         if (battle->trainerID != 0) {
-            Encounter_NewVsTrainer(task, battle->trainerID, battle->doubles ? battle->trainerID : 0, 0, HEAP_ID_FIELD2,
+            Encounter_NewVsTrainer(task, battle->trainerID, battle->trainer2ID, battle->partnerID, HEAP_ID_FIELD2,
                 &battle->resultMask);
         } else {
             Encounter_NewVsSpeciesAtLevel(task, battle->species, battle->level, &battle->resultMask, FALSE);
@@ -96,7 +97,7 @@ static BOOL FieldTask_DebugBattle(FieldTask *task)
     return TRUE;
 }
 
-int GUI_CreateMon_StartBattle(int speciesNo, int level, int trainerID, int doubles)
+static int StartDebugBattle(int speciesNo, int level, int trainerID, int trainer2ID, int partnerID)
 {
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
     if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)
@@ -110,9 +111,20 @@ int GUI_CreateMon_StartBattle(int speciesNo, int level, int trainerID, int doubl
     battle->species = speciesNo;
     battle->level = level;
     battle->trainerID = trainerID;
-    battle->doubles = doubles;
+    battle->trainer2ID = trainer2ID;
+    battle->partnerID = partnerID;
     FieldSystem_CreateTask(fieldSystem, FieldTask_DebugBattle, battle);
     return TRUE;
+}
+
+int GUI_CreateMon_StartBattle(int speciesNo, int level, int trainerID, int doubles)
+{
+    return StartDebugBattle(speciesNo, level, trainerID, doubles ? trainerID : 0, 0);
+}
+
+int GUI_CreateMon_StartTrainerBattle(int trainer1, int trainer2, int partner)
+{
+    return trainer1 != 0 && StartDebugBattle(0, 0, trainer1, trainer2, partner);
 }
 
 int GUI_CreateMon_StartWildEncounter(int speciesNo, int level)
