@@ -1,0 +1,38 @@
+--- a/src/ov167/btl_server_flow.c
++++ b/src/ov167/btl_server_flow.c
+@@ -2369,7 +2369,7 @@
+     BattleEventVar_SetConstValue(BTL_EVAR_MOVE, param->move);
+     BattleEventVar_SetConstValue(BTL_EVAR_MOVE_TYPE, param->type);
+     BattleEventVar_SetConstValue(BTL_EVAR_REFLECTED_FLAG, param->flags.reflected);
+-    BattleEventVar_SetConstValue(BTL_EVAR_STRING, (s32)string);
++    BattleEventVar_SetConstValue(BTL_EVAR_STRING, (s32)Gen5_PtrToU32(string) /* The port: 64 bits */);
+     BattleEventVar_SetConstValue(BTL_EVAR_EFFECTIVENESS, value);
+     BattleEventVar_SetRewriteOnceValue(BTL_EVAR_NO_EFFECT_FLAG, 0);
+     BattleEventVar_SetRewriteOnceValue(BTL_EVAR_FLAG, 0);
+@@ -3934,7 +3934,7 @@
+     BattleEventVar_Push(0x1e11);
+     BattleEventVar_SetConstValue(BTL_EVAR_ATTACKER, GetMonID(attacker));
+     BattleEventVar_SetConstValue(BTL_EVAR_DEFENDER, GetMonID(target));
+-    BattleEventVar_SetConstValue(BTL_EVAR_STRING, (s32)string);
++    BattleEventVar_SetConstValue(BTL_EVAR_STRING, (s32)Gen5_PtrToU32(string) /* The port: 64 bits */);
+     BattleEventVar_SetValue(BTL_EVAR_CONDITION, 0);
+     BattleEvent_CallHandlers(flow, BTL_EVENT_DECIDE_SPECIAL_MOVE_CONDITION);
+     condition = BattleEventVar_GetValue(BTL_EVAR_CONDITION);
+@@ -3947,7 +3947,7 @@
+     BattleEventVar_Push(0x1e28);
+     BattleEventVar_SetConstValue(BTL_EVAR_ATTACKER, GetMonID(attacker));
+     BattleEventVar_SetConstValue(BTL_EVAR_DEFENDER, GetMonID(target));
+-    BattleEventVar_SetConstValue(BTL_EVAR_STRING, (s32)string);
++    BattleEventVar_SetConstValue(BTL_EVAR_STRING, (s32)Gen5_PtrToU32(string) /* The port: 64 bits */);
+     BattleEventVar_SetConstValue(BTL_EVAR_CONDITION, condition);
+     BattleEvent_CallHandlers(flow, BTL_EVENT_ADD_MOVE_CONDITION_STRING);
+     BattleEventVar_Pop(0x1e2e);
+@@ -6216,7 +6216,7 @@
+     BattleEventVar_Push(0x2ccf);
+     BattleEventVar_SetConstValue(BTL_EVAR_MON, GetMonID(mon));
+     BattleEventVar_SetConstValue(BTL_EVAR_MOVE, actualMove);
+-    BattleEventVar_SetConstValue(BTL_EVAR_STRING, (s32)string);
++    BattleEventVar_SetConstValue(BTL_EVAR_STRING, (s32)Gen5_PtrToU32(string) /* The port: 64 bits */);
+     BattleEventVar_SetRewriteOnceValue(BTL_EVAR_FLAG, FALSE);
+     BattleEvent_CallHandlers(flow, BTL_EVENT_SET_MOVE_MESSAGE);
+     result = BattleEventVar_GetValue(BTL_EVAR_FLAG);

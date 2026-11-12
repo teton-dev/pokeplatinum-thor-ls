@@ -1,0 +1,28 @@
+# The Journal's page when a save loads (Continue opens it when the save has a journal entry to show), with widescreen on
+# (TEST_CONFIG as in widescreen_screens.txt). From a save that opens it:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_journal_load.txt --from FIXTURE
+mash A for 45
+shot load-1
+mash A for 45
+shot load-2
+mash A for 45
+shot load-3
+mash A for 45
+shot load-4
+mash A for 45
+shot load-5
+mash A for 45
+shot load-6
+mash A for 45
+shot load-7
+mash A for 45
+shot load-8
+mash A for 45
+shot load-9
+mash A for 45
+shot load-10
+mash A for 45
+shot load-11
+exit 0

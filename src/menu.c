@@ -13,6 +13,10 @@
 
 #include "res/text/bank/menu_entries.h"
 
+#ifdef SDK_PORT
+#include "port/test_script.h"
+#endif
+
 static BOOL TryMovingCursorAndPlaySound(Menu *menu, u8 direction, u16 sound);
 static u8 TryMovingCursor(Menu *menu, u8 direction);
 static u8 CalcMaxEntryWidth(Menu *menu);
@@ -37,6 +41,9 @@ Menu *Menu_New(const MenuTemplate *template, u8 xOffset, u8 yOffset, u8 cursorSt
 
     DrawWholeMenu(menu);
     DrawCursor(menu);
+#ifdef SDK_PORT
+    TestScript_OnEvent(TEST_EVENT_MENU);
+#endif
 
     return menu;
 }

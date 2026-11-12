@@ -15,6 +15,12 @@
 #include "trainer_info.h"
 #include "vars_flags.h"
 
+#ifdef SDK_PORT
+#include "port/hm_free.h"
+
+#include "script_manager.h"
+#endif
+
 BOOL ScrCmd_CheckPokedexAcquired(ScriptContext *ctx)
 {
     const Pokedex *pokedex = SaveData_GetPokedex(ctx->fieldSystem->saveData);
@@ -54,6 +60,17 @@ BOOL ScrCmd_CheckBadgeAcquired(ScriptContext *ctx)
 
     GF_ASSERT(badgeNum < MAX_BADGES);
     *destVar = TrainerInfo_HasBadge(SaveData_GetTrainerInfo(ctx->fieldSystem->saveData), badgeNum);
+
+#ifdef SDK_PORT
+    // Field moves without badges: the field moves' scripts (a tree to cut, a rock, a boulder, a rocky
+    // wall, a waterfall) see the badge; the story's checks don't
+    if (HmFree_NoBadges()) {
+        u16 *scriptID = FieldSystem_GetScriptMemberPtr(ctx->fieldSystem, SCRIPT_MANAGER_SCRIPT_ID);
+        if (*scriptID >= SCRIPT_ID(FIELD_MOVES, 0) && *scriptID <= SCRIPT_ID(FIELD_MOVES, 15)) {
+            *destVar = TRUE;
+        }
+    }
+#endif
 
     return FALSE;
 }

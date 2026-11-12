@@ -1,0 +1,38 @@
+--- a/src/ov170/tr_ai.c
++++ b/src/ov170/tr_ai.c
+@@ -996,7 +996,10 @@
+ // The list is 32-bit values, stored as 16-bit halves, and ends with 0xffffffff
+ BOOL AIIfResultInList(VM *vm, void *work) {
+     TrAIContext *wk = work;
+-    const u16 *list = (const u16 *)(vm->pc + (s32)VM_Read32(vm));
++    // The port: the offset is read before the program counter is: in one expression the order is unspecified,
++    // and GCC and Clang read the counter first (MWCC after), which put the list 4 bytes early
++    s32 listOffset = VM_Read32(vm);
++    const u16 *list = (const u16 *)(vm->pc + listOffset);
+     s32 offset = VM_Read32(vm);
+     s32 i = 0;
+     u32 value;
+@@ -1014,7 +1017,10 @@
+ 
+ BOOL AIIfResultNotInList(VM *vm, void *work) {
+     TrAIContext *wk = work;
+-    const u16 *list = (const u16 *)(vm->pc + (s32)VM_Read32(vm));
++    // The port: the offset is read before the program counter is: in one expression the order is unspecified,
++    // and GCC and Clang read the counter first (MWCC after), which put the list 4 bytes early
++    s32 listOffset = VM_Read32(vm);
++    const u16 *list = (const u16 *)(vm->pc + listOffset);
+     s32 offset = VM_Read32(vm);
+     s32 i = 0;
+     u32 value;
+@@ -2066,7 +2072,10 @@
+     TrAIContext *wk = work;
+     u32 mode = VM_Read32(vm);
+     s32 max = VM_Read32(vm);
+-    const u16 *table = (const u16 *)(vm->pc + (s32)VM_Read32(vm));
++    // The port: the offset is read before the program counter is: in one expression the order is unspecified,
++    // and GCC and Clang read the counter first (MWCC after), which put the table 4 bytes early
++    s32 tableOffset = VM_Read32(vm);
++    const u16 *table = (const u16 *)(vm->pc + tableOffset);
+     int index;
+     BOOL end = FALSE;
+ 

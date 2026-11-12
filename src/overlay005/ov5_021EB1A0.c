@@ -22,6 +22,7 @@
 #include "overworld_anim_manager.h"
 
 #ifdef SDK_PORT
+#include "port/following_hack.h"
 #include "port/frame_rate.h"
 #endif
 
@@ -107,6 +108,13 @@ static void (*const Unk_ov5_021FF448[11])(MapObject *, Billboard *, UnkStruct_ov
 Billboard *ov5_021EB1A0(MapObject *mapObj)
 {
     int v0 = MapObject_GetGraphicsID(mapObj);
+
+#ifdef SDK_PORT
+    // Following Renegade Platinum's Pokemon (hk_23CBD0C): the billboard renderer's
+    if (FollowingHack_IsPokemonGraphics(v0)) {
+        return ov5_021ECB80(mapObj);
+    }
+#endif
 
     switch (v0) {
     case OBJ_EVENT_GFX_PLAYER_M:

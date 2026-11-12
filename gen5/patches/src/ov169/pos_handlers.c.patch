@@ -1,0 +1,11 @@
+--- a/src/ov169/pos_handlers.c
++++ b/src/ov169/pos_handlers.c
+@@ -51,7 +51,7 @@
+                 }
+                 BattleEventItem_SetWorkValue(item, 6, monId);
+             }
+-            return (BOOL)item;
++            return item != NULL; // The port: 64 bits
+         }
+     }
+     return FALSE;

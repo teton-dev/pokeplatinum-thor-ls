@@ -143,6 +143,13 @@ static void StartMenu_SetIconAnimationAndPalette(Sprite *sprite, u16 anim, u16 p
 static void StartMenu_ChangeActiveMenuIcon(StartMenu *menu, u16 oldIndex, u16 index);
 static void StartMenu_TryTransitionIconAnimationToWiggle(Sprite *sprite);
 static BOOL StartMenu_Main(FieldTask *fieldTask);
+
+#ifdef SDK_PORT
+BOOL StartMenu_PortIsOpen(FieldSystem *fieldSystem)
+{
+    return fieldSystem->task != NULL && fieldSystem->task->func == StartMenu_Main;
+}
+#endif
 static void StartMenu_InitMenu(FieldTask *fieldTask);
 static BOOL StartMenu_Select(FieldTask *fieldTask);
 static u32 StartMenu_MakeOptionList(StartMenu *menu, u8 *listOut);

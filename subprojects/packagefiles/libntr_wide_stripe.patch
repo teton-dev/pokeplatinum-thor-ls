@@ -1,0 +1,85 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -146,6 +146,10 @@
+ // usual, with their leftmost and rightmost pixel columns continued across the sides of a wide scene,
+ // for a bar or a box that reaches the screen's edges (its text stays in the middle). Default: none.
+ void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers);
++// Also asked for every frame: main- or sub-engine text-mode BG layers (bit n: BGn) whose sides, in a wide scene, repeat the
++// picture's pixel column `column` (0 to 1 across the 256 pixels) for each row, on both sides, instead of the edge columns:
++// for a background of horizontal stripes whose own edges are a frame. Wins over the edge extension and the mirror.
++void SIM_SetWidescreenBgStripe(u8 bgLayers, float column);
+ // Wide BG layers (SIM_SetWidescreenSceneOptions) whose sides mirror the 256-pixel picture instead of repeating it
+ void SIM_SetWidescreenBgMirror(u8 bgLayers);
+ // Layers (SIM_SetWidescreenBgEdgeExtend) whose sides mirror the 256-pixel picture instead of continuing its edge columns
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -30,6 +30,9 @@
+ uniform int wideEdgeMask;
+ // BG layers (bit n: BGn) of those whose sides mirror the picture instead of continuing its edge column
+ uniform int wideEdgeMirrorMask;
++// BG layers (bit n: BGn) whose sides repeat the picture's pixel column wideStripeColumn for each row
++uniform int wideStripeMask;
++uniform float wideStripeColumn;
+ // OBJ priorities (bit n: priority n) whose dark edge pixels continue across the sides
+ uniform int wideObjEdgeMask;
+ 
+@@ -68,10 +71,11 @@
+         bgc[0] = texture(bgTexture[0], cWide);
+     }
+     vec2 cEdge = vec2(clamp(c2d.s, 0.002, 0.998), c2d.t);
++    vec2 cStripe = vec2(wideStripeColumn, c2d.t);
+     vec2 cEdgeMirror = vec2(clamp(c2d.s < 0.0 ? -c2d.s : (c2d.s > 1.0 ? 2.0 - c2d.s : c2d.s), 0.002, 0.998), c2d.t);
+-    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : ((inside2d || (wideEdgeMask & 2) != 0) ? texture(bgTexture[1], (wideEdgeMirrorMask & 2) != 0 ? cEdgeMirror : cEdge) : none);
+-    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : ((inside2d || (wideEdgeMask & 4) != 0) ? texture(bgTexture[2], (wideEdgeMirrorMask & 4) != 0 ? cEdgeMirror : cEdge) : none);
+-    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], (wideEdgeMirrorMask & 8) != 0 ? cEdgeMirror : cEdge) : none);
++    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : ((inside2d || (wideEdgeMask & 2) != 0) ? texture(bgTexture[1], (wideStripeMask & 2) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 2) != 0 ? cEdgeMirror : cEdge)) : none);
++    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : ((inside2d || (wideEdgeMask & 4) != 0) ? texture(bgTexture[2], (wideStripeMask & 4) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 4) != 0 ? cEdgeMirror : cEdge)) : none);
++    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], (wideStripeMask & 8) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 8) != 0 ? cEdgeMirror : cEdge)) : none);
+     vec4 objc[4];
+     vec2 cWrap = vec2(fract(c2d.s), c2d.t);
+     // Outside the 4:3 picture, the edge column's pixel if it is dark (a bar), for the priorities asked for
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -746,6 +746,10 @@
+ static u8 sWideMirrorRequested = 0;
+ static u8 sWideMirrorBgs = 0;     // wide BG layers whose sides mirror the picture
+ static u8 sWideEdgeMirrorRequested = 0;
++static u8 sWideStripeRequested = 0;
++static float sWideStripeColumnRequested = 0.99f;
++static u8 sWideStripeBgs = 0;
++static float sWideStripeColumn = 0.99f;
+ static u8 sWideEdgeMirrorBgs = 0; // of those, the layers whose sides mirror the picture
+ static u8 sWideEdgeBgs = 0;       // main-engine BG layers whose edge columns continue across the sides
+ 
+@@ -778,6 +782,11 @@
+   sWideEdgeMirrorRequested = bgLayers & 0x0F;
+ }
+ 
++extern "C" void SIM_SetWidescreenBgStripe(u8 bgLayers, float column) {
++  sWideStripeRequested = bgLayers & 0x0F;
++  sWideStripeColumnRequested = column;
++}
++
+ extern "C" void SIM_SetWidescreenBgMirror(u8 bgLayers) {
+   sWideMirrorRequested = bgLayers & 0x0F;
+ }
+@@ -1400,6 +1409,10 @@
+                      wideHere ? sWideEdgeBgs : 0);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideEdgeMirrorMask"),
+                      wideHere ? sWideEdgeMirrorBgs : 0);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideStripeMask"),
++                     wideHere ? sWideStripeBgs : 0);
++  glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideStripeColumn"),
++                     sWideStripeColumn);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideObjEdgeMask"),
+                      wideHere ? sWideObjEdge : 0);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgScaleS"),
+@@ -2523,6 +2536,8 @@
+     sWideEdgeBgs = (wide || wideSub) ? sWideEdgeRequested : 0;
+     sWideMirrorBgs = wide ? sWideMirrorRequested : 0;
+     sWideEdgeMirrorBgs = (wide || wideSub) ? sWideEdgeMirrorRequested : 0;
++    sWideStripeBgs = (wide || wideSub) ? sWideStripeRequested : 0;
++    sWideStripeColumn = sWideStripeColumnRequested;
+     sWideObjEdge = (wide || wideSub) ? sWideObjEdgeRequested : 0;
+   }
+ 

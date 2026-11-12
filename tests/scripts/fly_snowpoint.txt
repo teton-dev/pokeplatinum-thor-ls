@@ -1,0 +1,19 @@
+# Flying to Snowpoint City as the town map's choice starts it (the HM cut-in, then the landing) at Fly's own spot,
+# the tile in front of the Pokémon Center (0x17B, 0xEA). The check is that it finishes and the player is free.
+# From a finished game's save (the fixture full100, the owner's, never committed):
+#
+#   tools/docker/desktop.sh test tests/scripts/fly_snowpoint.txt --from full100
+
+# The save opens on the journal page: A and B, a few times, until the overworld
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+fly 165 379 234 3
+until free timeout 3000
+wait 90
+shot snowpoint-fly
+exit 0

@@ -1,0 +1,17 @@
+# The Hall of Fame: the credits sequence as the Champion's room starts it (the Hall of Fame screen with the party, the
+# save, the dial message). Passes if the game gets back to the overworld.
+#
+#   tools/docker/desktop.sh test tests/scripts/hall_of_fame.txt --from turtwig
+#   ... with `gen5-battles on` (and a Gen 5 build) to check the setting makes no difference
+
+mash A until free
+hall-of-fame
+wait 300
+shot hof-1
+wait 900
+shot hof-2
+wait 1500
+shot hof-3
+mash A for 3000
+shot hof-end
+exit 0

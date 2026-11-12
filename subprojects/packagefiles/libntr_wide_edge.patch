@@ -1,0 +1,77 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -142,6 +142,10 @@
+ // edge, and so on), for 2D effects with no edges of their own (rain, snow, sand). Default:
+ // none (OBJs stay in the 4:3 middle).
+ void SIM_SetWidescreenObjWrap(u8 objPriorities);
++// Also asked for every frame: main-engine text-mode BG layers (bit n: BGn) drawn in the 4:3 middle as
++// usual, with their leftmost and rightmost pixel columns continued across the sides of a wide scene,
++// for a bar or a box that reaches the screen's edges (its text stays in the middle). Default: none.
++void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers);
+ BOOL SIM_IsWidescreenActive(void);
+ float SIM_WidescreenRatio(void);
+ 
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -739,6 +739,8 @@
+ static u8 sWideBgLayers = 0;      // main-engine BG layers drawn across the whole width
+ static u8 sWideObjRequested = 0;
+ static u8 sWideObjWrap = 0;       // main-engine OBJ priorities repeated across the sides
++static u8 sWideEdgeRequested = 0;
++static u8 sWideEdgeBgs = 0;       // main-engine BG layers whose edge columns continue across the sides
+ 
+ extern "C" void SIM_SetWidescreenScene(BOOL wide) {
+   sWideRequested = wide;
+@@ -753,6 +755,10 @@
+   sWideObjRequested = objPriorities & 0x0F;
+ }
+ 
++extern "C" void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers) {
++  sWideEdgeRequested = bgLayers & 0x0F;
++}
++
+ extern "C" BOOL SIM_IsWidescreenActive(void) {
+   return sWideActive ? TRUE : FALSE;
+ }
+@@ -1363,6 +1369,8 @@
+                      wideHere ? wideBgMask : 0);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideObjMask"),
+                      wideHere ? sWideObjWrap : 0);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideEdgeMask"),
++                     wideHere ? sWideEdgeBgs : 0);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgScaleS"),
+                      (float)sWide3dWidth / 512.0f);
+ 
+@@ -2476,6 +2484,7 @@
+     sWideScale3D = wide && sWideScale3DRequested;
+     sWideBgLayers = wide ? sWideBgRequested : 0;
+     sWideObjWrap = wide ? sWideObjRequested : 0;
++    sWideEdgeBgs = wide ? sWideEdgeRequested : 0;
+   }
+ 
+   // Setup 3D Viewport
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -26,6 +26,8 @@
+ uniform float wideBgScaleS;
+ // OBJ priorities repeated across the sides (bit n: priority n): the 4:3 picture wraps around
+ uniform int wideObjMask;
++// BG layers (bit n: BGn) whose edge columns continue across the sides
++uniform int wideEdgeMask;
+ 
+ smooth in vec2 fragTexCoord;
+ //uniform float inAlpha;
+@@ -61,9 +63,10 @@
+     if ((wideBgMask & 1) != 0 && bg0as3d == 0) {
+         bgc[0] = texture(bgTexture[0], cWide);
+     }
+-    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : (inside2d ? texture(bgTexture[1], c2d) : none);
+-    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : (inside2d ? texture(bgTexture[2], c2d) : none);
+-    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : (inside2d ? texture(bgTexture[3], c2d) : none);
++    vec2 cEdge = vec2(clamp(c2d.s, 0.002, 0.998), c2d.t);
++    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : ((inside2d || (wideEdgeMask & 2) != 0) ? texture(bgTexture[1], cEdge) : none);
++    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : ((inside2d || (wideEdgeMask & 4) != 0) ? texture(bgTexture[2], cEdge) : none);
++    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], cEdge) : none);
+     vec4 objc[4];
+     vec2 cWrap = vec2(fract(c2d.s), c2d.t);
+     objc[0] = inside2d ? texture(objTexture[0], c2d) : ((wideObjMask & 1) != 0 ? texture(objTexture[0], cWrap) : none);

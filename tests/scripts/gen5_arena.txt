@@ -1,0 +1,14 @@
+# Gen 5 battles: BW2's arena for a trainer battle. POKEPLATINUM_GEN5_ARENA=bg,terrain (BW2's battle background and
+# terrain numbers) overrides the arena the bridge picks; the shot is the battle's start. From the turtwig fixture:
+#
+#   POKEPLATINUM_GEN5_ARENA=11,0 tools/docker/desktop.sh test tests/scripts/gen5_arena.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+trainer 1
+until battle
+until command timeout 6000
+wait 90
+shot arena
+exit 0

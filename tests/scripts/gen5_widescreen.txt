@@ -1,0 +1,43 @@
+# Gen 5 battles, milestone 6: widescreen. With Settings > Display > Widescreen on and the bottom screen in its own
+# window, the top window 16:9: the overworld (Twinleaf Town, outside the player's house) and a wild and a trainer
+# battle in Black 2 and White 2's engine fill the window, unstretched, with the sprites, gauges and text in the 4:3
+# middle. The check is the shots (and "Widescreen: on" in the log). From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/gen5_widescreen.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+wait 30
+shot overworld
+# A wild Bidoof: the send-out, the command, Tackle, then RUN until it works
+wild 399 5
+until battle
+wait 60
+shot wild-intro
+until command
+wait 30
+shot wild-command
+touch 128 95
+wait 30
+touch 64 54
+wait 90
+shot wild-tackle
+until command timeout 6000
+wait 30
+touch 128 178
+mash B touch 128 178 until free
+wait 30
+shot overworld-back
+# Youngster Tristan; Tackle until it's over
+trainer 1
+until battle
+wait 120
+shot trainer-intro
+until command timeout 6000
+wait 30
+shot trainer-command
+mash A until free timeout 12000
+shot trainer-back
+exit 0

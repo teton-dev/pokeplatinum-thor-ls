@@ -1,5 +1,6 @@
 // Following Pokemon; see include/port/follower.h
 #include "port/follower.h"
+#include "port/following_hack.h"
 
 #include <nitro.h>
 #include <stdio.h>
@@ -391,7 +392,8 @@ void Follower_Update(void)
     }
 
     Pokemon *lead = Lead(fieldSystem);
-    const BOOL wanted = config->followerPokemon && lead != NULL && PlaceAllows(fieldSystem);
+    // Following Renegade Platinum has followers of its own (port/following_hack.h)
+    const BOOL wanted = config->followerPokemon && !FollowingHack_IsActive() && lead != NULL && PlaceAllows(fieldSystem);
 
     if (!wanted) {
         if (sFollower != NULL) {

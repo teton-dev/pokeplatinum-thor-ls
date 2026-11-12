@@ -1,0 +1,55 @@
+--- a/src/ov168/btlv_effvm.c
++++ b/src/ov168/btlv_effvm.c
+@@ -1176,10 +1176,11 @@
+     BtlvEffvmParticleVBlankWork *vblank;
+ 
+     if (BtlvEffvm_FindOrAddParticleId(wk, fileId, &index) == TRUE) {
+-        work = GFL_HeapAllocate(HEAPID_TAIL(wk->heapId), 0x4800, FALSE, "btlv_effvm.c", 1912);
++        // The port: twice the work, for the particle library's 64-bit structures
++        work = GFL_HeapAllocate(HEAPID_TAIL(wk->heapId), 0x4800 * 2, FALSE, "btlv_effvm.c", 1912);
+         resource = Particle_ReadResource(ARCID_BTLV_EFFVM_PARTICLES, fileId, HEAPID_TAIL(wk->heapId));
+         if (work != NULL && resource != NULL) {
+-            wk->particles[index] = Particle_CreateSystemEx(work, 0x4800, FALSE, 5, 6, 54, HEAPID_TAIL(wk->heapId));
++            wk->particles[index] = Particle_CreateSystemEx(work, 0x4800 * 2, FALSE, 5, 6, 54, HEAPID_TAIL(wk->heapId));
+             if (wk->particles[index] != NULL) {
+                 Particle_SetResourceNoUpload(wk->particles[index], resource);
+                 vblank = GFL_HeapAllocate(HEAPID_TAIL(wk->heapId), sizeof(BtlvEffvmParticleVBlankWork), FALSE,
+@@ -1920,6 +1921,7 @@
+     BtlvEffvm *wk = env;
+     u32 fileId = VM_Read32(vm);
+ 
++    Gen5_SetMoveBgShown(1); // The port: a move's full-screen background is up (widescreen mirrors its sides)
+     GFL_BGSysSetBGPriority(3, 1);
+     GFL_BGSysLoadNCGRStatic(ARCID_BTLV_EFFVM_BG, fileId + 1, 3, 0, 0, FALSE, HEAPID_TAIL(wk->heapId));
+     loadBGScrToVramByNarcNoReserveNegAlign(ARCID_BTLV_EFFVM_BG, fileId, 3, 0, 0, FALSE, HEAPID_TAIL(wk->heapId));
+@@ -2712,6 +2714,7 @@
+             BtlvScu_RestoreBG3(scu);
+         }
+         GFL_BGSysSetBGPriority(3, 0);
++        Gen5_SetMoveBgShown(0);
+         wk->bgMoved = FALSE;
+         GFL_BGSysMoveBG(3, BG_MOVE_SET_X, wk->bgX);
+         GFL_BGSysMoveBG(3, BG_MOVE_SET_Y, wk->bgY);
+@@ -3630,9 +3633,10 @@
+         VEC_CrossProduct(&base, &dir, &axis);
+         VEC_Normalize(&axis, &axis);
+         MTX_RotAxis43(&work->mtx, &axis, FX_SinIdx(angle), FX_CosIdx(angle));
+-        work->mtx.rt.trans.x = from.x;
+-        work->mtx.rt.trans.y = from.y;
+-        work->mtx.rt.trans.z = from.z;
++        // The port: the SDK's names of the translation row (pokebw2's fx.h adds rt.trans)
++        work->mtx._30 = from.x;
++        work->mtx._31 = from.y;
++        work->mtx._32 = from.z;
+     }
+     if (param->from != EFFVM_EMIT_EXPLICIT && param->to != EFFVM_EMIT_EXPLICIT && param->from != param->to) {
+         spinAxis = 2;
+@@ -4128,7 +4132,7 @@
+         pos->z += offset->z;
+     }
+     BtlvEffvm_MulVec44(pos, &mtx, pos, &w);
+-    pos->x = FX_Mul(FX_Div(pos->x, w), FX32_CONST(4));
++    pos->x = FX_Mul(FX_Div(pos->x, w), Gen5_Widen(FX32_CONST(4))); // The port: the projection is as wide as the screen
+     pos->y = FX_Mul(FX_Div(pos->y, w), FX32_CONST(3));
+     pos->z = -pos->z;
+ }

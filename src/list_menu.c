@@ -12,6 +12,10 @@
 #include "system.h"
 #include "text.h"
 
+#ifdef SDK_PORT
+#include "port/test_script.h"
+#endif
+
 static void PrintEntry(ListMenu *menu, void *string, u8 xOffset, u8 yOffset);
 static void PrintEntries(ListMenu *menu, u16 startIndex, u16 lineOffset, u16 lineCount);
 static void PrintCursor(ListMenu *menu);
@@ -24,6 +28,9 @@ static void InvokeCursorCallback(ListMenu *menu, u8 onInit);
 ListMenu *ListMenu_New(const ListMenuTemplate *template, u16 startListPos, u16 startCursorPos, u8 heapID)
 {
     ListMenu *menu = Heap_Alloc(heapID, sizeof(ListMenu));
+#ifdef SDK_PORT
+    TestScript_OnEvent(TEST_EVENT_MENU);
+#endif
 
     menu->template = *template;
     menu->cursor = ColoredArrow_New(heapID);

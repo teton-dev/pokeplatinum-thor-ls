@@ -52,6 +52,10 @@
 #include "res/text/bank/generic_names.h"
 #include "res/text/bank/naming_screen.h"
 
+#ifdef SDK_PORT
+#include "port/test_script.h"
+#endif
+
 // if these are modified, NamingScreen_InitializeCharsGraphics
 // and calls to NamingScreen_PrintChars need to be adjusted.
 #define NMS_NUM_ROWS 6
@@ -1069,6 +1073,9 @@ static BOOL NamingScreen_Init(ApplicationManager *appMan, int *state)
 
     switch (*state) {
     case 0:
+#ifdef SDK_PORT
+        TestScript_OnEvent(TEST_EVENT_NAMING_SCREEN);
+#endif
         SetVBlankCallback(NULL, NULL);
         DisableHBlank();
         GXLayers_DisableEngineALayers();

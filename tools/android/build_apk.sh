@@ -66,14 +66,18 @@ c = toolchain / 'aarch64-linux-android$API-clang'
 cpp = toolchain / 'aarch64-linux-android$API-clang++'
 ar = toolchain / 'llvm-ar'
 strip = toolchain / 'llvm-strip'
+nm = toolchain / 'llvm-nm'
+objcopy = toolchain / 'llvm-objcopy'
 
 [built-in options]
 # The decompiled game code type-puns and relies on wrapping signed arithmetic (as the
 # DS compiler allowed), so optimize without strict aliasing or signed-overflow UB
 # libntr also writes across neighbouring hardware-register variables in places (like the
 # DS register file), which FORTIFY would abort on.
-c_args = ['-I' + prefix / 'include', '-fno-strict-aliasing', '-fwrapv', '-U_FORTIFY_SOURCE']
-cpp_args = ['-I' + prefix / 'include', '-fno-strict-aliasing', '-fwrapv', '-U_FORTIFY_SOURCE']
+# A plain char is unsigned on arm64 but was signed on the DS (mwcc's -char signed) and is on
+# the x86 desktop builds, so make it signed here too.
+c_args = ['-I' + prefix / 'include', '-fno-strict-aliasing', '-fwrapv', '-fsigned-char', '-U_FORTIFY_SOURCE']
+cpp_args = ['-I' + prefix / 'include', '-fno-strict-aliasing', '-fwrapv', '-fsigned-char', '-U_FORTIFY_SOURCE']
 c_link_args = ['-L' + prefix / 'lib']
 cpp_link_args = ['-L' + prefix / 'lib']
 
@@ -92,7 +96,7 @@ INI
 # 4. libmain.so
 if [ ! -f "$BUILD/meson/build.ninja" ]; then
     # The PC builds compile without optimization; a handheld CPU can't absorb that
-    $MESON setup -Dbuild_target=android -Doptimization=2 \
+    $MESON setup -Dbuild_target=android -Doptimization=2 ${POKEBW2:+-Dpokebw2=$POKEBW2} \
         --native-file="$ROOT/meson/native.ini" \
         --cross-file="$BUILD/android.ini" \
         -- "$BUILD/meson"

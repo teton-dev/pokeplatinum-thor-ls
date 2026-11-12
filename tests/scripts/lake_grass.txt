@@ -1,0 +1,34 @@
+# From the turtwig fixture to the tall grass at Lake Verity, through the scene with Cyrus there; saved standing next to
+# the grass, as the fixture verity-grass for the tests that need wild Pokémon (gen5_grass.txt):
+#
+#   tools/docker/desktop.sh test tests/scripts/lake_grass.txt --from turtwig --keep verity-grass
+
+mash A until free
+# Out of the house, north through Twinleaf Town to Route 201
+walk DOWN 3
+mash A until free
+walk DOWN 1
+walk LEFT 3
+walk UP 16
+mash A until free
+walk UP 6
+mash A until free
+walk UP 4
+mash A until free
+# West along Route 201 to Verity Lakefront (Barry won't let the player into the grass east of here yet)
+walk UP 9
+walk LEFT 13
+walk LEFT 8
+mash A until free
+walk LEFT 9
+walk LEFT 4
+# North to the gap in the trees right of the sign, into Lake Verity: Cyrus's scene
+walk UP 8
+walk LEFT 1
+walk UP 3
+mash A until free timeout 9000
+walk UP 4
+walk UP 2
+shot verity-grass
+save
+exit 0

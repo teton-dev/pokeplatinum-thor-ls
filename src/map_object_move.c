@@ -29,6 +29,10 @@
 #include "unk_020655F4.h"
 #include "unk_020673B8.h"
 
+#ifdef SDK_PORT
+#include "port/following_hack.h"
+#endif
+
 #define sinkInDeepSnowDistance    -12
 #define sinkInDeeperSnowDistance  -14
 #define sinkInDeepestSnowDistance -16
@@ -109,6 +113,13 @@ static BOOL sub_02063478(const MapObject *mapObj)
     } else if (MapObject_GetMovementType(mapObj) == 0x32) {
         return TRUE;
     }
+#ifdef SDK_PORT
+    // Following Renegade Platinum's follower moves out of sight too (the hack's hk_23CCF64 for its movement 0x44;
+    // the port's 0x45 too, which watches for the end of a ride)
+    if (FollowingHack_IsFollower(mapObj)) {
+        return TRUE;
+    }
+#endif
 
     u32 status = MapObject_GetStatus(mapObj);
 
@@ -622,6 +633,12 @@ u32 sub_02063EBC(const MapObject *mapObj, int dir)
 
 int sub_02063F00(const MapObject *mapObj, int x, int y, int z)
 {
+#ifdef SDK_PORT
+    // Following Renegade Platinum: the player walks through its follower, the others don't (hk_23CBA98)
+    if (FollowingHack_IsActive()) {
+        return FollowingHack_ObjectAt(mapObj, x, y, z);
+    }
+#endif
     int maxObjects, objX, objZ;
     const MapObjectManager *mapObjMan = MapObject_MapObjectManager(mapObj);
     const MapObject *v4 = MapObjectMan_GetMapObjectConst(mapObjMan);

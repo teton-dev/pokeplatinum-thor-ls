@@ -1,0 +1,248 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -146,6 +146,24 @@
+ // usual, with their leftmost and rightmost pixel columns continued across the sides of a wide scene,
+ // for a bar or a box that reaches the screen's edges (its text stays in the middle). Default: none.
+ void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers);
++// Wide BG layers (SIM_SetWidescreenSceneOptions) whose sides mirror the 256-pixel picture instead of repeating it
++void SIM_SetWidescreenBgMirror(u8 bgLayers);
++// Layers (SIM_SetWidescreenBgEdgeExtend) whose sides mirror the 256-pixel picture instead of continuing its edge columns
++void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers);
++
++// Small images stamped onto a wide BG layer's picture each frame (Platinum's HP boxes get caps at their outer ends,
++// in the sides of the wide screen). The image is RGB, pure white is transparent. A stamp is placed with its top left
++// at (x, y) in the 256-pixel screen's coordinates (x may be negative or past 255), drawn height rows tall (the
++// row above the image's last five is repeated to stretch it), mirrored left to right when flipX
++typedef struct SIM_WideStamp {
++  short x;
++  short y;
++  short height;
++  unsigned char flipX;
++  unsigned char extraTop; // of a stretch, the rows added under the image's top (the rest go under its HP band)
++} SIM_WideStamp;
++void SIM_SetWidescreenStampImage(const unsigned char *rgb, int width, int height);
++void SIM_SetWidescreenStamps(unsigned char bgLayer, const SIM_WideStamp *stamps, int count);
+ // Also asked for every frame: main-engine OBJ priorities (bit n: priority n) whose dark pixels at the 4:3 picture's
+ // leftmost and rightmost columns continue across the sides of a wide scene, for a black bar that reaches the
+ // screen's edge (the Gen 5 battle's party balls' bar and ability bar). Default: none.
+--- a/libraries/sim/src/sim_g2.cpp
++++ b/libraries/sim/src/sim_g2.cpp
+@@ -277,7 +277,33 @@
+ #endif
+ }
+ 
+-bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width) {
++static const int kMaxWideStamps = 16;
++static unsigned char sStampImage[16 * 64 * 3];
++static int sStampW = 0;
++static int sStampH = 0;
++static SIM_WideStamp sStamps[kMaxWideStamps];
++static int sStampCount = 0;
++static int sStampBg = -1;
++
++void G2SIM_SetWideStampImage(const unsigned char *rgb, int width, int height) {
++  if (rgb == nullptr || width <= 0 || height <= 0 || width > 16 || height > 64) {
++    sStampW = sStampH = 0;
++    return;
++  }
++  memcpy(sStampImage, rgb, (size_t)width * height * 3);
++  sStampW = width;
++  sStampH = height;
++}
++
++void G2SIM_SetWideStamps(unsigned char bgNum, const SIM_WideStamp *stamps, int count) {
++  sStampBg = bgNum;
++  sStampCount = count > kMaxWideStamps ? kMaxWideStamps : (count < 0 ? 0 : count);
++  for (int i = 0; i < sStampCount; i++) {
++    sStamps[i] = stamps[i];
++  }
++}
++
++bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width, bool mirror) {
+   const bool text = bgNum <= 1 ? bgMode <= 5 : bgNum == 2 ? (bgMode <= 1 || bgMode == 3) : bgMode == 0;
+   if (!text || width <= SIM_NDS_SCREEN_WIDTH || width > kWideTexWidth || !s_SIM_DBG_BGenable[bgNum]) {
+     return false;
+@@ -306,6 +332,77 @@
+   sLineWidth = SIM_NDS_SCREEN_WIDTH;
+   sWideOut = nullptr;
+ 
++  if (mirror) {
++    // The sides show the picture mirrored: column -1-k is column k, and column 256+k is column 255-k
++    const int pad = (width - SIM_NDS_SCREEN_WIDTH) / 2;
++    for (int row = 0; row < SIM_NDS_SCREEN_HEIGHT; row++) {
++      u8 *line = sWideBuf + 4 * kWideTexWidth * row;
++      for (int x = 0; x < width; x++) {
++        const int screenX = x - pad;
++        int src;
++        if (screenX < 0) {
++          src = -1 - screenX;
++        } else if (screenX >= SIM_NDS_SCREEN_WIDTH) {
++          src = 2 * SIM_NDS_SCREEN_WIDTH - 1 - screenX;
++        } else {
++          continue;
++        }
++        if (src < 0 || src >= SIM_NDS_SCREEN_WIDTH) {
++          continue; // more than a screen's width of side
++        }
++        memcpy(line + 4 * x, line + 4 * (src + pad), 4);
++      }
++    }
++  }
++
++  if (sStampW > 0 && bgNum == sStampBg) {
++    const int pad = (width - SIM_NDS_SCREEN_WIDTH) / 2;
++    for (int i = 0; i < sStampCount; i++) {
++      const SIM_WideStamp &st = sStamps[i];
++      for (int r = 0; r < st.height; r++) {
++        // A stamp taller than its image repeats rows: st.extraTop of row 3 (under the box's corner, above the HP
++        // band), and the rest of the row above the image's last five (the fill under the band)
++        int srcRow = r;
++        if (st.height > sStampH) {
++          const int tail = 5;
++          const int topRows = 4; // rows 0..3, then extraTop copies of row 3
++          if (r < topRows) {
++            srcRow = r;
++          } else if (r < topRows + st.extraTop) {
++            srcRow = topRows - 1;
++          } else if (r >= st.height - tail) {
++            srcRow = r - (st.height - sStampH);
++          } else if (r - st.extraTop < sStampH - tail) {
++            srcRow = r - st.extraTop;
++          } else {
++            srcRow = sStampH - tail - 1;
++          }
++        }
++        const int y = st.y + r;
++        if (y < 0 || y >= SIM_NDS_SCREEN_HEIGHT || srcRow < 0 || srcRow >= sStampH) {
++          continue;
++        }
++        u8 *line = sWideBuf + 4 * kWideTexWidth * (SIM_NDS_SCREEN_HEIGHT - 1 - y);
++        for (int c = 0; c < sStampW; c++) {
++          const int srcCol = st.flipX ? sStampW - 1 - c : c;
++          const unsigned char *px = sStampImage + 3 * (srcRow * sStampW + srcCol);
++          if (px[0] == 255 && px[1] == 255 && px[2] == 255) {
++            continue;
++          }
++          const int x = st.x + c + pad;
++          if (x < 0 || x >= width) {
++            continue;
++          }
++          u8 *d = line + 4 * x;
++          d[0] = px[0];
++          d[1] = px[1];
++          d[2] = px[2];
++          d[3] = 255;
++        }
++      }
++    }
++  }
++
+   glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bgNum]);
+   glBindTexture(GL_TEXTURE_2D, sWideTextures[bgNum]);
+   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, kWideTexWidth, SIM_NDS_SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, sWideBuf);
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -742,6 +742,10 @@
+ static u8 sWideEdgeRequested = 0;
+ static u8 sWideObjEdgeRequested = 0;
+ static u8 sWideObjEdge = 0;       // main-engine OBJ priorities whose dark edge pixels continue across the sides
++static u8 sWideMirrorRequested = 0;
++static u8 sWideMirrorBgs = 0;     // wide BG layers whose sides mirror the picture
++static u8 sWideEdgeMirrorRequested = 0;
++static u8 sWideEdgeMirrorBgs = 0; // of those, the layers whose sides mirror the picture
+ static u8 sWideEdgeBgs = 0;       // main-engine BG layers whose edge columns continue across the sides
+ 
+ extern "C" void SIM_SetWidescreenScene(BOOL wide) {
+@@ -759,6 +763,22 @@
+ 
+ extern "C" void SIM_SetWidescreenObjEdgeExtend(u8 objPriorities) {
+   sWideObjEdgeRequested = objPriorities & 0x0F;
++}
++
++extern "C" void SIM_SetWidescreenStampImage(const unsigned char *rgb, int width, int height) {
++  G2SIM_SetWideStampImage(rgb, width, height);
++}
++
++extern "C" void SIM_SetWidescreenStamps(unsigned char bgLayer, const SIM_WideStamp *stamps, int count) {
++  G2SIM_SetWideStamps(bgLayer, stamps, count);
++}
++
++extern "C" void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers) {
++  sWideEdgeMirrorRequested = bgLayers & 0x0F;
++}
++
++extern "C" void SIM_SetWidescreenBgMirror(u8 bgLayers) {
++  sWideMirrorRequested = bgLayers & 0x0F;
+ }
+ 
+ extern "C" void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers) {
+@@ -1307,7 +1327,7 @@
+     const int bg = bgOrder[i];
+     glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bg]);
+     if (bgEnabled[bg] && !(bg == 0 && bg0as3d)) {
+-      if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, sWide3dWidth)) {
++      if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, sWide3dWidth, ((sWideMirrorBgs >> bg) & 1) != 0)) {
+         wideBgMask |= 1 << bg;
+         continue;
+       }
+@@ -1377,6 +1397,8 @@
+                      wideHere ? sWideObjWrap : 0);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideEdgeMask"),
+                      wideHere ? sWideEdgeBgs : 0);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideEdgeMirrorMask"),
++                     wideHere ? sWideEdgeMirrorBgs : 0);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideObjEdgeMask"),
+                      wideHere ? sWideObjEdge : 0);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgScaleS"),
+@@ -2493,6 +2515,8 @@
+     sWideBgLayers = wide ? sWideBgRequested : 0;
+     sWideObjWrap = wide ? sWideObjRequested : 0;
+     sWideEdgeBgs = wide ? sWideEdgeRequested : 0;
++    sWideMirrorBgs = wide ? sWideMirrorRequested : 0;
++    sWideEdgeMirrorBgs = wide ? sWideEdgeMirrorRequested : 0;
+     sWideObjEdge = wide ? sWideObjEdgeRequested : 0;
+   }
+ 
+--- a/libraries/sim/include/sim_g2.h
++++ b/libraries/sim/include/sim_g2.h
+@@ -1,10 +1,13 @@
+ #ifndef SIM_G2_H
+ #define SIM_G2_H
+ #include <nitro/types.h>
++#include <simulator/sim.h>
+ void G2SIM_DrawBG( u8 bgNum, u8 bgMode, u8 bg03D, u8 isSub );
+ void G2SIM_DrawOBJ( u32 line, u8 isSub, int bgnum );
+ void G2SIM_PlotPixel(u8 * screenBuf, u8 r, u8 g, u8 b, u32 x, u32 y, BOOL isSub);
+ // Widescreen: a main-engine text-mode BG layer drawn width DS pixels wide (centred on the
+ // screen) into its own texture, bound to the layer's texture unit. false: not text mode
+-bool G2SIM_DrawBGWide( u8 bgNum, u8 bgMode, int width );
++bool G2SIM_DrawBGWide( u8 bgNum, u8 bgMode, int width, bool mirror );
++void G2SIM_SetWideStampImage( const unsigned char *rgb, int width, int height );
++void G2SIM_SetWideStamps( unsigned char bgNum, const SIM_WideStamp *stamps, int count );
+ #endif
+\ No newline at end of file
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -28,6 +28,8 @@
+ uniform int wideObjMask;
+ // BG layers (bit n: BGn) whose edge columns continue across the sides
+ uniform int wideEdgeMask;
++// BG layers (bit n: BGn) of those whose sides mirror the picture instead of continuing its edge column
++uniform int wideEdgeMirrorMask;
+ // OBJ priorities (bit n: priority n) whose dark edge pixels continue across the sides
+ uniform int wideObjEdgeMask;
+ 
+@@ -66,9 +68,10 @@
+         bgc[0] = texture(bgTexture[0], cWide);
+     }
+     vec2 cEdge = vec2(clamp(c2d.s, 0.002, 0.998), c2d.t);
+-    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : ((inside2d || (wideEdgeMask & 2) != 0) ? texture(bgTexture[1], cEdge) : none);
+-    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : ((inside2d || (wideEdgeMask & 4) != 0) ? texture(bgTexture[2], cEdge) : none);
+-    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], cEdge) : none);
++    vec2 cEdgeMirror = vec2(clamp(c2d.s < 0.0 ? -c2d.s : (c2d.s > 1.0 ? 2.0 - c2d.s : c2d.s), 0.002, 0.998), c2d.t);
++    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : ((inside2d || (wideEdgeMask & 2) != 0) ? texture(bgTexture[1], (wideEdgeMirrorMask & 2) != 0 ? cEdgeMirror : cEdge) : none);
++    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : ((inside2d || (wideEdgeMask & 4) != 0) ? texture(bgTexture[2], (wideEdgeMirrorMask & 4) != 0 ? cEdgeMirror : cEdge) : none);
++    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], (wideEdgeMirrorMask & 8) != 0 ? cEdgeMirror : cEdge) : none);
+     vec4 objc[4];
+     vec2 cWrap = vec2(fract(c2d.s), c2d.t);
+     // Outside the 4:3 picture, the edge column's pixel if it is dark (a bar), for the priorities asked for

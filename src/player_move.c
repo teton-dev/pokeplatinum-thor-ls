@@ -26,6 +26,9 @@
 #include "map_tile_behavior.h"
 #include "persisted_map_features_init.h"
 #include "player_avatar.h"
+#ifdef SDK_PORT
+#include "port/following_hack.h"
+#endif
 #include "sound_playback.h"
 #include "terrain_collision_manager.h"
 #include "unk_020655F4.h"
@@ -1862,6 +1865,10 @@ static void PlayerAvatar_SetMovement(PlayerAvatar *playerAvatar, MapObject *mapO
 {
     PlayerAvatar_SetMovementActionAndSpeed(playerAvatar, movementAction, speed);
     LocalMapObj_SetAnimationCode(mapObj, movementAction);
+#ifdef SDK_PORT
+    // Following Renegade Platinum: the follower takes the player's last tile at its next frame
+    FollowingHack_PlayerStep(mapObj, movementAction);
+#endif
 }
 
 /**

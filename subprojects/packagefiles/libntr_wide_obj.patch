@@ -1,0 +1,91 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -137,6 +137,11 @@
+ // drawn across the whole width from their tilemaps (a backdrop that scrolls), not only
+ // in the 4:3 middle. Default: neither (the game widens its camera; 2D stays 4:3).
+ void SIM_SetWidescreenSceneOptions(BOOL scale3D, u8 wideBgLayers);
++// Also asked for every frame: main-engine OBJ layers (bit n: priority n) repeated across the
++// sides of a wide scene, the 4:3 picture wrapping around (left of the middle shows its right
++// edge, and so on), for 2D effects with no edges of their own (rain, snow, sand). Default:
++// none (OBJs stay in the 4:3 middle).
++void SIM_SetWidescreenObjWrap(u8 objPriorities);
+ BOOL SIM_IsWidescreenActive(void);
+ float SIM_WidescreenRatio(void);
+ 
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -737,6 +737,8 @@
+ static u8 sWideBgRequested = 0;
+ static bool sWideScale3D = false; // libntr narrows the 3D to keep its 4:3 shapes
+ static u8 sWideBgLayers = 0;      // main-engine BG layers drawn across the whole width
++static u8 sWideObjRequested = 0;
++static u8 sWideObjWrap = 0;       // main-engine OBJ priorities repeated across the sides
+ 
+ extern "C" void SIM_SetWidescreenScene(BOOL wide) {
+   sWideRequested = wide;
+@@ -747,6 +749,10 @@
+   sWideBgRequested = wideBgLayers & 0x0F;
+ }
+ 
++extern "C" void SIM_SetWidescreenObjWrap(u8 objPriorities) {
++  sWideObjRequested = objPriorities & 0x0F;
++}
++
+ extern "C" BOOL SIM_IsWidescreenActive(void) {
+   return sWideActive ? TRUE : FALSE;
+ }
+@@ -1355,6 +1361,8 @@
+                      (float)(wideHere ? sWide3dWidth : SIM_NDS_SCREEN_WIDTH) / (float)sFboWidth);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgMask"),
+                      wideHere ? wideBgMask : 0);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideObjMask"),
++                     wideHere ? sWideObjWrap : 0);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgScaleS"),
+                      (float)sWide3dWidth / 512.0f);
+ 
+@@ -2467,6 +2475,7 @@
+     sWide3dWidth = wide ? sFboWidth : SIM_NDS_SCREEN_WIDTH;
+     sWideScale3D = wide && sWideScale3DRequested;
+     sWideBgLayers = wide ? sWideBgRequested : 0;
++    sWideObjWrap = wide ? sWideObjRequested : 0;
+   }
+ 
+   // Setup 3D Viewport
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -24,6 +24,8 @@
+ // whose width they use, holding only this screen (G2SIM_DrawBGWide)
+ uniform int wideBgMask;
+ uniform float wideBgScaleS;
++// OBJ priorities repeated across the sides (bit n: priority n): the 4:3 picture wraps around
++uniform int wideObjMask;
+ 
+ smooth in vec2 fragTexCoord;
+ //uniform float inAlpha;
+@@ -63,10 +65,11 @@
+     bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : (inside2d ? texture(bgTexture[2], c2d) : none);
+     bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : (inside2d ? texture(bgTexture[3], c2d) : none);
+     vec4 objc[4];
+-    objc[0] = inside2d ? texture(objTexture[0], c2d) : none;
+-    objc[1] = inside2d ? texture(objTexture[1], c2d) : none;
+-    objc[2] = inside2d ? texture(objTexture[2], c2d) : none;
+-    objc[3] = inside2d ? texture(objTexture[3], c2d) : none;
++    vec2 cWrap = vec2(fract(c2d.s), c2d.t);
++    objc[0] = inside2d ? texture(objTexture[0], c2d) : ((wideObjMask & 1) != 0 ? texture(objTexture[0], cWrap) : none);
++    objc[1] = inside2d ? texture(objTexture[1], c2d) : ((wideObjMask & 2) != 0 ? texture(objTexture[1], cWrap) : none);
++    objc[2] = inside2d ? texture(objTexture[2], c2d) : ((wideObjMask & 4) != 0 ? texture(objTexture[2], cWrap) : none);
++    objc[3] = inside2d ? texture(objTexture[3], c2d) : ((wideObjMask & 8) != 0 ? texture(objTexture[3], cWrap) : none);
+     vec4 objWin = inside2d ? texture(objWindowTexture, c2d) : none;
+     for(int i=0; i<4; i++) {
+         int bgNum = bgOrder[i];
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -184,7 +184,7 @@
+   }
+ 
+   bool wide = config->widescreen != FALSE;
+-  if (Toggle("Widescreen (experimental)", "Where the game allows it (the overworld in clear weather), "
++  if (Toggle("Widescreen (experimental)", "Where the game allows it (the overworld, Gen 5 battles), "
+              "the scene fills the whole top display instead of a 4:3 box. Text boxes and menus stay 4:3 in the "
+              "middle. Needs the bottom screen on its own display.", &wide)) {
+     config->widescreen = wide ? TRUE : FALSE;

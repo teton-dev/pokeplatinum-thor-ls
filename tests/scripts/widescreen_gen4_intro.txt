@@ -1,0 +1,55 @@
+mash A until free
+jump 342 114 854
+until free timeout 3000
+wait 30
+wild 399 5
+until battle
+wait 5
+shot in-1
+wait 5
+shot in-2
+wait 5
+shot in-3
+wait 5
+shot in-4
+wait 5
+shot in-5
+wait 5
+shot in-6
+wait 5
+shot in-7
+wait 5
+shot in-8
+wait 5
+shot in-9
+wait 5
+shot in-10
+wait 5
+shot in-11
+wait 5
+shot in-12
+wait 5
+shot in-13
+wait 5
+shot in-14
+wait 5
+shot in-15
+wait 5
+shot in-16
+wait 5
+shot in-17
+wait 5
+shot in-18
+wait 5
+shot in-19
+wait 5
+shot in-20
+wait 5
+shot in-21
+wait 5
+shot in-22
+wait 5
+shot in-23
+wait 5
+shot in-24
+exit 0

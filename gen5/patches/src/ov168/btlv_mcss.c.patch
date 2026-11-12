@@ -1,0 +1,24 @@
+--- a/src/ov168/btlv_mcss.c
++++ b/src/ov168/btlv_mcss.c
+@@ -24,6 +24,7 @@
+ #include "pml/poke_party.h"
+ #include "system/hp_gauge.h"
+ #include "system/mcss.h"
++#include "gen5/player_back.h" // The port: the player's own back sprite
+ 
+ // The data of the Pokémon a sprite shows, copied whole when a Pokémon transforms
+ typedef struct {
+@@ -488,6 +489,13 @@
+         work->entries[index].shadow = work->shadows;
+         BtlvMcss_SetupTrainerLoadInfo(trainerType, &info, pos);
+         BtlvMcss_GetDefaultPosImpl(work, &pos3d, pos);
++        if (pos == BTLV_MCSS_POS_TRAINER) {
++            // The port: the player's back drawn with the owner's art of Lucas or Dawn (gen5/player_back.h)
++            MCSSSys_SetNextBackSprite(work->mcssSys, PlayerBack_ForTrainerClass(trainerType));
++        } else {
++            // The port: a Sinnoh trainer BW2 has no sprite for, drawn with Platinum's (gen5/player_back.h)
++            MCSSSys_SetNextBackSprite(work->mcssSys, Gen5_TrainerFrontArt(trainerType));
++        }
+         work->entries[index].mcss = MCSSSys_Add(work->mcssSys, pos3d.x, pos3d.y, pos3d.z, &info);
+         BtlvMcss_UpdateScale(work, pos);
+         BtlvMcss_SetShadowVanish(work, pos, work->entries[index].shadow ^ 1);
