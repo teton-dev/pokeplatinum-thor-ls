@@ -117,6 +117,16 @@ Done since (2026-11-11, second pass):
   `FieldTask_WaitForAnimation` on top, so the count stayed at 1. The watcher now keeps the script's count from the
   start (`scrcmd.c`, logs "Script movements: ..." when the top task differs). Found with the stuck report
   (`port/stuck_report.c`: the field tasks, the script, the scripted movements, in the log after 10 s held).
+- **A new lead** (2026-11-12, from the Thor: after a switch the old follower stood still beside the new one until the
+  map changed): the hack changes the picture when its renderer resumes (hk_23CA384). When the field comes back
+  (`FollowingHack_MapObjectsReady`) and the follower's graphics aren't the lead's, the old follower is deleted and the
+  lead comes out of its ball where it stood at the next step. Every spawn also deletes any other object with the
+  follower's local ID first (`DeleteOtherFollowers`), so two can't be out. The desktop never showed the second one
+  (the Thor's came after a Gen 5 double battle); the stale picture it did show. Test: `following_switch.txt`.
+- **Its shadow across a map border** (2026-11-12, from the Thor): a shadow (`ov5_021F1570`) remembers the map its
+  object was on and ends when that changes, and `MAP_OBJ_STATUS_SHOW_SHADOW` stayed on, so none was made again after
+  `FollowingHack_MapConnected` moved the follower to the new map. The flag is cleared there now: the next tile makes
+  one. Test: `following_border.txt` (Twinleaf to Route 201).
 - Tested: `following_ball.txt`, `first_battle.txt`, `turtwig.txt` and `gen5_battle.txt` with this ROM; walking with
   turns back over the follower (the follower stays behind, the player passes through it).
 
@@ -126,8 +136,8 @@ Not done (simplified or missing):
   on the Thor (2026-11-12).
 - After a hop the hack shakes the screen for some heavy Pokémon (hk_23C8BD0): not ported. When it comes back out of
   its ball the hack also plays the tile's grass effect (hk_23CB998): not ported.
-- The emotes (renderer 0x23, hk_23C9720, 14 effects), and hk_23CA384 (the renderer's resume function: it also changes
-  the follower's picture when the lead Pokémon changed).
+- The emotes (renderer 0x23, hk_23C9720, 14 effects). hk_23CA384 (the renderer's resume) isn't ported as such: a new
+  lead is a new follower (above).
 - **Hooks still not ported** (`hooks.py` in the analysis lists them; grouped by the function they replace): the tile
   effects of map objects (`sub_0206397C`, `sub_02063964`: grass; `sub_02063D30`, `sub_02063DA8`: reflections), `Player_SetYPos`, `ov5_021ECCC8`, the shadows and effects in `ov5_021F17E4` to
   `ov5_021F1A8C` and `ov5_021F4AB4`, the map change (`FieldSystem_MapChange_LoadObjects`, `sub_0205281C`), the
