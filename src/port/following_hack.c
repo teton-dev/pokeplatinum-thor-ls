@@ -379,6 +379,14 @@ static u16 PokemonGraphicsID(u16 species, int form, int gender)
     return graphicsID;
 }
 
+// The graphics ID the lead Pokemon follows with
+static u16 LeadGraphicsID(FieldSystem *fieldSystem)
+{
+    Pokemon *mon = LeadMon(fieldSystem);
+    return PokemonGraphicsID(Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL), Pokemon_GetValue(mon, MON_DATA_FORM, NULL),
+        Pokemon_GetValue(mon, MON_DATA_GENDER, NULL));
+}
+
 // hk_23C84AC: where a Pokemon may follow
 static BOOL AllowedOnMap(u16 species, enum MapHeaderID mapID)
 {
@@ -1283,10 +1291,26 @@ static MapObject *AddFollowerObject(const MapObjectManager *mapObjMan, u16 speci
     return mapObj;
 }
 
+// Every map object with the follower's local ID but keep (one left over: seen on the Thor after a lead change, an
+// old follower standing still beside the new one until the map changed)
+static void DeleteOtherFollowers(const MapObjectManager *mapObjMan, const MapObject *keep)
+{
+    MapObject *mapObj;
+    int index = 0;
+
+    while (MapObjectMan_FindObjectWithStatus(mapObjMan, &mapObj, &index, MAP_OBJ_STATUS_0)) {
+        if (mapObj != keep && MapObject_GetLocalID(mapObj) == FOLLOWER_LOCAL_ID) {
+            printf("Following: an old follower (graphics %lu) deleted\n", (unsigned long)MapObject_GetGraphicsID(mapObj));
+            MapObject_Delete(mapObj);
+        }
+    }
+}
+
 // hk_23C8000: the lead Pokemon comes out at a tile (hidden: the scripts show it)
 static MapObject *SpawnFollower(FieldSystem *fieldSystem, int x, int z, int dir, enum MapHeaderID mapID)
 {
     ResetFollower();
+    DeleteOtherFollowers(fieldSystem->mapObjMan, NULL);
 
     Party *party = PartyOf(fieldSystem);
     if (Party_GetCurrentCount(party) == 0) {
@@ -1328,9 +1352,26 @@ void FollowingHack_MapObjectsReady(FieldSystem *fieldSystem)
     if (!sActive || !sFollower.request) {
         return;
     }
+    MapObject *follower = GetFollower();
     if (!sFollower.enabled) {
         SpawnFollower(fieldSystem, PlayerAvatar_GetXPos(fieldSystem->playerAvatar), PlayerAvatar_GetZPos(fieldSystem->playerAvatar),
             PlayerAvatar_GetFacingDir(fieldSystem->playerAvatar), fieldSystem->location->mapHeaderID);
+    } else if (follower != NULL && Party_AliveMonsCount(PartyOf(fieldSystem)) > 0
+        && MapObject_GetGraphicsID(follower) != LeadGraphicsID(fieldSystem)
+        && AllowedOnMap(LeadSpecies(fieldSystem), fieldSystem->location->mapHeaderID)) {
+        // The lead changed (the party menu, a battle, the PC...): the hack changes the picture as its renderer resumes
+        // (hk_23CA384); here the old follower goes and the new lead comes out of its ball where it stood, at the
+        // player's next step
+        const int x = MapObject_GetX(follower);
+        const int z = MapObject_GetZ(follower);
+        const int dir = MapObject_GetFacingDir(follower);
+        printf("Following: the lead changed (graphics %lu to %lu)\n", (unsigned long)MapObject_GetGraphicsID(follower),
+            (unsigned long)LeadGraphicsID(fieldSystem));
+        MapObject_Delete(follower);
+        MapObject *spawned = SpawnFollower(fieldSystem, x, z, dir, fieldSystem->location->mapHeaderID);
+        if (spawned != NULL) {
+            SetFollowerData(spawned, FOLLOWER_DATA_BALL, TRUE);
+        }
     } else if (!AllowedOnMap(LeadSpecies(fieldSystem), fieldSystem->location->mapHeaderID)) {
         if (GetFollower() != NULL) {
             MapObject_Delete(GetFollower());
@@ -1372,6 +1413,10 @@ void FollowingHack_MapConnected(FieldSystem *fieldSystem)
     if (follower != NULL) {
         if (allowed) {
             MapObject_SetMapHeaderID(follower, mapID);
+            // Its shadow (ov5_021F1570's) keeps the map it was made on and ends when that changes; the flag that it
+            // shows stays on, so none was made again (seen on the Thor: no shadow after a route change). Off, the
+            // next tile the follower steps on makes one for the new map (map_object_move.c)
+            MapObject_SetStatusFlagOff(follower, MAP_OBJ_STATUS_SHOW_SHADOW);
         } else {
             MapObject_Delete(follower);
             ResetFollower();

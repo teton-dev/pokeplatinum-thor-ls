@@ -25,6 +25,7 @@
 #include "generated/trainers.h"
 #include "generated/trainer_message_types.h"
 #include "message.h"
+#include "sound_playback.h"
 #include "trainer_data.h"
 #include "bag.h"
 #include "game_options.h"
@@ -589,6 +590,30 @@ static void TrainerToGen5(FieldBattleDTO *dto, int battler, Gen5Trainer *dest)
     if (Trainer_HasMessageType(id, TRMSG_DEFEAT, HEAP_ID_APPLICATION)) {
         Trainer_LoadMessage(id, TRMSG_DEFEAT, text, HEAP_ID_APPLICATION);
         Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->defeatText, GEN5_TEXT_LENGTH);
+    } else {
+        // A double battle's trainer (twins, a couple) has a line for each of its two people instead: both, a page each
+        static const int types[] = { TRMSG_DOUBLE_BATTLE_DEFEAT_1, TRMSG_DOUBLE_BATTLE_DEFEAT_2 };
+        int n = 0;
+        for (int k = 0; k < (int)NELEMS(types); k++) {
+            if (!Trainer_HasMessageType(id, types[k], HEAP_ID_APPLICATION) || n + 4 >= GEN5_TEXT_LENGTH) {
+                continue;
+            }
+            if (n > 0) {
+                // A new page: BW2's stream command that clears the window
+                dest->defeatText[n++] = 0xF000;
+                dest->defeatText[n++] = 0xBE01;
+                dest->defeatText[n++] = 0;
+            }
+            Trainer_LoadMessage(id, types[k], text, HEAP_ID_APPLICATION);
+            Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->defeatText + n, GEN5_TEXT_LENGTH - n);
+            while (dest->defeatText[n] != 0xFFFF) {
+                n++;
+            }
+            // Without the line break they end with
+            while (n > 0 && dest->defeatText[n - 1] == 0xFFFE) {
+                dest->defeatText[--n] = 0xFFFF;
+            }
+        }
     }
     String_Free(text);
 
@@ -959,6 +984,51 @@ static void StoreCaught(FieldBattleDTO *dto)
         (unsigned)box + 1);
 }
 
+// Platinum's victory music for the battle won, as its battle picks it (battle_controller_player.c: by the first
+// opposing trainer's class; battle_script.c for a wild Pokémon), played when BW2 asks for its own
+static void PlayVictoryMusic(void)
+{
+    u16 seq = VICTORY_TRAINER_sseq;
+
+    if (!sBattle.isTrainer) {
+        seq = VICTORY_WILD_POKEMON_sseq;
+    } else {
+        switch (sBattle.trainer.platinumClass) {
+        case TRAINER_CLASS_LEADER_ROARK:
+        case TRAINER_CLASS_LEADER_GARDENIA:
+        case TRAINER_CLASS_LEADER_WAKE:
+        case TRAINER_CLASS_LEADER_MAYLENE:
+        case TRAINER_CLASS_LEADER_FANTINA:
+        case TRAINER_CLASS_LEADER_CANDICE:
+        case TRAINER_CLASS_LEADER_BYRON:
+        case TRAINER_CLASS_LEADER_VOLKNER:
+            seq = VICTORY_GYM_LEADER_sseq;
+            break;
+        case TRAINER_CLASS_CHAMPION_CYNTHIA:
+            seq = VICTORY_CHAMPION_sseq;
+            break;
+        case TRAINER_CLASS_COMMANDER_MARS:
+        case TRAINER_CLASS_COMMANDER_JUPITER:
+        case TRAINER_CLASS_COMMANDER_SATURN:
+        case TRAINER_CLASS_GALACTIC_GRUNT_MALE:
+        case TRAINER_CLASS_GALACTIC_GRUNT_FEMALE:
+            seq = VICTORY_GALACTIC_GRUNT_sseq;
+            break;
+        case TRAINER_CLASS_GALACTIC_BOSS:
+            seq = VICTORY_CYRUS_sseq;
+            break;
+        case TRAINER_CLASS_ELITE_FOUR_AARON:
+        case TRAINER_CLASS_ELITE_FOUR_BERTHA:
+        case TRAINER_CLASS_ELITE_FOUR_FLINT:
+        case TRAINER_CLASS_ELITE_FOUR_LUCIAN:
+            seq = VICTORY_ELITE_FOUR_sseq;
+            break;
+        }
+    }
+    printf("Gen 5: the battle is won: Platinum's victory music %u\n", (unsigned)seq);
+    Sound_PlayBGM(seq);
+}
+
 static BOOL Main(ApplicationManager *appMan, int *state)
 {
     FieldBattleDTO *dto = ApplicationManager_Args(appMan);
@@ -972,8 +1042,12 @@ static BOOL Main(ApplicationManager *appMan, int *state)
             // Widescreen: BW2's camera as wide as libntr draws the 3D this frame (port/widescreen.c asks for it)
             Gen5_SetWidescreen(SIM_IsWidescreenActive() ? SIM_WidescreenRatio() : 1.0f);
             const BOOL running = Gen5_BattleFrame();
-            if (Gen5_TakeEvents() & GEN5_EVENT_COMMAND) {
+            const unsigned events = Gen5_TakeEvents();
+            if (events & GEN5_EVENT_COMMAND) {
                 TestScript_OnEvent(TEST_EVENT_BATTLE_COMMAND);
+            }
+            if (events & GEN5_EVENT_VICTORY_MUSIC) {
+                PlayVictoryMusic();
             }
             if (running) {
                 return FALSE;
