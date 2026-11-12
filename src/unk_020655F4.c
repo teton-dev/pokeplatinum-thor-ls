@@ -28,6 +28,8 @@
 #include "res/sound/pl_sound_data.naix"
 
 #ifdef SDK_PORT
+#include <stdio.h>
+
 #include "port/frame_rate.h"
 #endif
 
@@ -38,6 +40,37 @@ typedef struct MoveAnimData {
     MapObject *mapObj;
     const MapObjectAnimCmd *animCmd;
 } MoveAnimData;
+
+#ifdef SDK_PORT
+// The scripted movements under way, for the stuck report (port/stuck_report.h)
+#define PORT_MAX_MOVE_ANIMS 16
+static MoveAnimData *sPortMoveAnims[PORT_MAX_MOVE_ANIMS];
+
+static void PortTrackMoveAnim(MoveAnimData *data, BOOL add)
+{
+    for (int i = 0; i < PORT_MAX_MOVE_ANIMS; i++) {
+        if (add ? sPortMoveAnims[i] == NULL : sPortMoveAnims[i] == data) {
+            sPortMoveAnims[i] = add ? data : NULL;
+            return;
+        }
+    }
+}
+
+int MapObject_PortDescribeAnimations(char *out, int size)
+{
+    int used = 0;
+    for (int i = 0; i < PORT_MAX_MOVE_ANIMS && used < size; i++) {
+        const MoveAnimData *data = sPortMoveAnims[i];
+        if (data == NULL) {
+            continue;
+        }
+        used += snprintf(out + used, size - used, "movement of object %d: state %d, action %d (%d of %d), ended %d, its status %#x, action %d step %d; ",
+            MapObject_GetLocalID(data->mapObj), data->state, data->animCmd->movementAction, data->count, data->animCmd->count,
+            data->ended, MapObject_GetStatus(data->mapObj), MapObject_GetMovementAction(data->mapObj), MapObject_GetMovementStep(data->mapObj));
+    }
+    return used < size ? used : size;
+}
+#endif
 
 typedef struct WalkMovementData {
     u16 unused;
@@ -209,6 +242,9 @@ SysTask *MapObject_StartAnimation(MapObject *mapObj, const MapObjectAnimCmd *ani
 
     data->mapObj = mapObj;
     data->animCmd = animCmd;
+#ifdef SDK_PORT
+    PortTrackMoveAnim(data, TRUE);
+#endif
 
     return task;
 }
@@ -226,6 +262,9 @@ void MapObject_FinishAnimation(SysTask *task)
     GF_ASSERT(LocalMapObj_CheckAnimationFinished(data->mapObj) == TRUE);
 
     sub_020656AC(data->mapObj);
+#ifdef SDK_PORT
+    PortTrackMoveAnim(data, FALSE);
+#endif
     Heap_FreeExplicit(HEAP_ID_FIELD1, data);
     SysTask_Done(task);
 }
