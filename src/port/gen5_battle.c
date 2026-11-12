@@ -571,7 +571,15 @@ static void TrainerToGen5(FieldBattleDTO *dto, int battler, Gen5Trainer *dest)
     dest->platinumClass = trainer->header.trainerType;
     dest->aiFlags = trainer->header.aiMask;
     if (TrainerClassHasPlatinumArt(dest->platinumClass)) {
-        TrainerArtToGen5(dest->platinumClass, dest);
+        // Lucas and Dawn in their Platinum outfits: Platinum's data gives some of their trainers Diamond and Pearl's
+        // classes, whose pictures are the old outfits (the owner's choice: Platinum's everywhere)
+        int artClass = dest->platinumClass;
+        if (artClass == TRAINER_CLASS_DP_PLAYER_MALE || artClass == TRAINER_CLASS_DP_PLAYER_MALE_2) {
+            artClass = TRAINER_CLASS_PLAYER_MALE;
+        } else if (artClass == TRAINER_CLASS_DP_PLAYER_FEMALE || artClass == TRAINER_CLASS_DP_PLAYER_FEMALE_2) {
+            artClass = TRAINER_CLASS_PLAYER_FEMALE;
+        }
+        TrainerArtToGen5(artClass, dest);
     }
     for (int i = 0; i < MAX_TRAINER_ITEMS && i < 4; i++) {
         dest->items[i] = trainer->header.items[i];
