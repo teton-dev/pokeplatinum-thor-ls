@@ -101,6 +101,15 @@ static BOOL Gen5BattleShown(void)
 #endif
 }
 
+static BOOL Gen5MoveBgShown(void)
+{
+#ifdef GEN5_BATTLES
+    return Gen5Battle_MoveBgShown();
+#else
+    return FALSE;
+#endif
+}
+
 // A full-screen 2D application that fills the wide screen is running over the overworld: the Bag, the party screen, the Journal (also
 // the page that opens on loading a save) and the Town Map (and the Fly map). They are drawn for 256 pixels; their
 // layers' edge columns continue across the sides, so the backgrounds reach the edges of the window and the
@@ -265,7 +274,7 @@ void Widescreen_Update(void)
     // picture where they are patterns
     if (Gen5BattleShown()) {
         edgeBgs |= (1 << 1) | (1 << 2) | (1 << 3);
-        if (Gen5Battle_MoveBgShown()) {
+        if (Gen5MoveBgShown()) {
             edgeMirrorBgs |= (1 << 3);
         }
     }
