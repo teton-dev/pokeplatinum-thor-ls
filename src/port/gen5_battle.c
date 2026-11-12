@@ -83,14 +83,19 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     if (!SIM_Config_prj_GetConfig()->gen5Battles || Gen5Rom_GameName() == NULL) {
         return FALSE;
     }
-    // A single wild battle, with nothing special about it but a honey tree, or a single trainer battle
-    if (dto->battleType == BATTLE_TYPE_WILD_MON) {
+    // A wild battle, alone or beside a partner (two wild Pokémon), with nothing special about it but a honey tree
+    if (dto->battleType == BATTLE_TYPE_WILD_MON || dto->battleType == BATTLE_TYPE_AI_PARTNER) {
         return (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
     }
-    // The story's trainers (Gym Leaders, the rival, Cynthia, Team Galactic) are started by their scripts as any
-    // trainer is, with no flag; Barry's first battle on Route 201 has BATTLE_STATUS_FIRST_BATTLE (Platinum there
-    // keeps critical hits out of it and shows only FIGHT; BW2's trainer battles never let the player run)
-    return dto->battleType == BATTLE_TYPE_TRAINER && (dto->battleStatusMask & ~BATTLE_STATUS_FIRST_BATTLE) == 0;
+    // A trainer battle: single, double (one trainer's two Pokémon), against two trainers (TAG), or with them beside a
+    // partner (2vs2 and AI). The story's trainers (Gym Leaders, the rival, Cynthia, Team Galactic) are started by
+    // their scripts as any trainer is, with no flag; Barry's first battle on Route 201 has BATTLE_STATUS_FIRST_BATTLE
+    // (Platinum there keeps critical hits out of it and shows only FIGHT; BW2's trainer battles never let the player
+    // run). Link, Frontier, Safari and the rest stay Platinum's
+    const u32 type = dto->battleType;
+    const BOOL trainer = type == BATTLE_TYPE_TRAINER || type == BATTLE_TYPE_TRAINER_DOUBLES
+        || type == BATTLE_TYPE_TAG_DOUBLES || type == BATTLE_TYPE_TRAINER_WITH_AI_PARTNER;
+    return trainer && (dto->battleStatusMask & ~BATTLE_STATUS_FIRST_BATTLE) == 0;
 }
 
 BOOL Gen5Battle_StartDebug(int species, int level)
@@ -550,10 +555,10 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
 }
 
 // name and the line it says when beaten from Platinum's messages, and its class's prize (battle_script.c's table)
-static void TrainerToGen5(FieldBattleDTO *dto, Gen5Trainer *dest)
+static void TrainerToGen5(FieldBattleDTO *dto, int battler, Gen5Trainer *dest)
 {
-    const Trainer *trainer = &dto->trainer[BATTLER_ENEMY_1];
-    const int id = dto->trainerIDs[BATTLER_ENEMY_1];
+    const Trainer *trainer = &dto->trainer[battler];
+    const int id = dto->trainerIDs[battler];
     String *text = String_Init(GEN5_TEXT_LENGTH, HEAP_ID_APPLICATION);
 
     dest->id = id;
@@ -587,7 +592,7 @@ static void TrainerToGen5(FieldBattleDTO *dto, Gen5Trainer *dest)
     }
     String_Free(text);
 
-    Party *party = dto->parties[BATTLER_ENEMY_1];
+    Party *party = dto->parties[battler];
     dest->partyCount = Party_GetCurrentCount(party);
     if (dest->partyCount > GEN5_PARTY_MAX) {
         dest->partyCount = GEN5_PARTY_MAX;
@@ -766,12 +771,28 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     for (int i = 0; i < sBattle.partyCount; i++) {
         Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &sBattle.party[i]);
     }
-    Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
     sBattle.isTrainer = (dto->battleType & BATTLE_TYPE_TRAINER) != 0;
+    sBattle.doubles = (dto->battleType & BATTLE_TYPE_DOUBLES) != 0;
     if (sBattle.isTrainer) {
-        TrainerToGen5(dto, &sBattle.trainer);
+        TrainerToGen5(dto, BATTLER_ENEMY_1, &sBattle.trainer);
+        // Two trainers (TAG, or 2vs2 with a partner); a trainer who has both slots is one double battle's trainer
+        if ((dto->battleType & (BATTLE_TYPE_TAG | BATTLE_TYPE_2vs2)) && dto->trainerIDs[BATTLER_ENEMY_2] != 0
+            && dto->trainerIDs[BATTLER_ENEMY_2] != dto->trainerIDs[BATTLER_ENEMY_1]) {
+            sBattle.hasTrainer2 = TRUE;
+            TrainerToGen5(dto, BATTLER_ENEMY_2, &sBattle.trainer2);
+        }
     } else {
-        Gen5_PokemonToGen5(wild, &sBattle.wild);
+        Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), &sBattle.wild);
+        // Beside a partner: a second wild Pokémon, in Platinum's second enemy's party
+        if (sBattle.doubles && Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0) {
+            sBattle.hasWild2 = TRUE;
+            Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_2], 0), &sBattle.wild2);
+        }
+    }
+    // The partner (Cheryl, Riley, Buck, Marley, Mira, Barry), whom BW2's AI plays beside the player
+    if ((dto->battleType & BATTLE_TYPE_AI) && dto->trainerIDs[BATTLER_PLAYER_2] != 0) {
+        sBattle.hasPartner = TRUE;
+        TrainerToGen5(dto, BATTLER_PLAYER_2, &sBattle.partner);
     }
     // The pockets with what a battle can use. The DTO's bag goes back into the save after the battle
     const struct {
@@ -800,7 +821,11 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     for (int i = 0; i < Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_1]); i++) {
         Pokedex_Encounter(dto->pokedex, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], i));
     }
-    (void)wild;
+    if (sBattle.hasTrainer2 || sBattle.hasWild2) {
+        for (int i = 0; i < Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]); i++) {
+            Pokedex_Encounter(dto->pokedex, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_2], i));
+        }
+    }
 
     // A hack's own Pokemon and move data (Renegade Platinum), before BW2 opens its archives
     Gen5Data_Prepare();
@@ -887,7 +912,7 @@ enum {
 // Pokédex, the Pokétch's history, the TV's capture record and the game records
 static Pokemon *CaughtPokemon(FieldBattleDTO *dto)
 {
-    return Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
+    return Party_GetPokemonBySlotIndex(dto->parties[sBattle.caughtWild2 ? BATTLER_ENEMY_2 : BATTLER_ENEMY_1], 0);
 }
 
 static void TakeCaught(FieldBattleDTO *dto)
@@ -905,7 +930,7 @@ static void TakeCaught(FieldBattleDTO *dto)
         CaptureAttempt_Init(dto->captureAttempt, mon, dto->resultMask, 1, HEAP_ID_BATTLE);
     }
     GameRecords_IncrementRecordValue(dto->records, RECORD_CAUGHT_POKEMON);
-    dto->caughtBattlerIdx = BATTLER_ENEMY_1;
+    dto->caughtBattlerIdx = sBattle.caughtWild2 ? BATTLER_ENEMY_2 : BATTLER_ENEMY_1;
 }
 
 // Into the party, or the first box with room as Platinum's battle does (its PP restored, as a boxed Pokémon's is)
