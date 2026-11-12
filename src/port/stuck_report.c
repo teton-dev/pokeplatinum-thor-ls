@@ -16,11 +16,14 @@
 #include "player_avatar.h"
 #include "script_manager.h"
 
+// unk_020655F4.c: the scripted movements under way
+int MapObject_PortDescribeAnimations(char *out, int size);
+
 // After this many frames on the overworld without the player being free, the state is logged every STUCK_REPORT_EVERY
 #define STUCK_REPORT_AFTER (60 * 10)
 #define STUCK_REPORT_EVERY (60 * 5)
 
-static char sText[1024];
+static char sText[2048];
 static int sBusyFrames;
 
 // A function as its offset from StuckReport_Update, in the same library: `nm` on the unstripped build names it
@@ -73,6 +76,10 @@ static void Report(FieldSystem *fieldSystem)
                 used = Append(used, "ctx waits on %s at %ld, next command %ld, state %ld; ", name, offset, next, ctx->state);
             }
         }
+    }
+
+    if (used < (int)sizeof(sText)) {
+        used += MapObject_PortDescribeAnimations(sText + used, sizeof(sText) - used);
     }
 
     if (fieldSystem->playerAvatar != NULL) {
