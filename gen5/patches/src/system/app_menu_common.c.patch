@@ -1,0 +1,17 @@
+--- a/src/system/app_menu_common.c
++++ b/src/system/app_menu_common.c
+@@ -43,10 +43,14 @@
+ }
+ 
+ u8 AppMenuCommon_GetTypeIconPaletteIndex(u8 type) {
++    if (type == 17) {
++        return 2; // The port: Fairy's icon (src/port/gen5_data.c) uses the colors 8 and 9 of palette 2, which are free
++    }
+     return sTypeIconPalettes[type];
+ }
+ 
+ u32 AppMenuCommon_GetTypeIconCharFile(u8 type) {
++    // The port: Fairy's (17) is file 0x33, which gen5_data.c makes (it was Cool's: contest categories aren't shown)
+     return 0x22 + type;
+ }
+ 

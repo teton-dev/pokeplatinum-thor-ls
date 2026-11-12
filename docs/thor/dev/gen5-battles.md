@@ -496,6 +496,10 @@ once (Lucian: cells 0, 1, 2, 3, 4 for 30, 20, 2, 2 and 50 ticks) and ends on the
   the last pose only (`useFixed`). Checked on the desktop (`tests/scripts/gen5_elite_four_anim.txt`; Lucian's win
   through his defeat words: the same last pose as the end of the introduction). Not seen on the Thor yet. Open: whether
   Platinum's ticks are 30 Hz as assumed.
+- **Barry** (2026-11-12): his class mapped to BW2's rival, so he showed Hugh's sprite (seen on the Thor). He now gets
+  his Platinum sprite the same way (`TrainerClassHasPlatinumArt`); checked on the desktop against his Route 203 team
+  (trainer 248). Platinum's PK and MN characters (`CHAR_PK`, `CHAR_MN`), which `Gen5_TextToGen5` dropped ("You are
+  challenged by  Trainer Barry!"), are written "Poké" and "mon", as BW2 writes its class names.
 
 ## Pokémon sprite animations (2026-11-10)
 
@@ -733,22 +737,33 @@ Renegade Platinum, Complete or Classic, and Following Renegade Platinum) battles
   (140) is Draining Kiss, Submission (66) Play Rough, Luster Purge (295) Dazzling Gleam, Mist Ball (296) Disarming
   Voice, Lunar Dance (461) Moonblast (all Fairy, none in BW2), and Brine, Constrict, Horn Drill, Sand Tomb, Twister and
   Volt Tackle become Scald, Icicle Crash, Drill Run, Bulldoze, Hurricane and Wild Charge (all in BW2); Charm (204),
-  Moonlight (236) and Sweet Kiss (186) are only retyped Fairy. BW2 knows a move by its number, so for now the
-  replaced slots keep the old move's name, effect and animation with the new numbers (Moonblast shows as "Lunar
-  Dance" and heals the party). To do: map the six that BW2 has to its numbers (and back after the battle); for the
-  five Fairy moves, a BW2 move with the same effect (the effect is data for the plain ones: damage and a chance of a
-  stat drop, spread targets) and their own animation and name, which BW2 lacks (a ROM that has them: the move's
-  script in `ARCID_BTLV_EFFVM_MOVE_SCRIPTS` and its particle files could be copied; handlers are code and would be
-  written here).
-- **Not done:** Fairy's name in battle text, the Pokémon's types on BW2's own screens, Hidden Power
-  and Natural Gift never give Fairy (as Gen 5), Gen 5's Arceus plates and Judgment have no Fairy form; Renegade's move
-  effect changes; the experience and catch rate from the game's data.
+  Moonlight (236) and Sweet Kiss (186) are only retyped Fairy. BW2 knows a move by its number, so `gen5_data.c`
+  (`sReplacedMoves`) maps each slot, when the game's move there is the new one (its type and power), to a Gen 5
+  number for the battle and back after it: the six BW2 has to their own, and each Fairy move to a Gen 5 move Renegade
+  can't have (Night Daze 539, Snarl 555, Struggle Bug 522, Razor Shell 534, Horn Leech 532), whose data gets the Fairy
+  move's numbers and effect (stat drop, drain, sound flag) and whose name, in the names (bank 403) and in the "X used
+  move!" messages (bank 16, three lines per move, the name in the text), becomes the Fairy move's.
+  `Gen5_PortNoHandlers` (`move_handlers.c.patch`) drops BW2's handlers for those five numbers, so they do only what
+  their data says.
+- **The Fairy moves' animations** (2026-11-11): from Moon Black 2 (below). A copy of its `a/0/6/5` put at
+  `gen5_data/moon/a_0_6_5` in the game's folder (the owner's own ROM's file, never in the repository) makes
+  `gen5_data/a/0/6/5`, BW2's scripts with Moon's Moonblast (its 461), Dazzling Gleam (552), Disarming Voice (545) and
+  Play Rough (285) in the proxies' slots; without it the proxies' own animations play. Draining Kiss keeps Horn
+  Leech's (Moon has none). Checked with screenshots every 20 frames (`fa_*.txt` scripts, Turtwig against a Magikarp):
+  each plays on the right Pokémon and lines up (the moon over the user for Moonblast; pink rings from user to target
+  for Dazzling Gleam; rings on the user and a yellow flash on the target for Disarming Voice; stars and dust on the
+  target for Play Rough), and the text names the move. The stamp in `gen5_data/stamp.txt` has a version
+  (`DATA_VERSION`) besides the game's hashes and Moon's, so the files are made again when the code changes.
+- **Not done:** the Pokémon's types on BW2's own screens; Renegade's move
+  effect changes beyond the replaced moves. Not needed (checked 2026-11-11): Hidden Power is never Fairy, and
+  Renegade has no Pixie Plate and no Roseli Berry (its item names have neither), so Judgment and Natural Gift are
+  never Fairy either. Also not done: the experience and catch rate from the game's data.
 - **Tests:** `DATA=~/thor-dev/desktop-renegade tools/docker/desktop.sh test tests/scripts/gen5_battle.txt --from
   rn-turtwig` (fixtures made with `new_game.txt --keep rn-before-starter` and `turtwig.txt --from rn-before-starter
   --keep rn-turtwig`, in that data folder) passes; the log says "the game's own Pokemon and move data made" and the
   chart's Fairy values. A battle against a Clefairy (species 35, Fairy in Complete) runs.
 
-### Moon Black 2 as a source of the Fairy moves (2026-11-11, findings; not used yet)
+### Moon Black 2 as a source of the Fairy moves (2026-11-11, findings; used for the animations)
 
 `~/thor-dev/Pokemon Moon Black 2 (v4.2.3).nds` is Black 2 with 51 files changed (same file system, same move count).
 Its Fairy moves replace Gen 5 slots: Play Rough 285 (Skill Swap's), Moonblast 461 (Lunar Dance's, with Lunar Dance's
@@ -759,4 +774,9 @@ resources. `pokebw2/tools/script/btlv_effvm_script.py disasm` (Python 3.11+, run
 are code: the moves' slots in `move_handlers.c` keep the old moves' handlers (Lunar Dance's, Searing Shot's), so a
 slot used for a Fairy move needs its handler dropped when the game is Renegade (a hook in the handler lookup).
 Renegade's own slots 285 (Skill Swap) and 461 conflict: Play Rough needs a free slot (above 467) whose script is
-Moon's 285. Moon's type icon (`a/0/8/2`) and names (`a/0/0/2`) could replace the generated ones.
+Moon's 285. Moon's type icon (`a/0/8/2`) and names (`a/0/0/2`) could replace the generated ones. Done: the scripts go
+into the proxies' slots (above), the handlers are dropped; the icon and names stay generated (no ROM needed for them).
+
+**Experience crash (fixed 2026-11-11):** `AddExpAndEVs` (`btl_server_flow_sub.c`) divides the experience by the number
+of standing Pokémon that faced the defeated one, which can be 0: the DS gives 0 for a division by zero, x86 traps
+(SIGFPE, seen when `gen5_battle.txt` failed to run and won the next turn). The patch makes it 0.

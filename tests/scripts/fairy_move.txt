@@ -1,0 +1,47 @@
+# Renegade Platinum's Fairy moves in Gen 5 battles: Turtwig learns Moonblast (slot 461) and uses it on a level 30
+# Magikarp; screenshots every 20 frames show its animation (Moon Black 2's, with gen5_data/moon/a_0_6_5 in the data
+# folder). For the others change the learn line: 295 Dazzling Gleam, 296 Disarming Voice, 66 Play Rough, 140 Draining
+# Kiss (use a level 12 Magikarp for Dazzling Gleam: a level 30 one may Bounce out of reach).
+#
+#   DATA=~/thor-dev/desktop-renegade tools/docker/desktop.sh test tests/scripts/fairy_move.txt --from rn-turtwig
+
+gen5-import
+mash A until free
+learn 461
+gen5-battle 129 30
+until battle
+until command
+wait 60
+touch 128 95
+wait 40
+touch 64 60
+wait 120
+shot s00
+wait 20
+shot s01
+wait 20
+shot s02
+wait 20
+shot s03
+wait 20
+shot s04
+wait 20
+shot s05
+wait 20
+shot s06
+wait 20
+shot s07
+wait 20
+shot s08
+wait 20
+shot s09
+wait 20
+shot s10
+wait 20
+shot s11
+wait 20
+shot s12
+wait 20
+shot s13
+wait 20
+exit 0
