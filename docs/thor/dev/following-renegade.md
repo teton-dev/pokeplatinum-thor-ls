@@ -111,6 +111,12 @@ Done since (2026-11-11, second pass):
   deletes the last map's objects that aren't persistent (`sub_0206184C`), the follower among them. The follower is
   skipped there and moved to the new map (`FollowingHack_MapConnected`, from `fieldmap.c`), deleted where it may not
   follow, and spawned again (out of its ball at the next step) where it may. Tested Twinleaf to Route 201 and back.
+- **The lock after Rowan's Pokédex** (2026-11-12, on the Thor, not on the desktop): the lab scene's last `WaitMovement`
+  waited forever. `ScrCmd_ApplyMovement`'s watcher (`sub_02040F5C`) lowered the script's movement count through the
+  field's top task when a movement ended; Dawn's walk out ended while `WaitForAnimation` (the PC shutting down) had
+  `FieldTask_WaitForAnimation` on top, so the count stayed at 1. The watcher now keeps the script's count from the
+  start (`scrcmd.c`, logs "Script movements: ..." when the top task differs). Found with the stuck report
+  (`port/stuck_report.c`: the field tasks, the script, the scripted movements, in the log after 10 s held).
 - Tested: `following_ball.txt`, `first_battle.txt`, `turtwig.txt` and `gen5_battle.txt` with this ROM; walking with
   turns back over the follower (the follower stays behind, the player passes through it).
 
