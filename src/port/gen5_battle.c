@@ -44,6 +44,7 @@
 #include "party.h"
 #include "pokemon.h"
 #include "charcode_convert.h"
+#include "port/gen5_data.h"
 #include "port/gen5_rom.h"
 #include "port/sim_config_prj.h"
 #include "port/test_script.h"
@@ -223,7 +224,7 @@ void Gen5_PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest)
     dest->friendship = Pokemon_GetValue(mon, MON_DATA_FRIENDSHIP, NULL);
     dest->gender = Pokemon_GetGender(mon);
     for (int i = 0; i < 4; i++) {
-        dest->moves[i] = Pokemon_GetValue(mon, MON_DATA_MOVE1 + i, NULL);
+        dest->moves[i] = Gen5Data_MoveToGen5(Pokemon_GetValue(mon, MON_DATA_MOVE1 + i, NULL));
         dest->pp[i] = Pokemon_GetValue(mon, MON_DATA_MOVE1_PP + i, NULL);
         dest->ppUps[i] = Pokemon_GetValue(mon, MON_DATA_MOVE1_PP_UPS + i, NULL);
     }
@@ -254,7 +255,8 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
 
     Pokemon_SetValue(mon, MON_DATA_EXPERIENCE, &src->exp);
     for (int i = 0; i < 4; i++) {
-        Pokemon_SetValue(mon, MON_DATA_MOVE1 + i, &src->moves[i]);
+        u32 move = Gen5Data_MoveFromGen5(src->moves[i]);
+        Pokemon_SetValue(mon, MON_DATA_MOVE1 + i, &move);
         Pokemon_SetValue(mon, MON_DATA_MOVE1_PP_UPS + i, &src->ppUps[i]);
         Pokemon_SetValue(mon, MON_DATA_MOVE1_PP + i, &src->pp[i]);
     }
@@ -607,12 +609,24 @@ static BOOL IsGymLeaderClass(int trainerClass)
         || (trainerClass >= TRAINER_CLASS_LEADER_GARDENIA && trainerClass <= TRAINER_CLASS_LEADER_VOLKNER);
 }
 
+static BOOL IsGalacticClass(int trainerClass)
+{
+    return trainerClass == TRAINER_CLASS_GALACTIC_GRUNT_MALE || trainerClass == TRAINER_CLASS_GALACTIC_GRUNT_FEMALE
+        || trainerClass == TRAINER_CLASS_COMMANDER_MARS || trainerClass == TRAINER_CLASS_COMMANDER_JUPITER
+        || trainerClass == TRAINER_CLASS_COMMANDER_SATURN || trainerClass == TRAINER_CLASS_GALACTIC_BOSS;
+}
+
 static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *alt)
 {
     *alt = 0;
     const int trainerClass = (dto->battleType & BATTLE_TYPE_TRAINER) ? dto->trainer[BATTLER_ENEMY_1].header.trainerType : -1;
 
-    if (IsGymLeaderClass(trainerClass)) {
+    if (IsGalacticClass(trainerClass)) {
+        // Team Galactic's own arena (src/port/gen5_galactic.c): BW2's Champion room (16) with Crobat purple and Galactic
+        // blue streaks and gleaming stars, as terrain 1 of it
+        *bg = 16;
+        *terrain = 1;
+    } else if (IsGymLeaderClass(trainerClass)) {
         // BW2's Gym Leaders battle on a stone floor in a dark hall (Clay's)
         *bg = ARENA_BG_INDOORS;
         *terrain = 19;
@@ -776,6 +790,10 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     }
     (void)wild;
 
+    // A hack's own Pokemon and move data (Renegade Platinum), before BW2 opens its archives
+    Gen5Data_Prepare();
+    // The Team Galactic arena (the Champion's room with other streaks and stars), made from the ROM the first time
+    Gen5Data_PrepareGalacticArena();
     sFailed = !Gen5_BattleBegin(&sBattle, Gen5Rom_Dir());
     if (sFailed) {
         printf("Gen 5: the battle couldn't start\n");

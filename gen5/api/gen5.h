@@ -12,6 +12,12 @@ extern "C" {
 // BW2's archives are read from the Black 2 or White 2 files in gen5Dir (the data folder's gen5/, an absolute path),
 // whatever folder the current game runs in. FALSE if the folder can't be reached from there.
 int Gen5_FilesInit(const char *gen5Dir);
+// Before Gen5_FilesInit: archive arcId is read from path (from the game's folder) instead of gen5's
+void Gen5_FilesOverride(u32 arcId, const char *path);
+// The type chart: 18 by 18 (attacking type by defending type) in halves (0, 2, 4, 8), Fairy being type 17, or NULL for
+// BW2's own
+void Gen5_PortTypeChart(const u8 *chart);
+void Gen5_PortNoHandlers(const u16 *moves, u32 count); // moves with no handlers of their own (a hack's moves in their slots)
 
 // Reads a file through BW2's own archive code and checks it: Bulbasaur's base stats in the Pokémon data. message
 // says what was read, or what went wrong. Gen5_FilesInit first.

@@ -32,6 +32,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `pc.txt` | `turtwig` | a Pokémon Center's PC (Sandgem Town): the box screen shows, then back to the overworld (the check is the shot) | ~30 s |
 | `gen5_loss.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig loses (a level 100 Charizard): the blackout, back home (Gen 5 builds) | ~1 min |
 | `new_game_girl.txt` | nothing | `new_game.txt` with a girl: keep it as `before-starter-girl`, then `turtwig.txt --from before-starter-girl --keep turtwig-girl` | ~20 s |
+| `gen5_galactic_arena.txt` | `turtwig` | with *Gen 5 battles* on, a Galactic Grunt (trainer 296) in BW2's engine in the Team Galactic arena: the Champion room with purple and blue streaks and sparkle stars (the check is the shot) (Gen 5 builds) | ~1 min |
 | `gen5_player_back.txt` | `turtwig` or `turtwig-girl` | a wild and a trainer battle in BW2's engine: the player's back sprite is the fork's own art of Lucas or Dawn through the throw (the check is the shots) (Gen 5 builds) | ~1 min |
 | `gen5_widescreen.txt` | `turtwig` | with widescreen on (`TEST_CONFIG`, below): the overworld, then a wild and a trainer battle in BW2's engine fill the 16:9 window, the sprites and text in the 4:3 middle (the check is the shots) (Gen 5 builds) | ~2 min |
 | `widescreen_weather.txt` | `turtwig` | with widescreen on: rain, a blizzard (and its start menu), a sandstorm, fog, ash and Snowpoint City, each across the whole 16:9 window (the check is the shots) | ~30 s |
@@ -41,6 +42,9 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `widescreen_gen4_battle.txt` | `turtwig` | with widescreen on, Gen 5 battles off: a wild and a trainer battle in Platinum's engine, the backdrop across the 16:9 window and the HP boxes' end caps (the check is the shots) | ~1 min |
 | `widescreen_e4.txt` | `turtwig` | with widescreen on: the Elite Four's "VS" encounter effect (Aaron's), frame by frame with `stillshot`: the band across the 16:9 window, the portraits in the middle (the check is the shots; `leader 12` for Cynthia) | ~2 min |
 | `widescreen_leader.txt` | `turtwig` | with widescreen on: Roark's "VS" encounter effect across the 16:9 window (the check is the shots) | ~20 s |
+| `following_ball.txt` | `turtwig` of Following Renegade Platinum | the follower's ball effects run (with `DATA=~/thor-dev/desktop-following`; [notes](../docs/thor/dev/following-renegade.md)) | ~30 s |
+
+Renegade Platinum's Gen 5 battles: run `gen5_battle.txt` with `DATA=~/thor-dev/desktop-renegade` (or `desktop-following`) from fixtures made there ([notes](../docs/thor/dev/gen5-battles.md#renegade-platinum-2026-11-11-milestone-8-first-part)).
 
 `first_battle.txt` is the check for the Gen 5 battles: with them on, the same battle runs in Black 2 and White 2's
 engine, and the test passes once that asks for a command (BW2's battle raises the same `command` event as Platinum's).
