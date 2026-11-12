@@ -133,7 +133,9 @@ Done on the desktop build; the Android build is checked by compiling for arm64, 
   (Pokémon data, move handlers, gauges, bitmaps...). Some are harmless (alignment tests); the rest are the first
   suspects when the battle runs (milestone 3, which fixed those the battle runs).
 - **Left for milestones 1 and 2:** an NDK build of the APK with `-Dpokebw2` (`tools/android/build_apk.sh` now gives meson
-  the NDK's `llvm-nm` and `llvm-objcopy`; the CI would need a pokebw2 clone at a pinned commit).
+  the NDK's `llvm-nm` and `llvm-objcopy`; the CI would need a pokebw2 clone at a pinned commit). Done 2026-11-12:
+  `build_android.yml` fetches pokebw2 at `2c3961614d0f` (the commit the port is tested with) and builds with it, so the
+  Actions APK has Gen 5 battles. Bump that commit there when the local clone moves.
 
 ## Milestone 2: the ROM (2026-11-08)
 
