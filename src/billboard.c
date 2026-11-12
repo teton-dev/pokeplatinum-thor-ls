@@ -5,7 +5,15 @@
 #include "heap.h"
 
 #ifdef SDK_PORT
+#include <simulator/sim.h>
+
 #include "port/frame_rate.h"
+
+// The overworld's sprites are nudged toward the camera for the depth test, up to this much at their tops (view
+// units; nothing at their feet), so a head clears the lower edge of a sign just behind it (Twinleaf's town sign was
+// drawn over the player's cap). On the DS the edge snaps to its 256x192 pixels, which hides most of the overlap; at
+// a higher resolution it shows. Feet are not nudged, so tall grass still covers them
+#define BILLBOARD_DEPTH_NUDGE (FX32_ONE * 8)
 #endif
 
 enum BillboardAnimStatus {
@@ -250,6 +258,11 @@ static void BillboardList_Draw(BillboardList *list)
 
     Billboard *billboard = list->sentinelData.next;
 
+#ifdef SDK_PORT
+    NNS_G3dGeFlushBuffer();
+    SIM_SetSpriteDepthBias(BILLBOARD_DEPTH_NUDGE);
+#endif
+
     while (billboard != &list->sentinelData) {
         if (billboard->draw == TRUE) {
             if (billboard->callback != NULL) {
@@ -276,6 +289,11 @@ static void BillboardList_Draw(BillboardList *list)
 
         billboard = billboard->next;
     }
+
+#ifdef SDK_PORT
+    NNS_G3dGeFlushBuffer();
+    SIM_SetSpriteDepthBias(0);
+#endif
 }
 
 static void AllocResourcesAndAppendBillboard(Billboard *billboard, const BillboardResources *resources)

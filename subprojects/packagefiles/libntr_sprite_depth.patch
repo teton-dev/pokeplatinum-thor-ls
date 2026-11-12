@@ -1,0 +1,74 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -152,6 +152,9 @@
+ void SIM_SetWidescreenBgStripe(u8 bgLayers, float column);
+ // Wide BG layers (SIM_SetWidescreenSceneOptions) whose sides mirror the 256-pixel picture instead of repeating it
+ void SIM_SetWidescreenBgMirror(u8 bgLayers);
++// Polygons drawn while it is non-zero are moved toward the camera for the depth test only: nothing at their lowest point
++// on screen, `top` (fx32, view units) at their highest. For the overworld's sprites. Default: 0
++void SIM_SetSpriteDepthBias(fx32 top);
+ // Layers (SIM_SetWidescreenBgEdgeExtend) whose sides mirror the 256-pixel picture instead of continuing its edge columns
+ void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers);
+ 
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1602,6 +1602,18 @@
+     return;
+ }
+ 
++// SIM_SetSpriteDepthBias: polygons drawn while it is set are moved toward the camera for the depth test only (their
++// place on screen is unchanged), by nothing at their lowest point on screen up to `top` (fx32, in view units) at their
++// highest. A standing sprite's head then clears what stands just behind it (a sign's lower edge) while its feet stay
++// where the ground's effects (tall grass) can cover them. The DS snaps polygon edges to its 256x192 pixels, which
++// hides most of those overlaps; drawn at a higher resolution they show
++static fx32 s_spriteDepthBiasTop;
++
++extern "C" void SIM_SetSpriteDepthBias(fx32 top)
++{
++    s_spriteDepthBiasTop = top;
++}
++
+ void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
+     G3SIM_ClipVtx_t clip[G3SIM_CLIP_MAX_VERTS];
+     G3SIM_Vertex_t polyVerts[G3SIM_CLIP_MAX_VERTS];
+@@ -1639,7 +1651,20 @@
+         }
+         while ((w >> wsize) && (wsize < 32)) {
+             wsize += 4;
++        }
++    }
++
++    // The sprite depth bias's span: the polygon's lowest and highest points on screen (NDC y)
++    double biasBottom = 0.0, biasSpan = 0.0;
++    if(s_spriteDepthBiasTop != 0 && !s_SIM_useWBuffer) {
++        double lo = 1e9, hi = -1e9;
++        for(int i=0; i < numVerts; i++) {
++            double y = (double)clip[i].pos[1] / (double)clip[i].pos[3];
++            lo = y < lo ? y : lo;
++            hi = y > hi ? y : hi;
+         }
++        biasBottom = lo;
++        biasSpan = hi - lo;
+     }
+ 
+     for(int i=0; i < numVerts; i++) {
+@@ -1668,6 +1693,19 @@
+ 
+         s32 z = ((((s64)curVtx->pos[2] * 0x4000) / vw) + 0x3FFF) * 0x200;
+ 
++        // The sprite depth bias: the depth of the same point moved d toward the camera. With the projection's z column,
++        // z_clip = m22 * z_view + m32 and w = -z_view, so moving it d closer gives z_clip + m22 * d over w - d
++        if(biasSpan > 0.0) {
++            double t = ((double)curVtx->pos[1] / (double)vw - biasBottom) / biasSpan;
++            s64 d = (s64)((double)s_spriteDepthBiasTop * t);
++            s64 m22 = currentProjectionMatrix.nums[2][2];
++            s64 vwBiased = (s64)vw - d;
++            if(d > 0 && vwBiased > 0) {
++                s64 zClip = (s64)curVtx->pos[2] + ((m22 * d) >> FX32_SHIFT);
++                z = (s32)((((zClip * 0x4000) / vwBiased) + 0x3FFF) * 0x200);
++            }
++        }
++
+         if(s_SIM_useWBuffer) {
+         	z = wshifted;
+         }
