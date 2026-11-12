@@ -123,9 +123,11 @@ typedef struct Gen5Trainer {
     int artLastPose;
 } Gen5Trainer;
 
-// A single battle: the player's party and bag against one wild Pokémon, or a trainer (isTrainer). Gen5_BattleEnd writes back the party as
+// A battle: the player's party and bag against one wild Pokémon, or a trainer (isTrainer). Gen5_BattleEnd writes back the party as
 // the battle left it (HP, status, PP, experience, levels, moves, held items), what is left of each item, the money
 // won or lost, and a caught Pokémon as the battle left it (with the ball it was caught in).
+// A double battle (doubles): one trainer's two Pokémon at once, or two trainers' one each (hasTrainer2, trainer2), and
+// the player alone or beside a partner (hasPartner, partner: a trainer of the player's side, which BW2's AI plays).
 typedef struct Gen5Battle {
     Gen5Player player;
     int arenaBg; // BW2's battle background (the field environment's bgType) and terrain: where the battle is
@@ -141,10 +143,18 @@ typedef struct Gen5Battle {
     Gen5Item items[GEN5_ITEMS_MAX];
     int itemCount;
     Gen5Pokemon wild;
+    int hasWild2; // A second wild Pokémon (a wild battle beside a partner)
+    Gen5Pokemon wild2;
     int isTrainer;
     Gen5Trainer trainer;
+    int doubles;
+    int hasTrainer2;
+    Gen5Trainer trainer2;
+    int hasPartner;
+    Gen5Trainer partner;
     int moneyChange;
-    int caught; // The wild Pokémon was caught: caughtMon has it
+    int caught; // A wild Pokémon was caught: caughtMon has it, caughtWild2 says which
+    int caughtWild2;
     Gen5Pokemon caughtMon;
 } Gen5Battle;
 
