@@ -1,0 +1,11 @@
+# The desktop build's run environment (teton-dev fork): the build image plus a virtual display, VNC, screenshots
+# and scripted input, so the Linux build can be played and checked in Docker on a Mac, and an arm64 compiler with
+# arm64 SDL headers for gen5/tools/arm64_check.py. Used by tools/docker/desktop.sh, which builds it on top of
+# pokeplatinum-build.
+FROM pokeplatinum-build
+
+RUN dpkg --add-architecture arm64 && apt-get update && apt-get install -y --no-install-recommends \
+    x11vnc xdotool imagemagick x11-utils \
+    libgl1 libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libgles2 \
+    gcc-aarch64-linux-gnu libc6-dev-arm64-cross libsdl2-dev:arm64 \
+    && rm -rf /var/lib/apt/lists/*

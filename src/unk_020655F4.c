@@ -142,7 +142,11 @@ BOOL LocalMapObj_IsAnimationSet(const MapObject *mapObj)
 
 void LocalMapObj_SetAnimationCode(MapObject *mapObj, enum MovementAction movementAction)
 {
+#ifdef SDK_PORT
+    GF_ASSERT(movementAction < MOVEMENT_ACTION_COUNT_PORT);
+#else
     GF_ASSERT(movementAction < MAX_MOVEMENT_ACTION);
+#endif
 
     MapObject_SetMovementAction(mapObj, movementAction);
     MapObject_SetMovementStep(mapObj, 0);
@@ -2061,6 +2065,64 @@ static BOOL sub_02067394(MapObject *mapObj)
     sub_02066F88(mapObj, FX32_CONST(2), 2, 3, 8, MAP_OBJ_UNK_A0_03, 0, 1, 0);
     return TRUE;
 }
+
+#ifdef SDK_PORT
+// Following Renegade Platinum's actions: the follower's hops (half a tile, four frames)
+static BOOL MovementAction_FollowerHopNorth_Step0(MapObject *mapObj)
+{
+    MovementAction_InitJump(mapObj, DIR_NORTH, FX32_CONST(8), 4, 5, 0, 0x100);
+    return TRUE;
+}
+
+static BOOL MovementAction_FollowerHopSouth_Step0(MapObject *mapObj)
+{
+    MovementAction_InitJump(mapObj, DIR_SOUTH, FX32_CONST(8), 4, 5, 0, 0x100);
+    return TRUE;
+}
+
+static BOOL MovementAction_FollowerHopWest_Step0(MapObject *mapObj)
+{
+    MovementAction_InitJump(mapObj, DIR_WEST, FX32_CONST(8), 4, 5, 0, 0x100);
+    return TRUE;
+}
+
+static BOOL MovementAction_FollowerHopEast_Step0(MapObject *mapObj)
+{
+    MovementAction_InitJump(mapObj, DIR_EAST, FX32_CONST(8), 4, 5, 0, 0x100);
+    return TRUE;
+}
+
+BOOL (*const gMovementActionFuncs_FollowerHopNorth[])(MapObject *) = {
+    MovementAction_FollowerHopNorth_Step0,
+    MovementAction_Jump_Step1,
+    MovementAction_End,
+};
+
+BOOL (*const gMovementActionFuncs_FollowerHopSouth[])(MapObject *) = {
+    MovementAction_FollowerHopSouth_Step0,
+    MovementAction_Jump_Step1,
+    MovementAction_End,
+};
+
+BOOL (*const gMovementActionFuncs_FollowerHopWest[])(MapObject *) = {
+    MovementAction_FollowerHopWest_Step0,
+    MovementAction_Jump_Step1,
+    MovementAction_End,
+};
+
+BOOL (*const gMovementActionFuncs_FollowerHopEast[])(MapObject *) = {
+    MovementAction_FollowerHopEast_Step0,
+    MovementAction_Jump_Step1,
+    MovementAction_End,
+};
+
+// The Pokemon's emotes (the hack draws a picture over it): skipped
+BOOL (*const gMovementActionFuncs_FollowerEmote[])(MapObject *) = {
+    MovementAction_End,
+    MovementAction_End,
+    MovementAction_End,
+};
+#endif
 
 BOOL (*const gMovementActionFuncs_FaceNorth[])(MapObject *) = {
     MovementAction_FaceNorth_Step0,

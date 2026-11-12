@@ -78,4 +78,9 @@ BOOL StartMenu_ExitPoffinCase(FieldTask *fieldTask);
 BOOL StartMenu_ExitPalPad(FieldTask *fieldTask);
 BOOL StartMenu_ExitVsRecorder(FieldTask *fieldTask);
 
+#ifdef SDK_PORT
+// The start menu is open on the overworld (its icons are sprites on the top screen)
+BOOL StartMenu_PortIsOpen(FieldSystem *fieldSystem);
+#endif
+
 #endif // POKEPLATINUM_START_MENU_H

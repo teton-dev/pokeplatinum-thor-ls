@@ -1038,6 +1038,15 @@ static void HidePlayerMapObj(FieldSystem *fieldSystem, BOOL hidden)
     MapObject_SetHidden(playerMapObject, hidden);
 }
 
+#ifdef SDK_PORT
+static int sPortCutIns = 0;
+
+BOOL HMCutIn_PortIsPlaying(void)
+{
+    return sPortCutIns > 0;
+}
+#endif
+
 SysTask *HMCutIn_StartTask(FieldSystem *fieldSystem, BOOL isFly, Pokemon *shownPokemon, int playerGender)
 {
     SysTask *task;
@@ -1046,6 +1055,9 @@ SysTask *HMCutIn_StartTask(FieldSystem *fieldSystem, BOOL isFly, Pokemon *shownP
     cutIn->mon = shownPokemon;
     cutIn->playerGender = playerGender;
     cutIn->_1 = isFly;
+#ifdef SDK_PORT
+    sPortCutIns++;
+#endif
 
     if (isFly == FALSE) {
         task = SysTask_Start(SysTask_CutIn, cutIn, 133);
@@ -1066,6 +1078,11 @@ void HMCutIn_EndTask(SysTask *cutInTask)
 {
     HMCutIn *cutIn = SysTask_GetParam(cutInTask);
 
+#ifdef SDK_PORT
+    if (sPortCutIns > 0) {
+        sPortCutIns--;
+    }
+#endif
     FreeHMCutIn(cutIn);
     SysTask_Done(cutInTask);
 }
@@ -1397,6 +1414,11 @@ static BOOL CutIn_InitSpritesFly(HMCutIn *cutIn)
 
 static BOOL HMCutIn_UnloadMonSprite(HMCutIn *cutIn)
 {
+#ifdef SDK_PORT
+    // The Pokémon's sprite stays in the sprite list, off screen, after its cell data is released below; drawing it
+    // then reads freed memory, which crashed Fly (depending on what reused the memory: Dialga, Giratina...)
+    Sprite_SetDrawFlag(cutIn->pokemonSprite, FALSE);
+#endif
     CutIn_UnloadPokemonSpriteResources(cutIn);
     cutIn->state++;
     return FALSE;

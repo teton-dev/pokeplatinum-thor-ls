@@ -1,0 +1,18 @@
+# From the before-starter fixture: Turtwig, Barry's battle (Tackle every turn) and what follows, until the player is
+# free again; saved as a fixture with a Pokémon in the party, for the tests that need one:
+#
+#   tools/docker/desktop.sh test tests/scripts/turtwig.txt --from before-starter --keep turtwig
+
+mash A until free
+walk LEFT 1
+press A
+mash LEFT for 300
+mash A until menu
+press A
+mash A until battle
+mash A until command
+# Fight, the first move, as long as the battle asks
+mash A until free timeout 20000
+shot free
+save
+exit 0

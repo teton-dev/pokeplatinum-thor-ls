@@ -1,0 +1,22 @@
+# Gen 5 battles, milestone 5: Barry's first battle on Route 201 (BATTLE_STATUS_FIRST_BATTLE, started by the briefcase's
+# script) in Black 2 and White 2's engine, played to the end: Turtwig's Tackle every turn. The log has the battle's
+# start and its result; the script then goes on as after Platinum's (Barry's lines, the lab). From the before-starter
+# fixture (new_game.txt):
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_first_battle.txt --from before-starter
+
+gen5-import
+gen5-battles on
+mash A until free
+walk LEFT 1
+press A
+mash LEFT for 300
+mash A until menu
+press A
+mash A until battle
+mash A until command
+shot gen5-first-command
+mash A until free timeout 20000
+shot gen5-first-free
+party
+exit 0

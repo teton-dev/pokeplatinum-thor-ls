@@ -1,0 +1,21 @@
+# Gen 5 battles, milestone 5: a trainer battle in Black 2 and White 2's engine with Settings > Gameplay > Gen 5
+# battles on. From the turtwig fixture: Youngster Tristan (Platinum's trainer 1, a level 5 Starly), started as his
+# encounter starts it; A picks FIGHT and Tackle every turn until it's over. The log has the money won and the party
+# after; the shots the battle and the overworld. Turtwig usually wins with about half its HP left (money +80); the
+# damage rolls can make it lose (money -48), and the test passes either way: it checks the battle runs to the end.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_trainer.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+party
+trainer 1
+until battle
+until command timeout 6000
+wait 30
+shot gen5-trainer-command
+mash A until free timeout 12000
+shot gen5-trainer-back
+party
+exit 0

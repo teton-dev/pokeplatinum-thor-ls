@@ -1,5 +1,9 @@
 #include "field_map_change.h"
 
+#ifdef SDK_PORT
+#include "port/following_hack.h"
+#endif
+
 #include <nitro.h>
 #include <string.h>
 
@@ -357,6 +361,9 @@ static void FieldMapChange_CreateObjects(FieldSystem *fieldSystem)
     fieldSystem->playerAvatar = PlayerAvatar_New(fieldSystem->mapObjMan, fieldSystem->location->x, fieldSystem->location->z, fieldSystem->location->faceDirection, playerData->playerState, gender, 0, playerData);
 
     sub_0203A418(fieldSystem);
+#ifdef SDK_PORT
+    FollowingHack_MapLoaded(fieldSystem);
+#endif
     MapObjectMan_StopAllMovement(fieldSystem->mapObjMan);
 }
 

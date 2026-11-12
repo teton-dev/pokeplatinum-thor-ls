@@ -1,0 +1,23 @@
+# Widescreen on Platinum's own (Gen 4) battles: a wild Bidoof and a trainer, with Settings > Display > Widescreen on
+# (TEST_CONFIG as in widescreen_screens.txt), Gen 5 battles off. The check is the shots. From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_gen4_battle.txt --from turtwig
+mash A until free
+jump 342 114 854
+until free timeout 3000
+wait 30
+wild 399 5
+until battle
+until command
+wait 90
+shot wild-command
+touch 128 178
+mash B touch 128 178 until free
+until free timeout 3000
+trainer 1
+until battle
+until command
+wait 90
+shot trainer-command
+exit 0

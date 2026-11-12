@@ -1,0 +1,8 @@
+# Gen 5 battles, milestone 2: imports the Black 2 or White 2 (USA) ROM as Settings > Games > Gen 5 battles does
+# (src/port/gen5_rom.cpp: the game code and SHA1, then its archives and sound data into gen5/), and passes when
+# BW2's own archive code reads a file from it (Bulbasaur's base stats). Needs the Gen 5 code (-Dpokebw2) and the ROM:
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_rom.txt      (the ROM: GEN5_ROM, or ~/thor-dev/PKMNB2.nds)
+
+gen5-import
+exit 0

@@ -1014,6 +1014,10 @@ pokeplatinum_c = files(
 )
 
 if(build_target != 'arm')
+# Gen 5 battles (teton-dev fork): the Black 2 / White 2 ROM's import, with the Gen 5 code (-Dpokebw2)
+if get_option('pokebw2') != ''
+pokeplatinum_c += files('port/gen5_rom.cpp', 'port/gen5_battle.c', 'port/gen5_summary.c', 'port/gen5_data.c', 'port/gen5_galactic.c')
+endif
 pokeplatinum_c += files(
     'port/charcode_convert.c',
     'port/debug_field.c',
@@ -1023,11 +1027,14 @@ pokeplatinum_c += files(
     'port/randomizer.c',
     'port/soft_reset.c',
     'port/speed_up.c',
+    'port/test_script.c',
+    'port/test_crash.cpp',
     'port/hm_free.c',
     'port/widescreen.c',
     'port/gba_slot.c',
     'port/repel_prompt.c',
     'port/follower.c',
+    'port/following_hack.c',
     'port/gear_sprites.c',
     'port/gear_berries.c',
     'port/gear_daycare.c',

@@ -249,6 +249,10 @@ static void sub_02052F28(FieldSystem *fieldSystem, ClearGameStruct *clearGameStr
     clearGameStruct->string = NULL;
     clearGameStruct->dial = NULL;
 
+    // The field map ended with the Hall of Fame and freed its BgConfig (and its heap with it), leaving
+    // fieldSystem->bgConfig dangling: the DS never overwrote that memory, so using it worked there
+    fieldSystem->bgConfig = BgConfig_New(HEAP_ID_FIELD1);
+
     Window_Init(&clearGameStruct->window);
     GXLayers_SetBanks(&v0);
 
@@ -315,4 +319,6 @@ static void ClearGame_FreeStringRemoveWindowFreeTilemapBuffer(FieldSystem *field
     }
 
     Bg_FreeTilemapBuffer(fieldSystem->bgConfig, BG_LAYER_MAIN_3);
+    Heap_Free(fieldSystem->bgConfig);
+    fieldSystem->bgConfig = NULL;
 }

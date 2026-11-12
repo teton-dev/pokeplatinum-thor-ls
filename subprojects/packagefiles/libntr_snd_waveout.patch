@@ -1,0 +1,159 @@
+diff -ruN a/libraries/sim7/src/pxi.c b/libraries/sim7/src/pxi.c
+--- a/libraries/sim7/src/pxi.c
++++ b/libraries/sim7/src/pxi.c
+@@ -17,6 +17,14 @@
+ SIM_queue_t * pxiQueuePtr;
+ SIM_queue_t * pxi7to9QueuePtr;
+ 
++// The ARM7's direct channel commands (NitroSystem's wave output, NNS_SndWaveOut..., uses them; the sequences don't):
++// carried out on the simulated channels, as the SDK's SND_CommandProc does
++#define UNPACK_COMMAND(arg, shift, bit) (((arg) >> (shift)) & ((1 << (bit)) - 1))
++void SND_LockChannel7(u32 chBitMask, u32 flags);
++void SND_UnlockChannel7(u32 chBitMask, u32 flags);
++void SND_StopUnlockedChannel7(u32 chBitMask, u32 flags);
++void SIM_SndUpdateChannelStatus(void);
++
+ static SIM_queue_t SIM_drawQueue;
+ static SIM_queue_t SIM_pxiQueue;
+ static SIM_queue_t SIM_pxi7to9Queue;
+@@ -185,7 +193,16 @@
+ 
+             				case SND_COMMAND_START_TIMER:
+ 
++								// Not the channels a capture (reverb, effects) starts with: the simulator doesn't capture, and
++								// they would play its unwritten buffer
++								for( int i=0; i<SND_CHANNEL_NUM && sndCommandList->arg[1] == 0; i++)
+ 								{
++									if( (sndCommandList->arg[0] >> i) & 1 )
++									{
++										SND_StartChannel7(i);
++									}
++								}
++								{
+ 									u32 wav_len = 200;
+ 									u8 channelsEnabled[32] = {0};
+ 									
+@@ -235,6 +252,13 @@
+ 
+             				case SND_COMMAND_STOP_TIMER:
+ 
++								for( int i=0; i<SND_CHANNEL_NUM; i++)
++								{
++									if( (sndCommandList->arg[0] >> i) & 1 )
++									{
++										SND_StopChannel7(i, (s32)sndCommandList->arg[3]);
++									}
++								}
+ 								u8 channelsEnabled[32] = {0};
+ 								u8 alarmsEnabled[32] = {0};
+ 								for( int i=0; i<32; i++ )
+@@ -272,24 +296,35 @@
+             				    break;
+ 
+             				case SND_COMMAND_CHANNEL_TIMER:
+-
++            				    for (int i = 0; i < SND_CHANNEL_NUM; i++) {
++            				        if ((sndCommandList->arg[0] >> i) & 1) SND_SetChannelTimer7(i, (int)sndCommandList->arg[1]);
++            				    }
+             				    break;
+ 
+             				case SND_COMMAND_CHANNEL_VOLUME:
+-
++            				    for (int i = 0; i < SND_CHANNEL_NUM; i++) {
++            				        if ((sndCommandList->arg[0] >> i) & 1) SND_SetChannelVolume7(i, (int)sndCommandList->arg[1], (SNDChannelDataShift)sndCommandList->arg[2]);
++            				    }
+             				    break;
+ 
+             				case SND_COMMAND_CHANNEL_PAN:
+-
++            				    for (int i = 0; i < SND_CHANNEL_NUM; i++) {
++            				        if ((sndCommandList->arg[0] >> i) & 1) SND_SetChannelPan7(i, (int)sndCommandList->arg[1]);
++            				    }
+             				    break;
+ 
+             				case SND_COMMAND_SETUP_CHANNEL_PCM:
+-								{
++								SND_SetupChannelPcm7((int)UNPACK_COMMAND(sndCommandList->arg[0], 0, 16),
++								                     (const void *)sndCommandList->arg[1],
++								                     (SNDWaveFormat)UNPACK_COMMAND(sndCommandList->arg[3], 24, 2),
++								                     (SNDChannelLoop)UNPACK_COMMAND(sndCommandList->arg[3], 26, 2),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[3], 0, 16),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[2], 0, 22),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[2], 24, 7),
++								                     (SNDChannelDataShift)UNPACK_COMMAND(sndCommandList->arg[2], 22, 2),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[0], 16, 16),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[3], 16, 7));
+ 
+-									
+-
+-								}
+-
+             				    break;
+ 
+             				case SND_COMMAND_SETUP_CHANNEL_PSG:
+@@ -311,12 +346,15 @@
+             				    break;
+ 
+             				case SND_COMMAND_LOCK_CHANNEL:
++            				    SND_LockChannel7((u32)sndCommandList->arg[0], (u32)sndCommandList->arg[1]);
+             				    break;
+ 
+             				case SND_COMMAND_UNLOCK_CHANNEL:
++            				    SND_UnlockChannel7((u32)sndCommandList->arg[0], (u32)sndCommandList->arg[1]);
+             				    break;
+ 
+             				case SND_COMMAND_STOP_UNLOCKED_CHANNEL:
++            				    SND_StopUnlockedChannel7((u32)sndCommandList->arg[0], (u32)sndCommandList->arg[1]);
+             				    break;
+ 
+             				case SND_COMMAND_INVALIDATE_SEQ:
+@@ -339,6 +377,8 @@
+ 						}
+ 						sndCommandList = sndCommandList->next;
+ 					} 
++						// The channels' status as the commands left it, before they count as done
++						SIM_SndUpdateChannelStatus();
+ 						if( win_SNDi_SharedWork )
+ 						{
+ 							win_SNDi_SharedWork->finishCommandTag++;
+diff -ruN a/libraries/sim7/src/snd/snd_exchannel.c b/libraries/sim7/src/snd/snd_exchannel.c
+--- a/libraries/sim7/src/snd/snd_exchannel.c
++++ b/libraries/sim7/src/snd/snd_exchannel.c
+@@ -150,6 +150,26 @@
+     }
+ }
+ 
++#ifdef SDK_PORT
++// The channels that play, for SND_GetChannelStatus (the ARM7 driver's SND_UpdateSharedWork, which the simulator
++// doesn't have): NitroSystem's wave output (NNS_SndWaveOutIsPlaying) reads it. After the driver's work (in the audio
++// callback) and after each batch of commands (pxi.c)
++void SIM_SndUpdateChannelStatus(void)
++{
++    u32 status = 0;
++    int ch;
++
++    if (SNDi_SharedWork == NULL)
++        return;
++    for (ch = 0; ch < SND_CHANNEL_NUM; ch++)
++    {
++        if (SND_IsChannelActive7(ch))
++            status |= 1 << ch;
++    }
++    SNDi_SharedWork->channelStatus = status;
++}
++#endif
++
+ void SND_ExChannelMain(BOOL doPeriodicProc)
+ {
+     SNDExChannel *ch_p;
+@@ -285,6 +305,10 @@
+             }
+         }
+     }
++
++#ifdef SDK_PORT
++    SIM_SndUpdateChannelStatus();
++#endif
+ }
+ 
+ BOOL SND_StartExChannelPcm(SNDExChannel *ch_p,

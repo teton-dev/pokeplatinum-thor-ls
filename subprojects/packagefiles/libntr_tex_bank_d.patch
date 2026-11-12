@@ -1,0 +1,11 @@
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -86,7 +86,7 @@
+ 			vramBank = (void *)HW_LCDC_VRAM_C;
+ 			break;
+ 		case GX_VRAM_TEX_0_D:
+-			vramBank = (void *)HW_LCDC_VRAM_A;
++			vramBank = (void *)HW_LCDC_VRAM_D;
+ 			break;
+ 		default:
+ 			//?

@@ -1,0 +1,56 @@
+--- a/src/system/gfl_use.c
++++ b/src/system/gfl_use.c
+@@ -105,31 +105,11 @@
+ static GFLUseWork *sWork;
+ 
+ void GFLAppInit(void) {
+-    if (!OS_IsRunOnTwl()) {
+-        void *end = OS_GetArenaHi(OS_ARENA_MAIN);
+-        void *start = OS_GetArenaLo(OS_ARENA_MAIN);
+-
+-        start = OS_InitAlloc(OS_ARENA_MAIN, start, end, 1);
+-        OS_SetArenaLo(OS_ARENA_MAIN, start);
+-        sOSHeap = OS_CreateExtraHeap(OS_ARENA_MAIN);
+-        sExtraHeapMemory = OS_AllocFromHeap(OS_ARENA_MAIN, sOSHeap, EXTRA_HEAP_SIZE);
+-    }
+-
+-    if (OS_IsRunOnTwl()) {
+-        GFL_MemInit(HEAP_SETUP_TWL, 2, 193, 0);
+-    } else {
+-        GFL_MemInit(HEAP_SETUP_NTR, 2, 193, 0);
+-    }
+-    GFL_HeapDTCMInit(0x2000);
+-    GFL_HeapCreateChild(1, 7, 0x27000);
+-    if (!OS_IsRunOnTwl()) {
+-        GFL_HeapCreateRoot(sExtraHeapMemory, EXTRA_HEAP_SIZE, 9);
+-    } else {
+-        GFL_HeapCreateChild(1, 9, EXTRA_HEAP_SIZE);
+-    }
++    // The port (Gen 5 battles): the heaps from a block of the port's own (gen5/src/runtime.c), the archives from
++    // the extracted ROM (gen5/src/files.c), and no DS debug RAM
++    Gen5_MemInit();
+ 
+     initTableArea(0);
+-    GFL_ArcSysInit(NARC_PATH_LIST, ARC_PATH_COUNT);
+     GFL_HIDInit(0, 0);
+     if (OS_GetConsoleType() & CONSOLE_TYPE_DEBUG_MASK) {
+         GFL_DebugSetVerboseAssertHandlers();
+@@ -146,7 +126,7 @@
+     sWork->vblankTCBMgr = GFL_TCBMgrCreate(VBLANK_TCB_COUNT, sWork->vblankTCBWork);
+ 
+     GFL_FadeCreate(0);
+-    mainBackupSystemInit(7, showSavegameMainError, showSavegameAltError);
++    // The port: no save backup system (the port's battles write their results to Platinum's save)
+     GFL_TextPrintInit(NULL);
+     RTCCache_Init();
+     GFL_RandomInit();
+@@ -231,7 +211,8 @@
+ }
+ 
+ const char *GFL_ArcSysGetResourcePath(u32 arcId) {
+-    return NARC_PATH_LIST[arcId];
++    // The port: the file in the extracted ROM's folder, once there is one (gen5/src/files.c)
++    return Gen5_ArcPath(arcId, NARC_PATH_LIST[arcId]);
+ }
+ 
+ // Waits for L, R, X and Y to be held together, after a failed assert's message

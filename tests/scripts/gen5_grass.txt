@@ -1,0 +1,18 @@
+# Gen 5 battles, milestone 4b: a wild Pokémon from the tall grass, in Black 2 and White 2's engine because
+# Settings > Gameplay > Gen 5 battles is on. From the verity-grass fixture (lake_grass.txt): into the grass at Lake
+# Verity, back and forth until a wild Pokémon appears, then RUN until it works; passes once back on the overworld.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_grass.txt --from verity-grass
+
+gen5-import
+gen5-battles on
+mash A until free
+walk RIGHT 1
+pace UP DOWN until battle timeout 9000
+until command
+wait 60
+shot gen5-grass-command
+touch 128 178
+mash B touch 128 178 until free
+shot gen5-grass-back
+exit 0

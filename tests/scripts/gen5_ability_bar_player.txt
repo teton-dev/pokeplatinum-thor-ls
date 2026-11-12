@@ -1,0 +1,51 @@
+# Gen 5 battles in widescreen: the ability pop-up's bar for the player's Pokémon (it slides in from the left): from the
+# owner's finished save (the fixture full100, never committed) whose lead is Palkia (Pressure) against a wild Pidgey.
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/gen5_ability_bar_player.txt --from full100
+
+gen5-import
+gen5-battles on
+gen5-battles on
+# The finished save opens on the journal page (the shots give it real time to come up)
+mash A for 300
+shot j1
+mash A for 300
+shot j2
+mash B for 300
+shot j3
+mash A until free timeout 3000
+wild 16 5
+until battle
+shot a00
+wait 25
+shot a01
+wait 25
+shot a02
+wait 25
+shot a03
+wait 25
+shot a04
+wait 25
+shot a05
+wait 25
+shot a06
+wait 25
+shot a07
+wait 25
+shot a08
+wait 25
+shot a09
+wait 25
+shot a10
+wait 25
+shot a11
+wait 25
+shot a12
+wait 25
+shot a13
+wait 25
+shot a14
+until command timeout 6000
+shot cmd
+exit 0

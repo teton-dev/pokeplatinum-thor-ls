@@ -1,0 +1,23 @@
+# The first battle: from the before-starter fixture (new_game.txt), Turtwig from Prof. Rowan's briefcase, then
+# Barry's challenge, until the battle asks what to do. Passes when the battle has loaded and is waiting for the
+# player: the check that a battle engine (Platinum's, or Gen 5's with Gen 5 battles on) starts and runs.
+#
+#   tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starter
+
+# The title screen and Continue: back on Route 201, two tiles right of the briefcase
+mash A until free
+walk LEFT 1
+
+# The briefcase opens the starter choice. Left as far as it goes is Turtwig; A, then Yes
+press A
+mash LEFT for 300
+mash A until menu
+shot starter
+press A
+
+# Barry chooses his and challenges the player
+mash A until battle
+mash A until command
+wait 30
+shot battle
+exit 0

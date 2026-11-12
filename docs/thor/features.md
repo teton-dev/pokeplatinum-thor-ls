@@ -129,14 +129,36 @@ on the second display (not swapped):
 * **Overworld**: the field camera sees more of the map on the left and right,
   unstretched. Text boxes, menus and the location banner stay 4:3 in the middle. The
   next map blocks load in one frame, so running or cycling sideways doesn't show
-  unloaded ground at the edges. Rain, snow, sand, fog and dark caves stay 4:3: their
-  weather and darkness are 2D overlays that would only cover the middle. The Poke Radar
-  keeps its patches while they are anywhere on the wider screen.
-* **Battles** stay 4:3 with black bars at the sides: the battle backdrop is a
-  256-pixel picture and the bases and HP boxes are placed for 256 pixels, so there's
-  nothing real to show beside them.
+  unloaded ground at the edges. The Poke Radar keeps its patches while they are anywhere
+  on the wider screen.
+* **Weather** fills the wide screen too: rain, snow, hail, sand and ash fall across the
+  sides (the 4:3 screen's particles repeat there), and fog, sandstorms, clouds and the
+  forests' light span the whole width. While the start menu is open, the falling
+  particles show only in the middle (its icons would repeat at the left otherwise).
+  Dark caves before Flash stay 4:3: the darkness is a circle drawn for the 4:3 screen.
+* **Field moves**: the band that crosses the screen when a Pokemon uses Fly, Surf, Cut
+  and the other moves spans the whole wide screen: its rings are mirrored at the sides
+  and the wind and the Pokemon that cross it continue to the edges. A Gym Leader's
+  "VS" banner before a battle does the same: it spans the whole width, with the leader
+  and the name where they are. So does the band of the Elite Four's and the Champion's
+  "VS" (their portraits stay in the 4:3 middle).
+* **Bag, party, Town Map, Fly map and Journal** (including the page that opens when you load a
+  save) fill the wide screen (the Journal's pages with entries also have their paper
+  again; they showed text on black before): their backgrounds continue to the left and right edges,
+  while their lists, text and the map stay in the 4:3 middle. The party screen's background lines and panels are mirrored across the sides. Other menus (Pokedex,
+  Pokemon Summary...) still sit in a 4:3 box with black sides.
 
-Menus and other screens stay 4:3.
+**Rain** falls from the top of the screen to the bottom and splashes, as on the DS (earlier
+builds only showed a few drops near the bottom: each drop stopped on its second frame).
+* **Gen 5 battles** (*Settings > Gameplay > Gen 5 battles*) fill the wide screen: the
+  arena is 3D, so its camera sees more of it on the left and right, unstretched. The
+  Pokemon, trainers, HP boxes and text stay where they are, in the 4:3 middle.
+* **Platinum's own battles** fill the wide screen too: the backdrop is a 256-pixel picture,
+  so it is mirrored at both sides, and the HP boxes get a rounded end cap on their outer
+  side so that they look like windows floating over it. The Pokemon, bases and text box
+  stay in the 4:3 middle.
+
+Other menus and screens stay 4:3.
 
 **3D as the DS draws it:** lit 3D models are shaded the way the DS lights them (towns
 at night look brighter and bluer than in earlier builds), and the overworld has the
@@ -246,3 +268,7 @@ isn't an Egg if none could), with the usual message and cut-in. Fly (and the oth
 where they can be used) shows in that Pokemon's menu in the party screen. Owning the HM
 is what keeps the story in order: places the game blocks until you have a move are
 opened by the same HM as before.
+
+*Settings > Gameplay > Field moves without badges* (off by default) also drops the badge
+each field move needs, with or without HMs: a cheat, since it can take you past the
+story's order. Story events that check for a badge still do.

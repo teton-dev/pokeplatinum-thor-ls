@@ -42,8 +42,17 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("General", "HmFreeFieldMoves")) {
         config->hmFree = StringToBool(value);
     }
+    if(MATCH("General", "HmNoBadges")) {
+        config->hmNoBadges = StringToBool(value);
+    }
     if(MATCH("General", "FollowerPokemon")) {
         config->followerPokemon = StringToBool(value);
+    }
+    if(MATCH("General", "Gen5Screens")) {
+        config->gen5Screens = StringToBool(value);
+    }
+    if(MATCH("General", "Gen5Battles")) {
+        config->gen5Battles = StringToBool(value);
     }
     if(MATCH("General", "RepelPrompt")) {
         config->repelPrompt = StringToBool(value);
@@ -178,9 +187,12 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->instantText = TRUE;
   aConfig->instantBars = TRUE;
   aConfig->hmFree = TRUE;
+  aConfig->hmNoBadges = FALSE;
   aConfig->hardLevelCap = FALSE;
   aConfig->repelPrompt = TRUE;
   aConfig->followerPokemon = TRUE;
+  aConfig->gen5Battles = FALSE;
+  aConfig->gen5Screens = FALSE;
   aConfig->expShareAll = FALSE;
   aConfig->clockOffsetMinutes = 0;
   aConfig->nuzlocke = FALSE;
@@ -239,9 +251,12 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "InstantText=%s\n", BoolToString(aConfig->instantText));
     fprintf(configFile, "InstantBars=%s\n", BoolToString(aConfig->instantBars));
     fprintf(configFile, "HmFreeFieldMoves=%s\n", BoolToString(aConfig->hmFree));
+    fprintf(configFile, "HmNoBadges=%s\n", BoolToString(aConfig->hmNoBadges));
     fprintf(configFile, "HardLevelCap=%s\n", BoolToString(aConfig->hardLevelCap));
     fprintf(configFile, "RepelPrompt=%s\n", BoolToString(aConfig->repelPrompt));
     fprintf(configFile, "FollowerPokemon=%s\n", BoolToString(aConfig->followerPokemon));
+    fprintf(configFile, "Gen5Screens=%s\n", BoolToString(aConfig->gen5Screens));
+    fprintf(configFile, "Gen5Battles=%s\n", BoolToString(aConfig->gen5Battles));
     fprintf(configFile, "ExpShareAll=%s\n", BoolToString(aConfig->expShareAll));
     fprintf(configFile, "ClockOffsetMinutes=%d\n", aConfig->clockOffsetMinutes);
     fprintf(configFile, "EnableAsserts=%s\n", BoolToString(aConfig->enableAsserts));

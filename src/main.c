@@ -36,6 +36,7 @@
 #ifdef SDK_PORT
 #include "port/frame_rate.h"
 #include "port/gba_slot.h"
+#include "port/following_hack.h"
 #include "port/rom_patches.h"
 #include "port/save_sync.h"
 #include "port/sim_config_prj.h"
@@ -110,6 +111,8 @@ void NitroMain(void)
 
 #ifdef SDK_PORT
     // Tables and instructions ROM hacks change, from the ROM's code files
+    // Following Renegade Platinum (its code and tables are in weather_sys.narc), before the ROM's tables are read
+    FollowingHack_Init();
     RomPatches_Apply();
 #endif
 

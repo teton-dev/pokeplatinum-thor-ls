@@ -1,5 +1,9 @@
 #include "overlay005/field_effect_manager.h"
 
+#ifdef SDK_PORT
+#include "port/following_hack.h"
+#endif
+
 #include <nitro.h>
 #include <string.h>
 
@@ -315,6 +319,16 @@ static int FieldEffectRenderer_IsInvalid(const FieldEffectRenderer *fieldEffRend
 static const FieldEffectRendererFuncs *GetRendererFuncs(u32 id)
 {
     const FieldEffectRendererFuncs *iter = sFieldEffectRendererHandlers;
+
+#ifdef SDK_PORT
+    {
+        // The Following Renegade Platinum hack's renderer, one past the game's
+        const FieldEffectRendererFuncs *hack = FollowingHack_RendererFuncs(id);
+        if (hack != NULL) {
+            return hack;
+        }
+    }
+#endif
 
     while (iter->id != FIELD_EFFECT_RENDERER_INVALID) {
         if (iter->id == id) {

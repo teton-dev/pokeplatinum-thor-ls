@@ -1,0 +1,15 @@
+# Widescreen on the party screen . With Settings > Display > Widescreen on, the bottom screen in
+# its own window and the top window 16:9, it fills the window, its panels in the 4:3 middle. From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_party.txt --from turtwig
+mash A until free
+wait 30
+jump 342 114 854
+until free timeout 3000
+wait 60
+# (Opened by the test command app, it has no field task to return to: the run ends in it.)
+app party
+wait 600
+shot party
+exit 0

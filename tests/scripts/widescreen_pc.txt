@@ -1,0 +1,11 @@
+# Widescreen on Platinum's PC box screen: with Settings > Display > Widescreen on, the bottom screen in its own
+# window and the top window 16:9, its layers' edges continue across the sides. From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_pc.txt --from turtwig
+mash A until free
+wait 30
+app pc
+wait 400
+shot pc
+exit 0

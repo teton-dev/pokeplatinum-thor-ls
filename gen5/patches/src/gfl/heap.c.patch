@@ -1,0 +1,34 @@
+--- a/src/gfl/heap.c
++++ b/src/gfl/heap.c
+@@ -5,6 +5,8 @@
+ #include "nitro/os.h"
+ #include "nnsys/fnd.h"
+ 
++#include <stdio.h> // The port: GFL_HeapDumpOnFailure prints
++
+ // The heap API over heapsys.c, which stops the game when the heap system fails. The debug messages the failures printed
+ // are compiled out, which leaves the calls that computed their arguments
+ 
+@@ -281,6 +283,7 @@
+         file[i] = ' ';
+     }
+     file[i] = '\0';
++    printf("  %s:%u, %lu bytes\n", sHeapDumpFile, line, (unsigned long)sHeapDumpState.size); // The port
+ }
+ 
+ // Prints a heap's sizes and its allocated blocks
+@@ -288,10 +291,11 @@
+     GFL_HeapGetSize(heapId);
+     GFL_HeapGetFreeSizeCore(heapId);
+     GFL_HeapGetHighestAllocatableSize(heapId);
+-    GFL_HeapGetAllocationCount(heapId);
+-    exit(1);
++    // The port: lists the blocks and carries on (the exit calls are the debug build's stops, which here would quit
++    // the game): deleting the heap frees them
++    printf("Gen 5: heap %d deleted with %lu blocks allocated:\n", (int)heapId,
++           (unsigned long)GFL_HeapGetAllocationCount(heapId));
+     NNS_FndVisitAllocatedForExpHeap(GFL_HeapGetValidHeapBase(heapId), GFL_HeapDumpProc, 0);
+-    exit(0);
+ }
+ 
+ void GFL_HeapDTCMInit(u32 size) {

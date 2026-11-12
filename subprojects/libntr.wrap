@@ -2,9 +2,33 @@
 # Thor/Android fork: GLES renderer, android target, second-screen output.
 # Pinned to a commit of its thor-android branch; bump it in a commit of its own ("libntr: bump to <sha>").
 url = https://github.com/teton-dev/libntr.git
-revision = 0faac677543374128f425dc46fc8cbc635d74c63
+revision = 578c6a8c6e8904aac233d34b8d084e0639f478f1
 depth = 1
 directory = libntr
+# teton-dev fork, Gen 5 battles: G3_MultMtx33/44, G3_MultTransMtx33 and G3_Shininess through the simulator (BW2's
+# models call them; Platinum doesn't, and the register writes overran into GXSTAT). For libntr itself, later
+# libntr_g3_clip.patch: polygons clipped in clip space before the divide by W, as on the DS (BW2's sky and ground
+# meshes reach behind the camera; they were dropped). libntr_g3_clear.patch: the 3D buffer is cleared for a new frame
+# only by a command that draws, and in the 3D buffer (Platinum's PC boxes showed a black screen: their vblank handler's
+# matrix commands cleared the finished frame). libntr_wide_obj.patch: widescreen OBJ layers repeated across the sides
+# (SIM_SetWidescreenObjWrap: the overworld's weather sprites fill a wide screen). libntr_snd_waveout.patch: the
+# simulated ARM7 carries out the direct channel commands and keeps the channels' status, so that NitroSystem's wave
+# output plays (BW2's cries use it). libntr_g3_translucent_state.patch: each deferred translucent polygon is drawn with its own
+# culling and depth test (BW2's battle particles were culled). libntr_wide_edge.patch: SIM_SetWidescreenBgEdgeExtend,
+# a BG layer's edge columns continued across the sides of a wide scene (BW2's text box reaches the screen's edges).
+# libntr_wide_obj_edge.patch: SIM_SetWidescreenObjEdgeExtend, the pixels of OBJs at the 4:3 picture's edge continued
+# across the sides of a wide scene (BW2's party balls' bar and ability bar reach the screen's edges).
+# libntr_translucent_id.patch: SIM_SetTranslucentPolygonIdRule, the DS's rule that a translucent polygon doesn't blend
+# over a pixel another one with its polygon ID drew (BW2's shadows were darker where their parts overlap).
+# libntr_wide_window.patch: on a wide BG layer a hardware window that starts at 0 or reaches 255 continues across the
+# sides (the HM cut-in's band spans the whole wide screen). libntr_bg_charbase.patch: GX_LoadBG0/1/2Char loaded at
+# the character base masked to 128 KB, where the renderer reads the real one (the Journal's text on BG1, char base
+# 0x20000, was written over the page's tiles at 0: black pages)
+# libntr_wide_mirror.patch: SIM_SetWidescreenBgMirror, a wide BG layer's sides mirror the 256-pixel picture (the HM
+# cut-in's rings) instead of repeating it
+# libntr_g3_wdepth.patch: in W-buffer mode (the overworld) the depth is W interpolated with perspective, as on the DS,
+# written as gl_FragDepth (GL's own depth is linear in screen space: Twinleaf's sign drew over the player's cap)
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_g3_wdepth.patch
 
 [provide]
 dependency_names = NitroSDK

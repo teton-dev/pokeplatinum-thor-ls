@@ -11,6 +11,10 @@
 #include "math_util.h"
 #include "sys_task_manager.h"
 
+#ifdef SDK_PORT
+#include "port/test_script.h"
+#endif
+
 #define MAIN_TASK_MAX        160
 #ifdef SDK_PORT
 #define VBLANK_TASK_MAX      64
@@ -313,6 +317,9 @@ void ReadKeypadAndTouchpad(void)
     }
 
     padRead = PAD_Read();
+#ifdef SDK_PORT
+    padRead |= TestScript_Keys();
+#endif
 
     gSystem.pressedKeysRaw = padRead & (padRead ^ gSystem.heldKeysRaw);
     gSystem.pressedKeysRepeatableRaw = gSystem.pressedKeysRaw;
@@ -342,6 +349,15 @@ void ReadKeypadAndTouchpad(void)
     }
 
     TP_GetCalibratedPoint(&tp, &tpRaw);
+#ifdef SDK_PORT
+    u16 testX, testY;
+    if (TestScript_Touch(&testX, &testY)) {
+        tp.x = testX;
+        tp.y = testY;
+        tp.touch = 1;
+        tp.validity = TP_VALIDITY_VALID;
+    }
+#endif
 
     if (tp.validity == TP_VALIDITY_VALID) {
         gSystem.touchX = tp.x;

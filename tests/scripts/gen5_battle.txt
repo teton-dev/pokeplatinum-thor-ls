@@ -1,0 +1,28 @@
+# Gen 5 battles, milestone 3: from the turtwig fixture (turtwig.txt), a wild battle against a level 5 Bidoof in Black
+# 2 and White 2's engine, started as the debug entry does (Settings > Advanced > Gen 5 battles). Turtwig uses Tackle,
+# then runs away with the touch screen's RUN button; passes once back on the overworld.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_battle.txt --from turtwig
+
+gen5-import
+mash A until free
+gen5-battle 399 5
+until battle
+until command
+wait 60
+shot gen5-command
+# FIGHT, then Tackle (the first move, top left), until the next turn asks again
+touch 128 95
+wait 30
+shot gen5-moves
+touch 64 54
+until command
+wait 60
+shot gen5-tackled
+# RUN, at the bottom of the touch screen, until it works (running away can fail), with B through the messages
+touch 128 178
+wait 60
+shot gen5-run
+mash B touch 128 178 until free
+shot gen5-back
+exit 0

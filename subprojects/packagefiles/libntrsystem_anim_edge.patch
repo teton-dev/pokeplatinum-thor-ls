@@ -1,0 +1,35 @@
+diff --git a/libraries/g2d/src/g2d_Animation.c b/libraries/g2d/src/g2d_Animation.c
+index 24b8b0f..0f91eae 100644
+--- a/libraries/g2d/src/g2d_Animation.c
++++ b/libraries/g2d/src/g2d_Animation.c
+@@ -141,6 +141,17 @@ static NNS_G2D_INLINE void MoveNext_ (NNSG2dAnimController * pAnimCtrl)
+     }
+ }
+ 
++static NNS_G2D_INLINE BOOL HasEffectiveFrame_ (const NNSG2dAnimSequence * pSequence)
++{
++    u16 i;
++    for ( i = 0; i < pSequence->numFrames; i++ ) {
++        if ( pSequence->pAnmFrameArray[i].frames != 0 ) {
++            return TRUE;
++        }
++    }
++    return FALSE;
++}
++
+ static NNS_G2D_INLINE void SequenceEdgeHandleCommon_ (NNSG2dAnimController * pAnimCtrl)
+ {
+     NNS_G2D_NULL_ASSERT(pAnimCtrl);
+@@ -151,7 +162,11 @@ static NNS_G2D_INLINE void SequenceEdgeHandleCommon_ (NNSG2dAnimController * pAn
+     }
+ 
+     #ifdef SDK_PORT
+-    if( pAnimCtrl->pCurrent->frames == 0 || pAnimCtrl->pActiveCurrent->frames == 0 )
++    // Stop only a sequence in which no frame lasts any time (it would loop forever). This tested
++    // pCurrent->frames, but pCurrent is one past the sequence's end here: it read the next sequence's first frame, or
++    // memory after the last sequence's, and stopped the animation for good when that was 0 (on Android's allocator it
++    // was, at the end of a loop: Pokémon sprite parts in Black 2 and White 2 stopped after their first cycle)
++    if( !HasEffectiveFrame_(pAnimCtrl->pAnimSequence) )
+     {
+         NNS_G2dStopAnimCtrl( pAnimCtrl );
+         return;

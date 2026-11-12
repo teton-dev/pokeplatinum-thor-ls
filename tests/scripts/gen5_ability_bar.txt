@@ -1,0 +1,60 @@
+# Gen 5 battles in widescreen: the ability pop-up's bar. A wild Gyarados (Intimidate) meets Turtwig and its ability
+# shows at the start; the shots follow the battle's opening frame by frame, to see whether the bar reaches the edges.
+# From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/gen5_ability_bar.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+wild 130 10
+until battle
+shot a00
+wait 25
+shot a01
+wait 25
+shot a02
+wait 25
+shot a03
+wait 25
+shot a04
+wait 25
+shot a05
+wait 25
+shot a06
+wait 25
+shot a07
+wait 25
+shot a08
+wait 25
+shot a09
+wait 25
+shot a10
+wait 25
+shot a11
+wait 25
+shot a12
+wait 25
+shot a13
+wait 25
+shot a14
+wait 25
+shot a15
+wait 25
+shot a16
+wait 25
+shot a17
+wait 25
+shot a18
+wait 25
+shot a19
+wait 25
+shot a20
+wait 25
+shot a21
+wait 25
+shot a22
+until command timeout 6000
+shot cmd
+exit 0

@@ -1,0 +1,26 @@
+--- a/src/system/pm_voice.c
++++ b/src/system/pm_voice.c
+@@ -340,13 +340,19 @@
+ }
+ 
+ static void PokeVoice_ReleaseCore(PokeVoiceEntry *entry) {
+-    NNS_SndWaveOutStop(entry->handle);
+-    NNS_SndWaveOutWaitForChannelStop(entry->handle);
+-    NNS_SndWaveOutFreeChannel(entry->handle);
+-    if (entry->chorus == TRUE) {
++    // The port: no channel when the cry never started (none of its own, or no wave), which the DS reads as NULL
++    // without harm; and none twice (a cry that failed to start keeps the last one's freed channel)
++    if (entry->handle != NULL) {
++        NNS_SndWaveOutStop(entry->handle);
++        NNS_SndWaveOutWaitForChannelStop(entry->handle);
++        NNS_SndWaveOutFreeChannel(entry->handle);
++        entry->handle = NULL;
++    }
++    if (entry->chorus == TRUE && entry->chorusHandle != NULL) {
+         NNS_SndWaveOutStop(entry->chorusHandle);
+         NNS_SndWaveOutWaitForChannelStop(entry->chorusHandle);
+         NNS_SndWaveOutFreeChannel(entry->chorusHandle);
++        entry->chorusHandle = NULL;
+     }
+     entry->playing = FALSE;
+     PokeVoice_Reset(entry);

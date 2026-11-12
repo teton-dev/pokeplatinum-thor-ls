@@ -1,0 +1,19 @@
+# Gen 5 battles, milestone 4b: a wild Pokémon met as in tall grass (the field's own wild encounter, not the debug
+# battle), in Black 2 and White 2's engine because Settings > Gameplay > Gen 5 battles is on. From the turtwig fixture:
+# a level 5 Bidoof, RUN until it works; passes once back on the overworld.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_wild.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+wild 399 5
+until battle
+until command
+wait 60
+shot gen5-wild-command
+# RUN, at the bottom of the touch screen, until it works, with B through the messages
+touch 128 178
+mash B touch 128 178 until free
+shot gen5-wild-back
+exit 0

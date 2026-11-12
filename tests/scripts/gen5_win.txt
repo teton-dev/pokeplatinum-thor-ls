@@ -1,0 +1,22 @@
+# Gen 5 battles: winning a battle in Black 2 and White 2's engine, and what it changes in the party. From the turtwig
+# fixture, a wild level 1 Pichu, which Turtwig's Tackle knocks out (its least damage is about Pichu's HP); B through
+# the experience messages until the player is free on the overworld again. The log's "party 0 after the battle" line
+# has Turtwig's experience, which went up (204 in the fixture).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_win.txt --from turtwig
+
+gen5-import
+mash A until free
+gen5-battle 172 1
+until battle
+until command
+wait 60
+# FIGHT, then Tackle
+touch 128 95
+wait 30
+touch 64 54
+wait 120
+shot gen5-win-hit
+mash B until free timeout 3600
+shot gen5-win-back
+exit 0

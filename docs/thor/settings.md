@@ -21,7 +21,15 @@ next page.
   for the whole party* (off by default: as in X and Y, the Pokemon that battled each get
   all the EXP and the rest of the party half), the hard level cap, the game clock (hours
   and days ahead of the device's), the Nuzlocke helper, 60 FPS options, drawing every DS
-  frame, *Following Pokemon* (see [Features](features.md#following-pokemon)).
+  frame, *Following Pokemon* (see [Features](features.md#following-pokemon)). In builds
+  with the Gen 5 battles (this fork's `gen5-battles` branch, experimental): *Gen 5
+  battles* (off by default) runs wild battles against Pokemon you meet in tall grass, caves
+  and water, and single battles against the trainers on routes (with Platinum's AI and prize
+  money), in Black 2 and White 2's engine, with your party and the results (HP, EXP,
+  levels, moves, money, items used) kept, and Pokemon you catch go to your party or the PC.
+  It needs your Black 2 or White 2 ROM, added in *Games > Gen 5 battles*. In these battles
+  your trainer is Lucas or Dawn (as you chose), drawn from the back in Gen 5 style art made
+  for this fork. Double battles, Gym Leaders and the rival don't use it yet.
 * **Display**: 3D sharpness and edge smoothing, the DS's outlines around 3D models (see
   [Features](features.md#screens)), second display, layout, swap screens, widescreen
   (experimental), texture packs, vsync. On Windows and Linux: *Bottom screen

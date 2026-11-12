@@ -1,0 +1,105 @@
+# Gen 5 battles: the player's back sprite, the owner's art of Lucas or Dawn (gen5/art), through the send-out's throw
+# in a wild and a trainer battle in Black 2 and White 2's engine. From the turtwig fixture (Lucas) or turtwig-girl
+# (Dawn: new_game_girl.txt, then turtwig.txt). The check is the shots, a frame apart: wild-NN and trainer-NN step
+# through the throw (standing, the ball up, winding up, thrown); the game's own timing varies a little from run to run.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_player_back.txt --from turtwig
+#   tools/docker/desktop.sh test tests/scripts/gen5_player_back.txt --from turtwig-girl
+
+gen5-import
+gen5-battles on
+mash A until free
+# A wild Bidoof; RUN until it works
+wild 399 5
+until battle
+wait 34
+wait 1
+shot wild-00
+wait 1
+shot wild-01
+wait 1
+shot wild-02
+wait 1
+shot wild-03
+wait 1
+shot wild-04
+wait 1
+shot wild-05
+wait 1
+shot wild-06
+wait 1
+shot wild-07
+wait 1
+shot wild-08
+wait 1
+shot wild-09
+wait 1
+shot wild-10
+wait 1
+shot wild-11
+wait 1
+shot wild-12
+wait 1
+shot wild-13
+wait 1
+shot wild-14
+wait 1
+shot wild-15
+until command
+touch 128 178
+mash B touch 128 178 until free
+# Youngster Tristan; Tackle until it's over
+trainer 1
+until battle
+wait 120
+wait 1
+shot trainer-00
+wait 1
+shot trainer-01
+wait 1
+shot trainer-02
+wait 1
+shot trainer-03
+wait 1
+shot trainer-04
+wait 1
+shot trainer-05
+wait 1
+shot trainer-06
+wait 1
+shot trainer-07
+wait 1
+shot trainer-08
+wait 1
+shot trainer-09
+wait 1
+shot trainer-10
+wait 1
+shot trainer-11
+wait 1
+shot trainer-12
+wait 1
+shot trainer-13
+wait 1
+shot trainer-14
+wait 1
+shot trainer-15
+wait 1
+shot trainer-16
+wait 1
+shot trainer-17
+wait 1
+shot trainer-18
+wait 1
+shot trainer-19
+wait 1
+shot trainer-20
+wait 1
+shot trainer-21
+wait 1
+shot trainer-22
+wait 1
+shot trainer-23
+until command timeout 6000
+mash A until free timeout 12000
+exit 0
