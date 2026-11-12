@@ -61,8 +61,10 @@ jobs:
 
       - name: Build APK
         env:
-          VERSION_CODE: 90000${{ github.run_number }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
+          # Above the official APKs and the local builds installed so far (up to 9000302), and rising with each run
+          export VERSION_CODE=$((9100000 + RUN_NUMBER))
           # The runner's default NDK (r27, clang 18): the toolchain the code was tested with
           echo "NDK: $ANDROID_NDK_HOME"
           export VERSION_NAME="$(git rev-parse --short HEAD)"
