@@ -53,3 +53,13 @@ widescreen.
 - HeartGold/SoulSilver shares libntr: effects written against libntr's renderer should work in both games, with
   each game supplying its own map and time data.
 - Record here any rendering finding from the other work that matters for this (depth, clipping, 2D overlays).
+
+## Findings
+
+- **Depth in W-buffer mode** (2026-11-12): the overworld uses the DS's W-buffer (`gBufferMode`, `camera.c`), whose depth
+  is W interpolated with perspective. libntr wrote W into the vertex's NDC z, which GL interpolates linearly across the
+  screen, so depth across a polygon was off: on the Thor Twinleaf's sign drew over the player's cap with him right under
+  it. `g3_vertex.glsl`/`g3_fragment.glsl` now pass the depth as a perspective-correct varying and write
+  `gl_FragDepth` with it in W mode (`wBuffer` uniform, `sim_main.cpp`); Z mode is unchanged. The cost: no early depth
+  test for the 3D scene. This is a local change in `subprojects/libntr`, still to commit to `teton-dev/libntr` (then
+  bump the pin).
