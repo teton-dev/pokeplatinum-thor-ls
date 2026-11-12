@@ -1,0 +1,21 @@
+--- a/libraries/sim7/src/pxi.c
++++ b/libraries/sim7/src/pxi.c
+@@ -117,6 +117,10 @@
+ 					{
+ 						break;
+ 					}
++					// The sequences run on the audio callback's thread (SND_SeqMain), these commands on this one: on the
++					// DS the ARM7 does both in turn. Without the lock a sequence started or stopped here could be read
++					// half set up there (a crash in the sequencer's byte cache, through a null track pointer)
++					SDL_LockAudio();
+ 					while( sndCommandList != NULL ){
+ 						switch( sndCommandList->id )
+ 						{
+@@ -379,6 +383,7 @@
+ 					} 
+ 						// The channels' status as the commands left it, before they count as done
+ 						SIM_SndUpdateChannelStatus();
++						SDL_UnlockAudio();
+ 						if( win_SNDi_SharedWork )
+ 						{
+ 							win_SNDi_SharedWork->finishCommandTag++;
