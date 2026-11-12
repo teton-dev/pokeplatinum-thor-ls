@@ -23,7 +23,12 @@ def write(path: pathlib.Path, text: str):
 
 
 for source in sorted((pokebw2 / "generated").glob("*.txt")):
-    write(output / "constants" / source.with_suffix(".h").name, gen_constants.generate(source))
+    text = gen_constants.generate(source)
+    if source.name == "types.txt":
+        # The port's Fairy (Renegade Platinum) is type 17; the "no type" is 18 (btl_calc.c's chart has 18 types)
+        assert "#define TYPE_NULL 17" in text
+        text = text.replace("#define TYPE_NULL 17", "#define TYPE_FAIRY 17\n#define TYPE_NULL 18")
+    write(output / "constants" / source.with_suffix(".h").name, text)
 for directory in ("system", "script"):
     for source in sorted((pokebw2 / "res" / "text" / directory).glob("*.txt")):
         write(output / "text" / directory / source.with_suffix(".h").name, text_ids.header(source))

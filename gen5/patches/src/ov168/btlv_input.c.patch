@@ -1,5 +1,16 @@
 --- a/src/ov168/btlv_input.c
 +++ b/src/ov168/btlv_input.c
+@@ -479,8 +479,8 @@
+ // the only function that reads the table: MWCC keeps the loop of a function that reads an aligned object entered at
+ // its test (docs/matching.md). An alignment of 1, 2 or 4 gives the same code and layout, and the table's address
+ // allows nothing above 4.
+-static const u32 MOVE_TYPE_TILE_PALETTES[17] ATTRIBUTE_ALIGN(4) = {
+-    464, 470, 473, 471, 472, 476, 475, 477, 479, 465, 466, 468, 467, 469, 478, 474, 480,
++static const u32 MOVE_TYPE_TILE_PALETTES[18] ATTRIBUTE_ALIGN(4) = {
++    464, 470, 473, 471, 472, 476, 475, 477, 479, 465, 466, 468, 467, 469, 478, 474, 480, 469, // Fairy: Psychic's for now
+ };
+ static const BtlvInputButtonSet MOVE_BUTTONS = { MOVE_TOUCH_RECTS, MOVE_BUTTON_FLAGS, MOVE_FLASH_ROWS };
+ // The scroll of BG 4 for the button rise of each slot
 @@ -3217,15 +3217,15 @@
      for (i = 0; i < 4; i++) {
          MI_CpuCopy16(

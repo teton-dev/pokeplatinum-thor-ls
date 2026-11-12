@@ -1,6 +1,29 @@
 --- a/src/ov167/move_handlers.c
 +++ b/src/ov167/move_handlers.c
-@@ -1917,7 +1917,7 @@
+@@ -874,8 +874,22 @@
+ // report); a u32 local is folded into each use.
+ 
+ // Function names from swan.
++// The port: moves whose slot a hack uses for another move have no handlers of their own (Gen5_PortNoHandlers)
++static u16 sNoHandlerMoves[16];
++static u32 sNumNoHandlerMoves;
++void Gen5_PortNoHandlers(const u16 *moves, u32 count) {
++    for (sNumNoHandlerMoves = 0; sNumNoHandlerMoves < count && sNumNoHandlerMoves < 16; sNumNoHandlerMoves++) {
++        sNoHandlerMoves[sNumNoHandlerMoves] = moves[sNumNoHandlerMoves];
++    }
++}
++
+ BOOL MoveEvent_AddItem(BattleMon *mon, u16 move, u32 subPriority) {
+     u32 i;
++    for (i = 0; i < sNumNoHandlerMoves; i++) {
++        if (sNoHandlerMoves[i] == move) {
++            return FALSE;
++        }
++    }
+     u8 monId;
+     u8 found;
+     const BattleEventHandlerEntry *handlers;
+@@ -1917,7 +1931,7 @@
  
      if (BattleEventVar_GetValue(BTL_EVAR_ATTACKER) == monId &&
          BattleEventVar_GetValue(BTL_EVAR_CONDITION) == CONDITION_BIND) {
@@ -9,7 +32,7 @@
          targetId = BattleEventVar_GetValue(BTL_EVAR_DEFENDER);
          switch (BattleEventItem_GetSubID(item)) {
          case MOVE_WRAP:
-@@ -2540,7 +2540,7 @@
+@@ -2540,7 +2554,7 @@
              move = BattleAction_GetFightMove(&action);
              if (move == 0 || !PML_MoveIsDamaging(move)) {
                  if (BattleEventVar_RewriteValue(BTL_EVAR_NO_EFFECT_FLAG, 1)) {
@@ -18,7 +41,7 @@
                  }
              }
          }
-@@ -4528,7 +4528,7 @@
+@@ -4528,7 +4542,7 @@
      BattleHandlerString *string;
  
      if (BattleEventVar_GetValue(BTL_EVAR_MON) == monId) {
@@ -27,7 +50,7 @@
          switch (work[0]) {
          case 1:
              BattleHandler_StrSetup(string, 2, 0x2e9);
-@@ -7194,7 +7194,7 @@
+@@ -7194,7 +7208,7 @@
      u16 move;
  
      if (BattleEventVar_GetValue(BTL_EVAR_MON) == monId) {
@@ -36,7 +59,7 @@
          move = BattleEventVar_GetValue(BTL_EVAR_MOVE);
          BattleHandler_StrSetup(string, 1, 0x78);
          BattleHandler_AddArg(string, move);
-@@ -7267,7 +7267,7 @@
+@@ -7267,7 +7281,7 @@
      u16 move;
  
      if (BattleEventVar_GetValue(BTL_EVAR_MON) == monId) {
@@ -45,7 +68,7 @@
          move = BattleEventVar_GetValue(BTL_EVAR_MOVE);
          BattleHandler_StrSetup(string, 1, 0x79);
          BattleHandler_AddArg(string, move);
-@@ -8472,7 +8472,7 @@
+@@ -8472,7 +8486,7 @@
      BattleHandlerString *string;
  
      if (BattleEventVar_GetValue(BTL_EVAR_ATTACKER) == monId) {

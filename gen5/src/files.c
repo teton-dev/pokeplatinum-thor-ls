@@ -18,6 +18,17 @@
 static char sPaths[ARC_COUNT][PATH_MAX_LENGTH];
 static const char *sPathTable[ARC_COUNT];
 static BOOL sPathsReady;
+// Archives read from elsewhere (Gen5_FilesOverride)
+static char sOverrides[ARC_COUNT][PATH_MAX_LENGTH];
+static BOOL sOverridden[ARC_COUNT];
+
+void Gen5_FilesOverride(u32 arcId, const char *path)
+{
+    if (arcId < ARC_COUNT) {
+        snprintf(sOverrides[arcId], PATH_MAX_LENGTH, "%s", path);
+        sOverridden[arcId] = TRUE;
+    }
+}
 // The extracted ROM's folder from the game's folder (Gen5_FilesInit)
 static char sBase[PATH_MAX_LENGTH];
 
@@ -64,7 +75,11 @@ int Gen5_FilesInit(const char *gen5Dir)
     }
     sPathsReady = FALSE;
     for (u32 i = 0; i < ARC_COUNT; i++) {
-        snprintf(sPaths[i], PATH_MAX_LENGTH, "%s/%s", base, GFL_ArcSysGetResourcePath(i));
+        if (sOverridden[i]) {
+            snprintf(sPaths[i], PATH_MAX_LENGTH, "%s", sOverrides[i]);
+        } else {
+            snprintf(sPaths[i], PATH_MAX_LENGTH, "%s/%s", base, GFL_ArcSysGetResourcePath(i));
+        }
         sPathTable[i] = sPaths[i];
     }
     sPathsReady = TRUE;

@@ -45,7 +45,6 @@ gen5_sources = [
     'src/ov167/btl_rec.c',
     'src/ov167/btl_server.c',
     'src/ov167/btl_server_cmd.c',
-    'src/ov167/btl_server_flow_sub.c',
     'src/ov167/btl_string.c',
     'src/ov167/btlv_scu.c',
     'src/ov167/handler_common.c',
@@ -143,7 +142,6 @@ gen5_sources = [
     'src/gfl/wm_icon.c',
     # The game's own systems the battle uses: Pokémon data, parties, text, save blocks (ARM9 main)
     'src/system/adventure_savedata.c',
-    'src/system/app_menu_common.c',
     'src/system/area_data.c',
     'src/system/bgwinfrm.c',
     'src/system/bmp_winframe.c',
@@ -257,7 +255,9 @@ gen5_patched = [
     'src/system/poke_tool.c',         # PokeParty_SetParam, PML_PkmSetParam (nicknames, OT names, mail)
     'src/system/pml_met_data.c',
     'src/system/resonance_resort_data.c', # No Join Avenue: a catch records nothing there
-    'src/ov167/btl_calc.c',           # A Platinum trainer's prize money (runtime.c)
+    'src/ov167/btl_calc.c',           # A Platinum trainer's prize money (runtime.c), the 18-type chart (Fairy)
+    'src/system/app_menu_common.c',   # Fairy's type icon: Psychic's for now
+    'src/ov167/btl_server_flow_sub.c', # Experience: a division by zero is 0, as on the DS
     'src/ov170/tr_ai.c',              # Jump tables' offsets read in a defined order (the trainer AI)
 ]
 

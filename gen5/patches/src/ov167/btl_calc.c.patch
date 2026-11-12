@@ -1,15 +1,76 @@
 --- a/src/ov167/btl_calc.c
 +++ b/src/ov167/btl_calc.c
-@@ -578,6 +578,8 @@
+@@ -63,7 +63,8 @@
+ };
+ 
+ // The damage of each attacking type against each defending type in halves: 0, 2 (half), 4 (normal) or 8 (double)
+-const u8 TYPE_CHART[17][17] = {
++// The port: 18 types, Fairy's own (Renegade Platinum); Gen5_PortTypeChart fills the table, BW2's until then
++static const u8 TYPE_CHART_BW2[17][17] = {
+     { 4, 4, 4, 4, 4, 2, 4, 0, 2, 4, 4, 4, 4, 4, 4, 4, 4 }, { 8, 4, 2, 2, 4, 8, 2, 0, 8, 4, 4, 4, 4, 2, 8, 4, 8 },
+     { 4, 8, 4, 4, 4, 2, 8, 4, 2, 4, 4, 8, 2, 4, 4, 4, 4 }, { 4, 4, 4, 2, 2, 2, 4, 2, 0, 4, 4, 8, 4, 4, 4, 4, 4 },
+     { 4, 4, 0, 8, 4, 8, 2, 4, 8, 8, 4, 2, 8, 4, 4, 4, 4 }, { 4, 2, 8, 4, 2, 4, 8, 4, 2, 8, 4, 4, 4, 4, 8, 4, 4 },
+@@ -75,6 +76,32 @@
+     { 4, 2, 4, 4, 4, 4, 4, 8, 2, 4, 4, 4, 4, 8, 4, 4, 2 },
+ };
+ 
++u8 TYPE_CHART[18][18];
++static BOOL sTypeChartReady;
++
++// chart: the 18 x 18 table (attacking type by defending type, in halves: 0, 2, 4 or 8), or NULL for BW2's own,
++// where Fairy has no effect on anything and nothing on it
++void Gen5_PortTypeChart(const u8 *chart) {
++    int a, d;
++
++    for (a = 0; a < 18; a++) {
++        for (d = 0; d < 18; d++) {
++            if (chart != NULL) {
++                TYPE_CHART[a][d] = chart[a * 18 + d];
++            } else {
++                TYPE_CHART[a][d] = (a < 17 && d < 17) ? TYPE_CHART_BW2[a][d] : 4;
++            }
++        }
++    }
++    sTypeChartReady = TRUE;
++}
++
++static void TypeChartInit(void) {
++    if (!sTypeChartReady) {
++        Gen5_PortTypeChart(NULL);
++    }
++}
++
+ // Reconstructed, not known from the ROM. MWCC puts data_ov167_021d74ba with the file's other small tables, as the
+ // original has it, only when some code reads it, even code it never emits. This accessor is that code; nothing
+ // calls it.
+@@ -129,6 +156,7 @@
+     if (attackType == TYPE_NULL || defenseType == TYPE_NULL) {
+         return TYPE_EFFECTIVENESS_NORMAL;
      }
++    TypeChartInit();
+     switch (TYPE_CHART[attackType][defenseType]) {
+     case 0:
+         return TYPE_EFFECTIVENESS_IMMUNE;
+@@ -201,7 +229,8 @@
+     u8 count;
+     u8 i;
+ 
+-    for (i = 0, count = 0; i < 17; i++) {
++    TypeChartInit();
++    for (i = 0, count = 0; i < 18; i++) {
+         if (TYPE_CHART[attackType][i] == 0 || TYPE_CHART[attackType][i] == 2) {
+             defenseTypes[count++] = i;
+         }
+@@ -579,6 +608,8 @@
      return money;
  }
-+
-+u32 Gen5_PortTrainerPrizeBase(u32 trainerId); // The port (runtime.c)
  
++u32 Gen5_PortTrainerPrizeBase(u32 trainerId); // The port (runtime.c)
++
  // A trainer's prize money: their base money times four times the level of their last Pokémon
  u32 BtlCalc_GetTrainerPrizeMoney(BtlSetupTrainer *trainer, PokeParty *party) {
-@@ -586,7 +588,9 @@
+     if (party != NULL) {
+@@ -586,7 +617,9 @@
  
          if (count != 0) {
              PartyPkm *pkm = PokeParty_GetPkm(party, count - 1);

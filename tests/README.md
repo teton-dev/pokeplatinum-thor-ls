@@ -43,6 +43,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `widescreen_e4.txt` | `turtwig` | with widescreen on: the Elite Four's "VS" encounter effect (Aaron's), frame by frame with `stillshot`: the band across the 16:9 window, the portraits in the middle (the check is the shots; `leader 12` for Cynthia) | ~2 min |
 | `widescreen_leader.txt` | `turtwig` | with widescreen on: Roark's "VS" encounter effect across the 16:9 window (the check is the shots) | ~20 s |
 | `following_ball.txt` | `turtwig` of Following Renegade Platinum | the follower's ball effects run (with `DATA=~/thor-dev/desktop-following`; [notes](../docs/thor/dev/following-renegade.md)) | ~30 s |
+| `fairy_move.txt` | `rn-turtwig` (Renegade Platinum) | a Fairy move (Moonblast) is named and animated in a Gen 5 battle; screenshots every 20 frames (with `DATA=~/thor-dev/desktop-renegade`) | ~40 s |
 
 Renegade Platinum's Gen 5 battles: run `gen5_battle.txt` with `DATA=~/thor-dev/desktop-renegade` (or `desktop-following`) from fixtures made there ([notes](../docs/thor/dev/gen5-battles.md#renegade-platinum-2026-11-11-milestone-8-first-part)).
 

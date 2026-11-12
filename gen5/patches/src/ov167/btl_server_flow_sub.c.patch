@@ -1,0 +1,12 @@
+--- a/src/ov167/btl_server_flow_sub.c
++++ b/src/ov167/btl_server_flow_sub.c
+@@ -534,7 +534,8 @@
+             numStanding++;
+         }
+     }
+-    exp = baseExp / numStanding;
++    // The port: the DS divides by zero to 0 (no mon that faced the defeated one is standing); x86 traps
++    exp = numStanding != 0 ? baseExp / numStanding : 0;
+     if (exp == 0) {
+         exp = 1;
+     }

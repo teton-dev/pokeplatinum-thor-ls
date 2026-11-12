@@ -122,7 +122,7 @@ static NamingScreenArgs *sNamingArgs;
 static ApplicationManager *sNamingApp;
 
 // Platinum's text to Unicode, for BW2: the letters, digits and punctuation the ASCII table knows, and the accented e
-// of Pokémon. Other characters (Japanese, symbols) are left out for now
+// of Pokémon, PKMN written out. Other characters (Japanese, symbols) are left out for now
 void Gen5_TextToGen5(const charcode_t *src, int srcLength, unsigned short *dest, int destLength)
 {
     int n = 0;
@@ -147,6 +147,16 @@ void Gen5_TextToGen5(const charcode_t *src, int srcLength, unsigned short *dest,
             // The command, its parameter count, the parameters
             if (i + 2 < srcLength) {
                 i += 2 + src[i + 2];
+            }
+            continue;
+        }
+        // PKMN, two characters of Platinum's font, as BW2 writes it: Pokémon
+        if (src[i] == CHAR_PK || src[i] == CHAR_MN) {
+            static const unsigned short pk[] = { 'P', 'o', 'k', 0xE9 }, mn[] = { 'm', 'o', 'n' };
+            const unsigned short *word = src[i] == CHAR_PK ? pk : mn;
+            const int length = src[i] == CHAR_PK ? 4 : 3;
+            for (int k = 0; k < length && n < destLength - 1; k++) {
+                dest[n++] = word[k];
             }
             continue;
         }
@@ -274,7 +284,8 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
     return Pokemon_GetValue(mon, MON_DATA_LEVEL, NULL) > level;
 }
 
-// Platinum's own front sprite of a trainer class, which BW2 has no sprite for (Sinnoh's Elite Four), made into the art
+// Platinum's own front sprite of a trainer class, which BW2 has no sprite for (Sinnoh's Elite Four, and Barry, whose
+// class would be BW2's rival, Hugh), made into the art
 // the Gen 5 battle draws in its place. Platinum keeps it as a cell bank (an NCER) of poses, each OBJ rectangles
 // over the tiles of an 80x80 picture of 8x8 tiles (4 bits a pixel): the cell's tile data is a block of the character
 // file (NCGR) that Platinum copies into place when the cell shows (the bank's VRAM transfer table: a source offset and a
@@ -285,7 +296,8 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
 // this is done for each battle
 static BOOL TrainerClassHasPlatinumArt(int trainerClass)
 {
-    return trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_ELITE_FOUR_LUCIAN;
+    return (trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_ELITE_FOUR_LUCIAN)
+        || trainerClass == TRAINER_CLASS_RIVAL;
 }
 
 #define ART_MAX_RECTS 32
