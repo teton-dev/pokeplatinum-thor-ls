@@ -1,0 +1,54 @@
+# Following Renegade Platinum: the follower when the lead changes in the party menu (from the Thor: the old follower
+# stayed out, still, beside the new one). From the fixture `turtwig` of that ROM: out of the house, a level 10 Shinx
+# given, then X > Pokémon > Turtwig > Switch > Shinx, back to the field, a few steps.
+#
+#   DATA=$HOME/thor-dev/desktop-following tools/docker/desktop.sh test tests/scripts/following_switch.txt --from turtwig
+
+mash A until free
+walk DOWN 3
+wait 60
+walk RIGHT 3
+wait 60
+give 403 10
+shot s0-before
+press X
+wait 30
+shot s1-menu
+press A
+wait 90
+shot s2-party
+press A
+wait 30
+shot s3-submenu
+press DOWN
+wait 10
+press A
+wait 30
+press RIGHT
+wait 10
+press A
+wait 60
+shot s4-switched
+press B
+wait 90
+press B
+wait 60
+shot s5-field
+walk RIGHT 2
+wait 60
+shot s6-walked
+walk LEFT 2
+wait 60
+shot s7-back
+learn 33
+gen5-import
+gen5-battles on
+wild 396 2
+until battle
+mash A until free timeout 12000
+wait 60
+shot s8-after-battle
+walk RIGHT 2
+wait 60
+shot s9-walked
+exit 0

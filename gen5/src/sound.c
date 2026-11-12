@@ -28,6 +28,8 @@
 #include "constants/species.h"
 #include "gfl/arc.h"
 #include "gfl/sound.h"
+#include "gen5.h"
+#include "gen5/port.h"
 
 // The sound effect players BW2 has (snd_sys.c's SND_PLAYER_COUNT): BW2's players 1 to 5
 #define PLAYER_COUNT 5
@@ -422,6 +424,19 @@ void GFL_SndBGMPlay(u32 bgm, u32 channelMask)
 {
     (void)channelMask;
     sBGM = bgm;
+    // The music of a win: Platinum's own plays in its place (the port's side picks it, gen5_battle.c), as its battle
+    // starts it when the last foe faints
+    switch (bgm) {
+    case SEQ_BGM_WIN1:
+    case SEQ_BGM_WIN2:
+    case SEQ_BGM_WIN3:
+    case SEQ_BGM_WIN4:
+    case SEQ_BGM_WIN5:
+    case SEQ_BGM_WIN6:
+    case SEQ_BGM_WIN_WBT:
+        Gen5_Event(GEN5_EVENT_VICTORY_MUSIC);
+        break;
+    }
 }
 
 u32 GFL_SndBGMGetID(void)

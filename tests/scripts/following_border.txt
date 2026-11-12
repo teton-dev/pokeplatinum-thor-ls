@@ -1,0 +1,25 @@
+# Following Renegade Platinum: the follower across a map border (Twinleaf Town to Route 201, no loading), with its
+# shadow (from the Thor: the follower lost its shadow on the next route). From the fixture `turtwig` of that ROM.
+#
+#   DATA=$HOME/thor-dev/desktop-following tools/docker/desktop.sh test tests/scripts/following_border.txt --from turtwig
+
+mash A until free
+walk DOWN 3
+mash A until free
+walk DOWN 1
+walk LEFT 3
+wait 60
+stillshot b0-twinleaf
+walk UP 16
+mash A until free
+walk UP 6
+mash A until free
+walk UP 4
+mash A until free
+walk UP 3
+wait 60
+stillshot b1-route
+walk UP 2
+wait 60
+stillshot b2-route
+exit 0

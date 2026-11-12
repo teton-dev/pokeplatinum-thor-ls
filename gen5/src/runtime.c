@@ -547,6 +547,8 @@ BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId)
         return FALSE;
     }
     GFL_StrBufLoadString(strbuf, trainer->defeatText);
+    printf("Gen 5: trainer %u says its defeat line (%lu characters)\n", trainer->id,
+        (unsigned long)GFL_StrBufGetCharCount(strbuf));
     return TRUE;
 }
 
