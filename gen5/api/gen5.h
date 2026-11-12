@@ -179,6 +179,7 @@ void Gen5_SetInput(unsigned keys, int touch, int x, int y);
 // What happened in the battle since the last call, as bits (the game's test scripts wait for them)
 enum Gen5BattleEvent {
     GEN5_EVENT_COMMAND = 1 << 0, // The battle asks the player what to do
+    GEN5_EVENT_VICTORY_MUSIC = 1 << 1, // The battle is won: Platinum's victory music is to play
 };
 
 unsigned Gen5_TakeEvents(void);

@@ -591,11 +591,20 @@ functions do (`src/system/btl_setup.c`):
   keyed by BW2 class.
 - **The partner** is drawn with BW2's back sprite of its nearest class (Barry as Hugh); Platinum's own back sprites of
   the partners, or the owner's Gen 5 style ones, are still to do. Its party isn't written back (Platinum doesn't either).
+- **Double battle trainers' lines** (from the Thor: Liv & Liz said nothing): a double battle's trainer has no
+  `TRMSG_DEFEAT` but one line for each of its two people (`TRMSG_DOUBLE_BATTLE_DEFEAT_1` and `_2`); both are shown,
+  a page each, as BW2 shows one trainer's line.
+- **Victory music** (from the Thor: none played): BW2's music calls are stubs (Platinum's music plays on, see
+  "Sound"), so its win music (`SEQ_BGM_WIN1` to `6`) raises `GEN5_EVENT_VICTORY_MUSIC` (`gen5/src/sound.c`) and
+  `gen5_battle.c` plays Platinum's own as its battle picks it (`PlayVictoryMusic`: by the first trainer's class, Gym
+  Leaders, Galactic, Cyrus, the Elite Four, Cynthia; the wild one). For every Gen 5 battle, single ones too. Logged,
+  not heard (the container has no audio).
 - Test: `gen5_doubles.txt` (`turtwig`, with a level 50 Empoleon given) plays Twins Liv & Liz (trainer 15), Tristan and
   Jacob (1 and 16, the test command `trainers A B [PARTNER]`), then the same two beside Cheryl (608), to the end; each
   shot at the first command shows both sides right.
 - **Not tested:** a wild battle beside a partner (it needs the partner's variable set and tall grass; catching there
-  is for the second wild Pokémon too, `caughtWild2`); the defeat lines and the second trainer's slide-in on screen;
+  is for the second wild Pokémon too, `caughtWild2`); the defeat lines (logged with their length) and the second
+  trainer's slide-in on screen;
   widescreen with four Pokémon; the scripted partner battles (Spear Pillar, Iron Island...) and their scripts after;
   the Thor.
 
