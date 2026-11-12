@@ -695,7 +695,11 @@ u16 Field_TileBehaviorToScript(FieldSystem *fieldSystem, u8 behavior)
         TrainerInfo *info = SaveData_GetTrainerInfo(fieldSystem->saveData);
         u32 distortionBehavior = PlayerAvatar_GetDistortionCurrTileBehaviour(fieldSystem->playerAvatar);
 
+#ifdef SDK_PORT
+        if (PlayerAvatar_CanUseSurf(fieldSystem->playerAvatar, distortionBehavior, behavior) && (TrainerInfo_HasBadge(info, 3) || HmFree_NoBadges())) {
+#else
         if (PlayerAvatar_CanUseSurf(fieldSystem->playerAvatar, distortionBehavior, behavior) && TrainerInfo_HasBadge(info, 3)) {
+#endif
             if (Party_HasMonWithMove(SaveData_GetParty(fieldSystem->saveData), MOVE_SURF) != PARTY_SLOT_NONE
 #ifdef SDK_PORT
                 || HmFree_CanUse(SaveData_GetParty(fieldSystem->saveData), MOVE_SURF)

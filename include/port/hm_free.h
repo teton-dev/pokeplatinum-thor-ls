@@ -17,6 +17,9 @@ extern "C" {
 #endif
 
 BOOL HmFree_Enabled(void);
+// Field moves without badges (Settings > Gameplay, off by default): the badge checks for Cut, Fly,
+// Surf, Strength, Defog, Rock Smash, Waterfall and Rock Climb pass without the badge
+BOOL HmFree_NoBadges(void);
 
 // An HM field move nobody in the party knows can be used anyway: the setting is on, the
 // HM is in the bag and there's a Pokemon (not an Egg) to do it

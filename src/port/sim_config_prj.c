@@ -42,6 +42,9 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("General", "HmFreeFieldMoves")) {
         config->hmFree = StringToBool(value);
     }
+    if(MATCH("General", "HmNoBadges")) {
+        config->hmNoBadges = StringToBool(value);
+    }
     if(MATCH("General", "FollowerPokemon")) {
         config->followerPokemon = StringToBool(value);
     }
@@ -184,6 +187,7 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->instantText = TRUE;
   aConfig->instantBars = TRUE;
   aConfig->hmFree = TRUE;
+  aConfig->hmNoBadges = FALSE;
   aConfig->hardLevelCap = FALSE;
   aConfig->repelPrompt = TRUE;
   aConfig->followerPokemon = TRUE;
@@ -247,6 +251,7 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "InstantText=%s\n", BoolToString(aConfig->instantText));
     fprintf(configFile, "InstantBars=%s\n", BoolToString(aConfig->instantBars));
     fprintf(configFile, "HmFreeFieldMoves=%s\n", BoolToString(aConfig->hmFree));
+    fprintf(configFile, "HmNoBadges=%s\n", BoolToString(aConfig->hmNoBadges));
     fprintf(configFile, "HardLevelCap=%s\n", BoolToString(aConfig->hardLevelCap));
     fprintf(configFile, "RepelPrompt=%s\n", BoolToString(aConfig->repelPrompt));
     fprintf(configFile, "FollowerPokemon=%s\n", BoolToString(aConfig->followerPokemon));

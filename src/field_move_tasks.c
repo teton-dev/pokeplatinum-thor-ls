@@ -49,6 +49,10 @@
 #include "spawn_locations.h"
 #endif
 
+#ifdef SDK_PORT
+#include "port/hm_free.h"
+#endif
+
 #define FIELD_MOVE_FLAG(move) (1 << (move))
 
 enum FlyState {
@@ -146,6 +150,11 @@ static inline BOOL FieldMoves_IsMoveUsable(const FieldMoveContext *fieldMoveCont
 
 static inline BOOL PlayerHasRequiredBadge(const FieldMoveContext *fieldMoveContext, enum Badge badge)
 {
+#ifdef SDK_PORT
+    if (HmFree_NoBadges()) {
+        return TRUE;
+    }
+#endif
     return TrainerInfo_HasBadge(SaveData_GetTrainerInfo(fieldMoveContext->fieldSystem->saveData), badge);
 }
 
