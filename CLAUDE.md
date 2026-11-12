@@ -9,7 +9,8 @@ This file adds what is specific to this fork and to the Gen 5 battles work.
 (Android).
 
 - `platinum-thor`: the owner's personal build. Its `build_android.yml` sets
-  `VERSION_CODE: 90000${{ github.run_number }}` so its APKs install over the official ones (keep that line).
+  `VERSION_CODE=$((9100000 + RUN_NUMBER))` so its APKs install over the official ones and over the local builds
+  installed on the Thor (up to 9000302; keep that line, and keep local builds' codes below 9100000).
   A push there builds an APK in Actions (artifact `pokeplatinum-android`), installed with `adb install -r`.
 - Upstream pull requests, each from its own branch based on upstream `platinum-thor`:
   - `SilasMayes/libntr#1` from `teton-dev/libntr` `left-stick-dpad`: the left stick as a second D-pad, with
