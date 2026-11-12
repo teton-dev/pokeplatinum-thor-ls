@@ -56,10 +56,11 @@ widescreen.
 
 ## Findings
 
-- **Depth in W-buffer mode** (2026-11-12): the overworld uses the DS's W-buffer (`gBufferMode`, `camera.c`), whose depth
-  is W interpolated with perspective. libntr wrote W into the vertex's NDC z, which GL interpolates linearly across the
-  screen, so depth across a polygon was off: on the Thor Twinleaf's sign drew over the player's cap with him right under
-  it. `g3_vertex.glsl`/`g3_fragment.glsl` now pass the depth as a perspective-correct varying and write
-  `gl_FragDepth` with it in W mode (`wBuffer` uniform, `sim_main.cpp`); Z mode is unchanged. The cost: no early depth
-  test for the 3D scene. This is a local change in `subprojects/libntr`, still to commit to `teton-dev/libntr` (then
-  bump the pin).
+- **Sprites and the objects just behind them** (2026-11-12): the overworld uses the Z-buffer (`Camera_SetProjection`
+  sets `gBufferMode` to Z; only some cut scenes keep the W-buffer). Twinleaf's town sign is a 3D model whose board's lower
+  edge is about 3 view units nearer the camera than the player's sprite on the tile in front, so it covers the top of the
+  cap. The DS snaps that edge to its 256x192 pixels (about one row of overlap, mostly the cap's outline); at the Thor's
+  resolution the overlap is larger. The port nudges the overworld's sprites toward the camera for the depth test only
+  (`billboard.c`, `SIM_SetSpriteDepthBias`, `libntr_sprite_depth.patch`): 8 units at their tops, nothing at their feet,
+  so tall grass still covers feet. An earlier attempt (a W-buffer depth patch) didn't apply to the overworld and was
+  dropped.

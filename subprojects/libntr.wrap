@@ -26,9 +26,9 @@ directory = libntr
 # 0x20000, was written over the page's tiles at 0: black pages)
 # libntr_wide_mirror.patch: SIM_SetWidescreenBgMirror, a wide BG layer's sides mirror the 256-pixel picture (the HM
 # cut-in's rings) instead of repeating it
-# libntr_g3_wdepth.patch: in W-buffer mode (the overworld) the depth is W interpolated with perspective, as on the DS,
-# written as gl_FragDepth (GL's own depth is linear in screen space: Twinleaf's sign drew over the player's cap)
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_g3_wdepth.patch
+# libntr_sprite_depth.patch: SIM_SetSpriteDepthBias, polygons moved toward the camera for the depth test only, more
+# toward their tops (billboard.c's overworld sprites: a head clears the lower edge of a sign just behind it)
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch
 
 [provide]
 dependency_names = NitroSDK
