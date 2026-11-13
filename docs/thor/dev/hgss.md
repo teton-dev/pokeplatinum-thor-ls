@@ -165,6 +165,27 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   static flag every real frame in between, so it stays wide for the whole transition regardless. Trainer battles'
   own transitions (spin, ball drop, the Leaders' and Rival's) aren't touched. Test:
   `widescreen_wild_transition.txt` (a stillshot mid-flip, `tests/README.md` says what to check for).
+- **The Pokégear's own gray phone bezel** (2026-11-13): full-screen apps over the field (the Bag, the Pokédex...)
+  already widen their own background to the window's edges with panels staying in the 4:3 middle (as the Platinum
+  fork does); the Pokégear is the one of them that should look like a phone doing it, so `widescreen.c`'s new
+  `WideApplication` (checking `fieldSystem->processManager->child->template.init` against `Pokegear_Init`) widens its
+  background (`GF_BG_LYR_MAIN_0`) the same way, and `UpdatePokegearBezel` draws a gray bezel with a speaker grill
+  over the gap on each side (two `SIM_WideStamp`s of one 16×64 image, the right one `flipX`, on the same layer,
+  `SIM_SetWidescreenStampImage`/`Stamps`).
+  **Not visually confirmed**: reaching the Pokégear screen itself turned out to be blocked by an unrelated,
+  pre-existing bug. `FLAG_GOT_POKEGEAR` reads back true after Elm's lab, the starter, and talking to Mom (confirmed
+  with a new `flag N` test command, `tests/README.md`), and `FieldSystem_ShouldDrawStartMenuIcon` agrees it should
+  show — but the start menu's Pokégear slot never renders (POKéMON and the Pokédex have the same problem even with a
+  caught Pokémon). `StartMenu_Init`, `StartMenu_BuildActionLists` and
+  `FieldSystem_GetStartMenuButtonInhibitFlags_Normal` all read as correct on inspection; the cause wasn't found. The
+  generic mechanism was instead checked against the Options app (reachable via the start menu): its own backdrop
+  (also `GF_BG_LYR_MAIN_2`, per `options_app.c`) turned out not to widen at all, for an unrelated reason of its
+  own — the Options screen swaps which hardware engine drives the top screen (`sWideSubTop` in
+  `subprojects/libntr/libraries/sim/src/sim_main.cpp`), and its backdrop didn't respond to any edge-extend bit
+  (0-3) in testing, so it likely isn't drawn through the normal per-BG path `SIM_SetWidescreenBgEdgeExtend` hooks
+  into at all. That Options branch was dropped rather than pursued further, since it was never asked for; the
+  Pokégear's own `GF_BG_LYR_MAIN_0` isn't swapped the same way, but until the start-menu bug is fixed this is
+  untested in the running game.
 - **No music** (2026-11-13): no song started anywhere (the title, towns, routes, Pokémon Centers, battles):
   every `NNS_SndArcPlayerStartSeqEx` failed to load its sequence or wave archive, because the sound heap
   (`SND_HEAP_SIZE`, `src/sound.c`) was full: 6,560 bytes free before the title's 17,820-byte sequence. The port's
