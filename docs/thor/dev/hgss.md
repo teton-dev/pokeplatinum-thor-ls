@@ -81,8 +81,25 @@ don't reach into the game (no item, give, wild, trainer, jump...), on HGSS's hoo
 `new-game`. The APK (`desktop.sh apk`, dev flavor `org.pokeheartgold.port.dev`) builds with the same volumes as
 Platinum's and installs on the Thor; its first launch (the ROM picker) is untested.
 
-Left in milestone 1: the APK's first launch and play on the Thor, and scripts on to Sprout Tower (upstream's own
-`tools/port/testrig/nav` scripts know the route, through gdb).
+Left in milestone 1: scripts on to Sprout Tower (upstream's own `tools/port/testrig/nav` scripts know the route,
+through gdb). The APK runs on the Thor (first launch and the ROM import done by the owner).
+
+### Platinum fork's fixes in HGSS (2026-11-12)
+
+- **Launched from the Thor's lower screen** both DS screens were drawn there (the bottom screen's Presentation skips
+  the game's own display and the main one). Fixed in both games' `PlatinumActivity` / `SecondaryScreen`: the
+  activity moves its task to the main display, and the bottom screen is placed again on configuration changes.
+- **libntr**: HGSS pins the same `teton-dev/libntr` commit (578c6a8, the left stick as a D-pad) with the same 18
+  patches and `libntrsystem_anim_edge.patch`. The chain only applies with `patch` (meson's first choice); `git
+  apply`, its fallback, refuses `libntr_wide_mirror.patch` and the ones after it on a clean checkout, here too.
+- **Widescreen overworld** (`lib/port/widescreen.c` in the HGSS fork): the field camera widened, the weather's
+  sprites and BG2 across the sides (`WeatherManager_PortLayers`), Flash's darkness 4:3. Battles and menus stay 4:3
+  (Gen 5 battles will bring their own). `widescreen_newbark.txt` checks it.
+- **Sprite depth bias** on HGSS's billboards (`BillboardLists_Draw`), as Platinum's `billboard.c`.
+- Platinum's rain fix doesn't apply: HGSS's decompilation types the drops' work (`WeatherParticle`).
+- Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
+  fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
+  They are quiet on the port now.
 
 ## Decisions needed from the owner
 
