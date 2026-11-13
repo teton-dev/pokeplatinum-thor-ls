@@ -182,8 +182,9 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   inside `G2SIM_DrawBGWide` (`subprojects/libntr/libraries/sim/src/sim_g2.cpp`), which only runs for a BG in
   `SIM_SetWidescreenSceneOptions`'s `wideBgLayers` mask; `WideApplication` had put the Pokégear's background in
   `edgeBgs` (`SIM_SetWidescreenBgEdgeExtend`) instead, which widens a BG's picture but never calls
-  `G2SIM_DrawBGWide` at all, so the bezel's stamps never got a chance to draw. Switched to `wideBgs`; not yet
-  re-checked on hardware. The generic mechanism was also checked against the Options app (reachable through the
+  `G2SIM_DrawBGWide` at all, so the bezel's stamps never got a chance to draw. Switched to `wideBgs` and re-checked
+  on hardware: **still just the blue background's sides, no bezel**, so that wasn't the whole story either. Left
+  as a to-do; the generic mechanism was also checked against the Options app (reachable through the
   start menu on desktop, unlike the Pokégear) along the way: its own backdrop (also `GF_BG_LYR_MAIN_2`, per
   `options_app.c`) didn't widen at all even with `edgeBgs`, for a different reason — the Options screen swaps which
   hardware engine drives the top screen (`sWideSubTop` in `sim_main.cpp`), landing the edge-extend bit on the wrong
