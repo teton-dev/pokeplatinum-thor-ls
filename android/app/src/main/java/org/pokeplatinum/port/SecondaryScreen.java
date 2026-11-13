@@ -57,7 +57,19 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
         displayManager.unregisterDisplayListener(this);
     }
 
+    /** Places the lower screen again: the game's window moved to another display (see PlatinumActivity). */
+    void refresh() {
+        if (wanted) {
+            update();
+        }
+    }
+
     private int ownDisplayId() {
+        // The window's display first: right after a move to another display the activity's can still be the old one
+        Display windowDisplay = activity.getWindow().getDecorView().getDisplay();
+        if (windowDisplay != null) {
+            return windowDisplay.getDisplayId();
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && activity.getDisplay() != null) {
             return activity.getDisplay().getDisplayId();
         }
@@ -102,6 +114,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
         dismiss();
         if (target == null) {
+            Log.i(TAG, "No display for the bottom screen (the game is on display " + ownDisplayId() + ")");
             return; // single screen: the game falls back to its normal layout
         }
 
