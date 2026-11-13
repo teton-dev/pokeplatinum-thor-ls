@@ -3,7 +3,29 @@
 The goal: the owner's HeartGold (and SoulSilver) ROM played natively on the Thor the way Platinum is here, with full
 widescreen, BW2's battle engine (`gen5-battles.md`), 60 FPS and HD texture packs.
 
-Status: **not started; this plan is waiting on the decisions at the end.**
+Status: **milestone 1 under way** (2026-11-12). The fork is `teton-dev/pokeheartgold-thor-ls` (branch
+`thor-android`), cloned at `~/pokeheartgold-thor-ls` with `upstream` = `SilasMayes/pokeheartgold`. Its desktop build
+runs in Docker and boots the owner's HeartGold ROM (sha1 matches retail) through the intro and title into a new game.
+
+### Running the desktop build
+
+`tools/docker/desktop.sh` in the HGSS fork (branch `desktop-docker`; its `tools/docker/README.md`): `build`,
+`start` (VNC on port 5901), `shot`, `key`, `hold`, `type`, `click`, `log`, `where`, `stop`, `GAME=ss`. Data folder
+`~/thor-dev/desktop-hg`. Findings from setting it up:
+
+- Its image is Ubuntu 24.04 with gcc 13, as upstream's CI, plus flex and bison (libntr's `makelcf`). A clean build
+  takes about 15 minutes on 8 cores under Rosetta. Platinum's Debian image has gcc 14, which makes some of the
+  decompilation's pointer mismatches errors (first: `src/application/main_menu/agb_cartridge.c`).
+- On the first start the desktop build asks for the ROM in an ImGui file dialog and extracts it into the working
+  directory; the game has to be restarted after (the script does both).
+- **It needs `firmware.bin`** (the port's DS Wi-Fi settings block) in the data folder, or it segfaults at boot.
+  The APK ships HGSS's `res/pc_port/dwc_nv.bin` as that file; the script copies it in for the desktop.
+- `[assert] GF_ASSERT failed` from `GetOverlayRamBounds` (`src/poke_overlay.c`) at every overlay load is harmless
+  and Platinum has it too (asserts only log on the port): on 64-bit, `FSOverlayInfoHeader` holds pointers, so the
+  overlay table libntr reads from `header.bin` lands `file_id` on the ARM9 load address (0x02000000) and the
+  lookup fails. Overlays are native code on the port anyway.
+- Keys over xdotool: A = `z`, B = `x`, Start = `Return` (`tools/port/testrig/sim_config.ini`). Upstream's Linux test
+  rig (`tools/port/testrig`) relies on gdb, which doesn't run under Rosetta here.
 
 ## What there is to build on
 
@@ -53,9 +75,18 @@ Status: **not started; this plan is waiting on the decisions at the end.**
 6. **60 FPS** on the overworld with HGSS's speed fixes, and texture packs (game code `IPKE`/`IPGE`).
 7. **Following Pokémon** (HGSS's own) and BW2 battles together.
 
+Scripted tests (2026-11-12): `lib/port/test_script.c` in the HGSS fork is Platinum's runner with the commands that
+don't reach into the game (no item, give, wild, trainer, jump...), on HGSS's hooks; `desktop.sh test`, fixtures in
+`~/thor-dev/fixtures/hg`. `new_game.txt` plays a new game (ETHAN) to the bedroom, map 64 at (6, 6), and keeps it as
+`new-game`. The APK (`desktop.sh apk`, dev flavor `org.pokeheartgold.port.dev`) builds with the same volumes as
+Platinum's and installs on the Thor; its first launch (the ROM picker) is untested.
+
+Left in milestone 1: the APK's first launch and play on the Thor, and scripts on to Sprout Tower (upstream's own
+`tools/port/testrig/nav` scripts know the route, through gdb).
+
 ## Decisions needed from the owner
 
-- Base the work on upstream's `thor-android` HGSS port (recommended), rather than porting the decompilation anew.
+- ~~Base the work on upstream's `thor-android` HGSS port~~: decided, forked 2026-11-12.
 - Whether HGSS now moves ahead of Renegade Platinum (CLAUDE.md and `gen5-battles.md` put Renegade, milestone 8,
   first).
 - Whether `hg-engine` matters at all for this (recommended: not as a base; maybe later as a hack target).
