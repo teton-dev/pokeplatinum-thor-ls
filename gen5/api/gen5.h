@@ -91,7 +91,7 @@ typedef struct Gen5Item {
 
 typedef struct Gen5Trainer {
     unsigned id; // Platinum's trainer ID
-    unsigned platinumClass;
+    unsigned platinumClass; // the game's own trainer class (Platinum's, or HGSS's: Gen5_SetGame)
     unsigned aiFlags; // Platinum's AI flags (gen5/src/trainers.c makes them BW2's)
     unsigned items[4];
     unsigned prizeBase; // The class's prize: the money for winning is its last Pokémon's level times 4 times this
@@ -191,6 +191,12 @@ int Gen5_BattleFrame(void);
 void Gen5_SetWidescreen(float ratio);
 // Whether a move's full-screen background is up, for its sides to be mirrored in a wide scene
 int Gen5_MoveBgShown(void);
+
+// The game playing, by its Gen 4 version number (HeartGold 7, SoulSilver 8, Platinum 12, the default; BW2 numbers
+// them the same): the origin game of its Pokémon in BW2, and whose trainer classes Gen5Trainer.platinumClass holds
+// (gen5/src/trainers.c). Before Gen5_BattleBegin
+void Gen5_SetGame(int version);
+int Gen5_GameVersion(void);
 
 // The HP boxes' look: White 2's light ones (1) or Black 2's dark ones (0, the default). Both are in either version's
 // files. Before Gen5_BattleBegin
