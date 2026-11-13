@@ -1,0 +1,72 @@
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -52,6 +52,18 @@
+ static GLuint s_G3DrawVertexBuffer;
+ 
+ extern G3SIM_TexImageParam_t s_texImageParam;
++
++// The bound texture's wrapping, from TEXIMAGE_PARAM: repeat, mirrored repeat or, with repeat off,
++// clamped to the edge texel as the DS does. The translucent polygons drawn at the end of the frame
++// set theirs too (they always repeated, and HGSS's starter balls showed their clamped spotlight
++// tiled across each ball)
++static void G3SIM_ApplyTexWrap(const G3SIM_TexImageParam_t *param)
++{
++	GLint s = param->repeatS ? (param->flipS ? GL_MIRRORED_REPEAT : GL_REPEAT) : GL_CLAMP_TO_EDGE;
++	GLint t = param->repeatT ? (param->flipT ? GL_MIRRORED_REPEAT : GL_REPEAT) : GL_CLAMP_TO_EDGE;
++	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, s);
++	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, t);
++}
+ extern G3SIM_PolygonAttr_t s_curPolygonAttr;
+ extern GLuint g3shaderProgramID;
+ extern u8 s_SIM_g3tex[4*1024*1024];
+@@ -350,27 +362,7 @@
+ 
+ 		texture->Activate();
+ 
+-		if(s_texImageParam.repeatS) {
+-			if(s_texImageParam.flipS)
+-			{
+-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+-			} else {
+-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+-			}
+-		} else {
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+-		}
+-
+-		if(s_texImageParam.repeatT) {
+-			if(s_texImageParam.flipT)
+-			{
+-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+-			} else {
+-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+-			}
+-		} else {
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+-		}
++		G3SIM_ApplyTexWrap(&s_texImageParam);
+ 
+ 
+ 		GLint texUnitLoc = G3SIM_Uniform("myTexture");
+@@ -539,20 +531,8 @@
+ 			glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("useTexture") , 0);
+ 		}
+ 
+-		if(item->texImageParam.flipS)
+-		{
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+-		} else {
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+-		}
++		G3SIM_ApplyTexWrap(&item->texImageParam);
+ 
+-		if(item->texImageParam.flipT)
+-		{
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+-		} else {
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+-		}
+-
+ 		// Set the polygon mode in the shader
+ 		GLint polygonModeLoc = G3SIM_Uniform("polygonMode");
+ 		glProgramUniform1i(g3shaderProgramID, polygonModeLoc, item->polygonAttr.polygonMode);
