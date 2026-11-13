@@ -138,8 +138,8 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   Tests: `gen5_trainer.txt` (a Rocket Grunt), `gen5_rival.txt` (Silver in New Bark Town), and the runner's
   `trainer ID [ID2]`. With more than one Pokémon a
   mashed A loops in BW2's "switch?" prompt and party screen after a knockout: keep test parties to one. Not done:
-  Mom's savings out of the prize, the trainers' mid-battle lines (`TRMSG_LAST_POKE`...), the player's back sprite
-  (still the Platinum fork's Lucas and Dawn), the Frontier.
+  Mom's savings out of the prize, the trainers' mid-battle lines (`TRMSG_LAST_POKE`...), the Frontier.
+  The player's back sprite is Ethan or Lyra (2026-11-13, below).
 - Platinum's rain fix doesn't apply: HGSS's decompilation types the drops' work (`WeatherParticle`).
 - **Battle particles** (2026-11-13): HGSS's own battles drew no move particles (Tackle's burst and dust). Its SPL
   (`lib/src/spl_draw_ptcl.c`, unlike Platinum's `lib/spl`) writes the geometry registers directly
@@ -178,3 +178,12 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
 - "HD 3D models": the port has HD *texture* packs (Dolphin-style PNG replacement); replacing models themselves is
   new work, with no format or source for HD models yet. Texture packs for HGSS are milestone 6.
 - Fork-only, as with Gen 5 in Platinum (GPL); ask upstream's developer before proposing any of it there.
+- **Ethan and Lyra** (2026-11-13): the player's back sprite in HGSS's Gen 5 battles. `PlayerBack_ForTrainerClass`
+  (`gen5/src/player_back.c`) gives Ethan (male) or Lyra (female) when `Gen5_GameVersion()` is HeartGold or SoulSilver,
+  Lucas and Dawn otherwise. The owner's sheets (`gen5/art/sheets/trainer_ethan_fullspritesheet.png`,
+  `trainer_lyra_fullspritesheet.png`) are converted by `gen5/tools/player_back.py convert` like the others. Lyra's is
+  laid out as Dawn's (armless standing pose, arm pieces added). Ethan's poses have their near arms drawn in, so only
+  the far arm is added to the throw, and BW2's "ball up" shows him standing, "ball higher" and "winding up" with his arm
+  over his head. His sheet's backing is noisy (compression), snapped to one colour (`backing_tolerance`). Previewed with
+  `player_back.py preview`; not yet built or seen in a battle (needs `desktop.sh build` in the HGSS fork and
+  `gen5_wild.txt` / `gen5_rival.txt`).

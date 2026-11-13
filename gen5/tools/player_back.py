@@ -67,6 +67,50 @@ SPRITES = {
             ['lean', ('arm_back', 113, 70)],
         ],
     },
+    # HeartGold and SoulSilver's player characters. Lyra's sheet is laid out as Dawn's
+    'lyra': {
+        'sheet': 'trainer_lyra_fullspritesheet.png',
+        'parts': {
+            'stand': (9, 20, 57, 128),
+            'overhead': (58, 15, 120, 128),
+            'lean': (120, 30, 192, 128),
+            'arm_back': (194, 3, 240, 28),
+            'arm_spare': (199, 42, 213, 72),
+            'arm_fist': (218, 40, 234, 71),
+            'arm_ball': (193, 84, 217, 124),
+            'arm_ball_high': (224, 84, 256, 123),
+        },
+        'anchors': {'stand': 31, 'overhead': 85, 'lean': 138},
+        'poses': [
+            [('arm_fist', 19, 73), 'stand'],
+            [('arm_ball', 7, 35), 'stand'],
+            [('arm_ball_high', -1, 36), 'stand'],
+            ['overhead'],
+            ['lean', ('arm_back', 113, 70)],
+        ],
+    },
+    # Ethan's sheet has the same three poses and arm pieces, but his poses have their near arms drawn in: standing
+    # with his fist at his side, the arm over his head, and the swing. Only the far arm swung back is added to the
+    # last. BW2's "ball up" is the standing pose (its short pause) and its long "ball higher" and "winding up" the
+    # arm over his head. The sheet's backing is noisy (compression), so it is snapped to one colour
+    'ethan': {
+        'sheet': 'trainer_ethan_fullspritesheet.png',
+        'backing_tolerance': 8,
+        'parts': {
+            'stand': (11, 20, 55, 128),
+            'overhead': (66, 15, 118, 128),
+            'lean': (119, 30, 189, 128),
+            'arm_back': (194, 3, 240, 29),
+        },
+        'anchors': {'stand': 29, 'overhead': 84, 'lean': 136},
+        'poses': [
+            ['stand'],
+            ['stand'],
+            ['overhead'],
+            ['overhead'],
+            ['lean', ('arm_back', 113, 70)],
+        ],
+    },
 }
 
 
@@ -237,9 +281,41 @@ def pack(sizes):
     return places
 
 
-def convert(name, spec):
+def snap_backing(pixels, tolerance):
+    # A sheet whose backing colour is noisy (Ethan's, saved with compression artefacts): every pixel within
+    # `tolerance` of the commonest colour's neighbourhood becomes that one backing colour, which keys out as usual
+    counts = {}
+    for row in pixels:
+        for p in row:
+            counts[p[:3]] = counts.get(p[:3], 0) + 1
+    # The backing is the mean of the pixels in the most crowded cell of the colour cube
+    cells = {}
+    for c, n in counts.items():
+        cells.setdefault((c[0] // 8, c[1] // 8, c[2] // 8), []).append((c, n))
+    best = max(cells.values(), key=lambda cell: sum(n for _, n in cell))
+    total = sum(n for _, n in best)
+    backing = tuple(round(sum(c[i] * n for c, n in best) / total) for i in range(3))
+    def fix(p):
+        if all(abs(p[i] - backing[i]) <= tolerance for i in range(3)):
+            return backing + (255,)
+        # The outline's edge pixels blended with the green backing: they are the outline's black (no part is green)
+        if p[1] > p[0] + 12 and p[1] > p[2] + 12:
+            return (0, 0, 0, 255)
+        return p
+    return backing, [[fix(p) for p in row] for row in pixels]
+
+
+def sheet_pixels(spec):
     width, height, pixels = png_read(ART / 'sheets' / spec['sheet'])
-    backing = pixels[0][0][:3]
+    if 'backing_tolerance' in spec:
+        backing, pixels = snap_backing(pixels, spec['backing_tolerance'])
+    else:
+        backing = pixels[0][0][:3]
+    return width, height, pixels, backing
+
+
+def convert(name, spec):
+    width, height, pixels, backing = sheet_pixels(spec)
     rects = {part: trim(pixels, backing, rect) for part, rect in spec['parts'].items()}
     used = {part for pose in spec['poses'] for part in [p if isinstance(p, str) else p[0] for p in pose]}
 

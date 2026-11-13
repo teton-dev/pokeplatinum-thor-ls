@@ -275,12 +275,13 @@ gen5_port_sources = files(
     'src/sdk.c',         # What pokebw2's own SDK copies have and libntr lacks
     'src/sound.c',       # src/system/snd_sys.c: BW2's sound effects and cries from its own archive, Platinum's music
     'src/trainers.c',    # Platinum's trainer classes as BW2's (milestone 5)
-    'src/player_back.c', # The player's back sprite: the owner's art of Lucas and Dawn (art/)
+    'src/player_back.c', # The player's back sprite: the owner's art of Lucas, Dawn, Ethan, Lyra (art/)
 )
 
 # The owner's art of the player's back (art/, converted from art/sheets by tools/player_back.py convert), as C data
 gen5_player_back_data = custom_target('gen5_player_back_data',
-    input: files('art/lucas_back.png', 'art/lucas_back.json', 'art/dawn_back.png', 'art/dawn_back.json'),
+    input: files('art/lucas_back.png', 'art/lucas_back.json', 'art/dawn_back.png', 'art/dawn_back.json',
+        'art/ethan_back.png', 'art/ethan_back.json', 'art/lyra_back.png', 'art/lyra_back.json'),
     output: 'gen5_player_back_data.h',
     command: [gen5_python, files('tools/player_back.py'), 'header', '@OUTPUT@'],
 )
