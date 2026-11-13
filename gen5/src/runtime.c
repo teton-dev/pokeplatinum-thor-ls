@@ -153,7 +153,7 @@ static PartyPkm *NewPkm(const Gen5Pokemon *src)
     // Before Gen 5 the nature is the PID's; Gen 5 keeps it in a field of its own
     PokeParty_SetParam(pkm, PKM_PARAM_NATURE, src->personality % 25);
     // Pokémon from Platinum: their ability slot comes from the PID's lowest bit, as for any Gen 4 Pokémon
-    PokeParty_SetParam(pkm, PKM_PARAM_ORIGIN_GAME, VERSION_PLATINUM);
+    PokeParty_SetParam(pkm, PKM_PARAM_ORIGIN_GAME, Gen5_GameVersion());
     for (int i = 0; i < 4; i++) {
         PokeParty_SetParam(pkm, PKM_PARAM_MOVE1 + i, src->moves[i]);
         PokeParty_SetParam(pkm, PKM_PARAM_MOVE1_PP_UP + i, src->ppUps[i]);
@@ -262,7 +262,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     copyTrainerName(info, battle->player.name);
     setIDAsUInt(info, battle->player.id);
     setTrainerGender(info, battle->player.gender);
-    PlayerInfo_SetVersion(info, VERSION_PLATINUM);
+    PlayerInfo_SetVersion(info, Gen5_GameVersion());
     // The money a loss takes is checked against what the player has (CalcLossMoney)
     getTrainerGameInfoAddress(SaveControl_GetInstance())->cash = battle->player.money;
     Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
@@ -427,6 +427,19 @@ int Gen5_MoveBgShown(void)
     return sMoveBgShown;
 }
 
+// The game playing: Gen 4's version number (BW2's for its Pokémon's origin game), Platinum's unless set
+static int sGameVersion = VERSION_PLATINUM;
+
+void Gen5_SetGame(int version)
+{
+    sGameVersion = version;
+}
+
+int Gen5_GameVersion(void)
+{
+    return sGameVersion;
+}
+
 static int sWhiteGauges = 0;
 
 void Gen5_SetWhiteGauges(int white)
@@ -582,7 +595,7 @@ int Gen5_SummaryBegin(const Gen5Summary *summary, const char *gen5Dir)
     copyTrainerName(info, summary->player.name);
     setIDAsUInt(info, summary->player.id);
     setTrainerGender(info, summary->player.gender);
-    PlayerInfo_SetVersion(info, VERSION_PLATINUM);
+    PlayerInfo_SetVersion(info, Gen5_GameVersion());
     Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
     Config_SetTextSpeed(config, 1);
     Config_SetTextSpeed(&getTrainerDataBlkAddress(SaveControl_GetInstance())->config, 1);

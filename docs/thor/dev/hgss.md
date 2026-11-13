@@ -107,8 +107,8 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   `DoAllScreenBrightnessTransitionStep` (`lib/port/gen5_game.c`). *Settings > Gen 5 battles* imports the BW2 ROM
   (`src/port/gen5_rom.cpp`, copied: keep the two the same) and has the setting and a debug wild battle.
   `lib/port/gen5_battle.c` is `src/port/gen5_battle.c` on HGSS's `BattleSetup`, started from `Battle_LaunchApp`:
-  wild battles so far (party, bag, arena, results, catching into the party or the PC). `gen5_wild.txt` plays one
-  to the end. Next: trainers (HGSS's AI flags table), evolution after a battle, the caught Pokémon's naming,
+  wild battles (party, bag, arena, results, catching into the party or the PC) and trainers (below). `gen5_wild.txt`
+  plays one to the end. Next: evolution after a battle, the caught Pokémon's naming,
   Apricorn balls, the Safari Zone and Bug-Catching Contest. Later, `gen5/` and the game-neutral parts of the bridge
   (`gen5_rom.cpp`, the conversions) move to a repository of their own (milestone 3).
 - **White HP boxes** (2026-11-12): HGSS's Gen 5 battles show White 2's light HP boxes. Both versions' palettes are in
@@ -121,7 +121,35 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   through `POKEHEARTGOLD_GEN5_ARENA=16,1` so far: HGSS's trainer battles don't go to BW2's engine yet. Found: in
   the widescreen battle a texel of the sky is about 0.8 as wide as high on screen (not 1.8 times wider, as the
   Galactic notes say), the texture is seen mirrored, and the ribbons' dark edges cover its rows below about 15.
+- **Trainer battles** (2026-11-13): single, double (one trainer's two), two trainers (TAG) and beside a partner
+  (MULTI with AI), including the losable ones (`BATTLE_TYPE_11`) and Silver's first (`BATTLE_SPECIAL_FIRST_RIVAL`);
+  Frontier, link, Safari, Bug Contest and the tutorial stay HGSS's. `gen5/` takes the game (`Gen5_SetGame`, Gen 4's
+  version number): HGSS's class table in `gen5/src/trainers.c` and HeartGold or SoulSilver as its Pokémon's origin
+  game. HGSS numbers its AI flags as Platinum does, so the table is shared. Sprites: BW2's where it has the same class
+  or person (the generic classes it shares, Johto's and Kanto's Gym Leaders, Giovanni, Blue, Lance, Red), HGSS's own
+  (`a/0/5/8`, the same format as Platinum's, converted as Platinum's are) for the rest: Team Rocket, Silver, the Elite
+  Four, Kimono Girls, Sages... (`TrainerClassHasBw2Sprite`). Names, class names (`msg_0730`), defeat lines (`TRMSG_LOSE`,
+  or both `TRMSG_DBL_LOSE_*` for a pair), prize by class (`sPrizeMoneyTbl`), victory music by class (`SEQ_GS_WIN1`,
+  `WIN3` for Gym Leaders, the Elite Four and Lance, `WINBRAIN`). Arenas: Rocket's (16, 1); Gym Leaders on the dark
+  stone hall (4, 19); Will, Koga, Bruno, Karen in BW2's Elite Four rooms (12 to 15), Lance in the Champion's (16, 0).
+  Tests: `gen5_trainer.txt` (a Rocket Grunt), and the runner's `trainer ID [ID2]`. With more than one Pokémon a
+  mashed A loops in BW2's "switch?" prompt and party screen after a knockout: keep test parties to one. Not done:
+  Mom's savings out of the prize, the trainers' mid-battle lines (`TRMSG_LAST_POKE`...), the player's back sprite
+  (still the Platinum fork's Lucas and Dawn), the Frontier.
 - Platinum's rain fix doesn't apply: HGSS's decompilation types the drops' work (`WeatherParticle`).
+- **Battle particles** (2026-11-13): HGSS's own battles drew no move particles (Tackle's burst and dust). Its SPL
+  (`lib/src/spl_draw_ptcl.c`, unlike Platinum's `lib/spl`) writes the geometry registers directly
+  (`reg_G3_VTX_10 = ...`), and on the port those are plain variables the renderer never reads: only the `G3_`
+  functions reach it. The file's writes are macros now, `G3_Direct0/1`, `G3_Translate` and `G3_Scale` on the port
+  and the registers on the DS. `graphics_object_manager.c`'s scale (the dress-up) likewise. Still writing registers
+  on the port, unchecked: `aprijuice_screen.c`, `dress_up.c`, `safari_decoration.c`, `plaza_game_swalot_plop.c`,
+  `pokeathlon_lamp_jump.c`, `wifi_plaza_visitor_profiles.c`. `battle_particles.txt` checks Tackle.
+- **Starter balls' spotlight** (2026-11-13): tiled across each ball, with an arc over it. It is a translucent A5I3
+  texture with repeat off, and libntr's deferred translucent pass always set `GL_REPEAT`
+  (`libntr_g3_tex_wrap.patch`: every pass takes the polygon's repeat and flip, and clamps to the edge texel as the
+  DS does, where the opaque pass used `GL_CLAMP_TO_BORDER`). `starter_balls.txt` (new-game to Elm's machine) shows it.
+  Platinum shares libntr: the patch belongs in its chain too. libntr also lacks the normal and vertex texture
+  coordinate sources (TEXIMAGE_PARAM modes 2 and 3); neither scene uses them.
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
