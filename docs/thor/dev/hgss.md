@@ -201,6 +201,10 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   libntr's OBJ edge extend continues to the sides, the portraits keeping 1; Red's (effect 46), black blocks filling
   BG3 like the wild transitions, is widened with them (`EncounterEffect_PortWildPlaying`). Unlike Platinum's, HGSS's
   leader banner has no sliding bars. `widescreen_cutins.txt`.
+- **X's menu in widescreen** (2026-11-13): its gray bar on the top screen (BG3, a vertical gradient loaded while the
+  menu's cursor is active, `start_menu.c`) stopped at the 4:3 edges; while `StartMenu_PortBarShown` its rows are
+  continued to the sides (BG edge extend). `widescreen_xmenu.txt`. Seen once on the way, unexplained: thin white
+  diagonal lines across New Bark Town's 3D for a frame, with the menu open.
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
