@@ -96,6 +96,11 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   sprites and BG2 across the sides (`WeatherManager_PortLayers`), Flash's darkness 4:3. Battles and menus stay 4:3
   (Gen 5 battles will bring their own). `widescreen_newbark.txt` checks it.
 - **Sprite depth bias** on HGSS's billboards (`BillboardLists_Draw`), as Platinum's `billboard.c`.
+- **60 FPS** (`lib/port/frame_rate.c`): the overworld's logic at 60 Hz while the player is free, with the speed
+  fixes (walk, run, bike, turn, ledge jumps, variable-speed walks, people's waits, sprite and effect animations,
+  map textures and props, the field's 3D animations, the weather's tasks, the surf mount's bob) and the Platinum
+  fork's settings (`sim_config_prj.ini`, *Settings > Gameplay*, `lib/port/settings_pages.cpp`). Not yet: the
+  rest of Platinum's list where HGSS has its own effects (footprints, emotes, shadows' fades...), checked by eye.
 - Platinum's rain fix doesn't apply: HGSS's decompilation types the drops' work (`WeatherParticle`).
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
