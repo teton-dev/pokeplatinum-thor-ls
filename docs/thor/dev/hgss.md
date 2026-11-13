@@ -152,7 +152,7 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   texture with repeat off, and libntr's deferred translucent pass always set `GL_REPEAT`
   (`libntr_g3_tex_wrap.patch`: every pass takes the polygon's repeat and flip, and clamps to the edge texel as the
   DS does, where the opaque pass used `GL_CLAMP_TO_BORDER`). `starter_balls.txt` (new-game to Elm's machine) shows it.
-  Platinum shares libntr: the patch belongs in its chain too. libntr also lacks the normal and vertex texture
+  Platinum's chain has it too (its `first_battle.txt` and `gen5_battle.txt` still pass). libntr also lacks the normal and vertex texture
   coordinate sources (TEXIMAGE_PARAM modes 2 and 3); neither scene uses them.
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.

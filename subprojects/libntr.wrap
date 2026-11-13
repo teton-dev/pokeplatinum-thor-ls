@@ -30,7 +30,7 @@ directory = libntr
 # toward their tops (billboard.c's overworld sprites: a head clears the lower edge of a sign just behind it)
 # libntr_snd_lock.patch: the sound commands (the PXI thread) hold SDL's audio lock, so the sequences (the audio
 # callback) never read a sequence half set up (a crash in the sequencer's byte cache)
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch, libntr_snd_lock.patch
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch, libntr_snd_lock.patch, libntr_g3_tex_wrap.patch
 
 [provide]
 dependency_names = NitroSDK
