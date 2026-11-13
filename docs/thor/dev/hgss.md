@@ -101,6 +101,16 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   map textures and props, the field's 3D animations, the weather's tasks, the surf mount's bob) and the Platinum
   fork's settings (`sim_config_prj.ini`, *Settings > Gameplay*, `lib/port/settings_pages.cpp`). Not yet: the
   rest of Platinum's list where HGSS has its own effects (footprints, emotes, shadows' fades...), checked by eye.
+- **Gen 5 battles** (2026-11-12): HGSS builds this repository's `gen5/` through `./gen5`, a symbolic link to
+  `../pokeplatinum-thor-ls/gen5` (this fork has to be cloned next to the HGSS one, as pokebw2 is), with
+  `-Dpokebw2`; the only game function the Gen 5 code calls (`BrightnessController_Update`) is HGSS's
+  `DoAllScreenBrightnessTransitionStep` (`lib/port/gen5_game.c`). *Settings > Gen 5 battles* imports the BW2 ROM
+  (`src/port/gen5_rom.cpp`, copied: keep the two the same) and has the setting and a debug wild battle.
+  `lib/port/gen5_battle.c` is `src/port/gen5_battle.c` on HGSS's `BattleSetup`, started from `Battle_LaunchApp`:
+  wild battles so far (party, bag, arena, results, catching into the party or the PC). `gen5_wild.txt` plays one
+  to the end. Next: trainers (HGSS's AI flags table), evolution after a battle, the caught Pokémon's naming,
+  Apricorn balls, the Safari Zone and Bug-Catching Contest. Later, `gen5/` and the game-neutral parts of the bridge
+  (`gen5_rom.cpp`, the conversions) move to a repository of their own (milestone 3).
 - Platinum's rain fix doesn't apply: HGSS's decompilation types the drops' work (`WeatherParticle`).
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
