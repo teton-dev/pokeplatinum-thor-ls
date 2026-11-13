@@ -165,6 +165,11 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   static flag every real frame in between, so it stays wide for the whole transition regardless. Trainer battles'
   own transitions (spin, ball drop, the Leaders' and Rival's) aren't touched. Test:
   `widescreen_wild_transition.txt` (a stillshot mid-flip, `tests/README.md` says what to check for).
+- **No music** (2026-11-13): no song started anywhere (the title, towns, routes, Pokémon Centers, battles):
+  every `NNS_SndArcPlayerStartSeqEx` failed to load its sequence or wave archive, because the sound heap
+  (`SND_HEAP_SIZE`, `src/sound.c`) was full: 6,560 bytes free before the title's 17,820-byte sequence. The port's
+  data takes more room than the DS's; `heap_buf` is twice the DS's size on the port now, as Platinum's
+  `SOUND_SYSTEM_HEAP_SIZE*2`, with 914,912 bytes free after the global data, and every song starts.
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
