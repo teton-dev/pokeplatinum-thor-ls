@@ -154,6 +154,17 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   DS does, where the opaque pass used `GL_CLAMP_TO_BORDER`). `starter_balls.txt` (new-game to Elm's machine) shows it.
   Platinum's chain has it too (its `first_battle.txt` and `gen5_battle.txt` still pass). libntr also lacks the normal and vertex texture
   coordinate sources (TEXIMAGE_PARAM modes 2 and 3); neither scene uses them.
+- **The wild battle's own transition, widened** (2026-11-13): the black or white tiles that flip the overworld away
+  before any battle starts (`EncounterEffect_WildRows*`/`WildDiagonals*`/`WildWave*`, effects 0-5 of
+  `gEncounterEffectFuncs`) draw on a 256-wide window (BG3, and BG1 for the wave), confined to the DS's width even
+  with widescreen on, since the field isn't "shown" (`ShownFieldSystem`) while it plays: a narrow box over the
+  (already wide) field for its whole length, then a cut to the wide battle. `lib/port/widescreen.c` now widens it
+  (BG3's edge extended) while it plays. The flag (`EncounterEffect_PortWildPlaying`, `src/battle_transition_task.c`)
+  is set around `EncounterEffect_Start`, not inside the six effect functions themselves: `Task_BattleTransition`'s
+  own poll only changes twice (started, and `env->done`), but `Widescreen_Update()` (`src/main.c`'s loop) reads the
+  static flag every real frame in between, so it stays wide for the whole transition regardless. Trainer battles'
+  own transitions (spin, ball drop, the Leaders' and Rival's) aren't touched. Test:
+  `widescreen_wild_transition.txt` (a stillshot mid-flip, `tests/README.md` says what to check for).
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
