@@ -1,8 +1,10 @@
 package org.pokeplatinum.port;
 
 import android.Manifest;
+import android.app.ActivityOptions;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
@@ -54,9 +56,36 @@ public class PlatinumActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        moveToMainDisplay();
         preferSixtyHertz();
         installBundledFiles();
         secondaryScreen = new SecondaryScreen(this);
+    }
+
+    /**
+     * Launched on a second panel (the Thor's lower screen has a launcher of its own), the game would draw both DS
+     * screens there: the lower screen goes on a display other than the game's own and the main one, and there is
+     * none left. Asking for this activity on the main display moves its task there (singleInstance: the running
+     * one is reused, not restarted), and the lower screen then goes on the panel it was launched from.
+     */
+    private void moveToMainDisplay() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || getDisplay() == null
+                || getDisplay().getDisplayId() == Display.DEFAULT_DISPLAY) {
+            return;
+        }
+        android.hardware.display.DisplayManager displays =
+            (android.hardware.display.DisplayManager) getSystemService(DISPLAY_SERVICE);
+        Display main = displays.getDisplay(Display.DEFAULT_DISPLAY);
+        if (main == null || !main.isValid() || main.getState() == Display.STATE_OFF) {
+            return;
+        }
+        Log.i(TAG, "Launched on display " + getDisplay().getDisplayId() + ": moving to the main display");
+        Intent intent = new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            startActivity(intent, ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY).toBundle());
+        } catch (SecurityException | ActivityNotFoundException e) {
+            Log.w(TAG, "Could not move to the main display", e);
+        }
     }
 
     /**
@@ -85,6 +114,22 @@ public class PlatinumActivity extends SDLActivity {
         super.onResume();
         if (secondaryScreen != null) {
             secondaryScreen.show();
+            // Again once the window has settled: after moveToMainDisplay it can resume while still counted on the
+            // display it was launched on
+            getWindow().getDecorView().postDelayed(() -> {
+                if (secondaryScreen != null) {
+                    secondaryScreen.refresh();
+                }
+            }, 500);
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // A move to another display (moveToMainDisplay) comes as a configuration change: the lower screen follows
+        if (secondaryScreen != null) {
+            secondaryScreen.refresh();
         }
     }
 
