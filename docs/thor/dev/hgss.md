@@ -172,20 +172,22 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   background (`GF_BG_LYR_MAIN_0`) the same way, and `UpdatePokegearBezel` draws a gray bezel with a speaker grill
   over the gap on each side (two `SIM_WideStamp`s of one 16×64 image, the right one `flipX`, on the same layer,
   `SIM_SetWidescreenStampImage`/`Stamps`).
-  **Not visually confirmed**: reaching the Pokégear screen itself turned out to be blocked by an unrelated,
-  pre-existing bug. `FLAG_GOT_POKEGEAR` reads back true after Elm's lab, the starter, and talking to Mom (confirmed
-  with a new `flag N` test command, `tests/README.md`), and `FieldSystem_ShouldDrawStartMenuIcon` agrees it should
-  show — but the start menu's Pokégear slot never renders (POKéMON and the Pokédex have the same problem even with a
-  caught Pokémon). `StartMenu_Init`, `StartMenu_BuildActionLists` and
-  `FieldSystem_GetStartMenuButtonInhibitFlags_Normal` all read as correct on inspection; the cause wasn't found. The
-  generic mechanism was instead checked against the Options app (reachable via the start menu): its own backdrop
-  (also `GF_BG_LYR_MAIN_2`, per `options_app.c`) turned out not to widen at all, for an unrelated reason of its
-  own — the Options screen swaps which hardware engine drives the top screen (`sWideSubTop` in
-  `subprojects/libntr/libraries/sim/src/sim_main.cpp`), and its backdrop didn't respond to any edge-extend bit
-  (0-3) in testing, so it likely isn't drawn through the normal per-BG path `SIM_SetWidescreenBgEdgeExtend` hooks
-  into at all. That Options branch was dropped rather than pursued further, since it was never asked for; the
-  Pokégear's own `GF_BG_LYR_MAIN_0` isn't swapped the same way, but until the start-menu bug is fixed this is
-  untested in the running game.
+  The desktop build couldn't reach the Pokégear screen to check this directly: the start menu's Pokégear slot never
+  rendered there even with `FLAG_GOT_POKEGEAR` set and read back true (a new `flag N` test command helped confirm
+  that, `tests/README.md`), though `StartMenu_Init`, `StartMenu_BuildActionLists` and
+  `FieldSystem_GetStartMenuButtonInhibitFlags_Normal` all read as correct on inspection. On the owner's Thor it's
+  reachable fine (Elm's lab, the starter, Mom), so that's a desktop-only quirk, not a real bug — the actual bezel
+  was checked on hardware instead, where it showed the background correctly widened but **no bezel graphic at
+  all**, just the blue background's own sides. The cause: `SIM_SetWidescreenStamps`'s stamps only ever composite
+  inside `G2SIM_DrawBGWide` (`subprojects/libntr/libraries/sim/src/sim_g2.cpp`), which only runs for a BG in
+  `SIM_SetWidescreenSceneOptions`'s `wideBgLayers` mask; `WideApplication` had put the Pokégear's background in
+  `edgeBgs` (`SIM_SetWidescreenBgEdgeExtend`) instead, which widens a BG's picture but never calls
+  `G2SIM_DrawBGWide` at all, so the bezel's stamps never got a chance to draw. Switched to `wideBgs`; not yet
+  re-checked on hardware. The generic mechanism was also checked against the Options app (reachable through the
+  start menu on desktop, unlike the Pokégear) along the way: its own backdrop (also `GF_BG_LYR_MAIN_2`, per
+  `options_app.c`) didn't widen at all even with `edgeBgs`, for a different reason — the Options screen swaps which
+  hardware engine drives the top screen (`sWideSubTop` in `sim_main.cpp`), landing the edge-extend bit on the wrong
+  engine's draw call. That Options branch was dropped rather than pursued further, since it was never asked for.
 - **No music** (2026-11-13): no song started anywhere (the title, towns, routes, Pokémon Centers, battles):
   every `NNS_SndArcPlayerStartSeqEx` failed to load its sequence or wave archive, because the sound heap
   (`SND_HEAP_SIZE`, `src/sound.c`) was full: 6,560 bytes free before the title's 17,820-byte sequence. The port's
