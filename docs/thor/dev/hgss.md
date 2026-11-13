@@ -191,6 +191,16 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (`SND_HEAP_SIZE`, `src/sound.c`) was full: 6,560 bytes free before the title's 17,820-byte sequence. The port's
   data takes more room than the DS's; `heap_buf` is twice the DS's size on the port now, as Platinum's
   `SOUND_SYSTEM_HEAP_SIZE*2`, with 914,912 bytes free after the global data, and every song starts.
+- **Trainers' arena on paths** (2026-11-13): any trainer battle on a town's or a route's ordinary ground
+  (`TERRAIN_PLAIN`, a general or city background) is on BW2's grass field with a dirt path (terrain 1), as Silver's
+  town battles were (`ArenaFromSetup`); tall grass, sand, water and the rest keep their own. `gen5_trainer_arena.txt`
+  checks a town; routes aren't scripted (the game keeps the player in New Bark Town until Elm's scenes are done).
+- **Cut-ins in widescreen** (2026-11-13), as the Platinum fork's: the Gym Leaders' (and Blue's and Silver's) banner,
+  BG3 behind the zigzag wipe's window, is drawn wide and mirrored while `EncounterEffect_PortGymLeaderPlaying`; the
+  Elite Four's and Lance's band's purple slashes (sprites 2 and 3, the "nameplates") go to sprite priority 2, which
+  libntr's OBJ edge extend continues to the sides, the portraits keeping 1; Red's (effect 46), black blocks filling
+  BG3 like the wild transitions, is widened with them (`EncounterEffect_PortWildPlaying`). Unlike Platinum's, HGSS's
+  leader banner has no sliding bars. `widescreen_cutins.txt`.
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
