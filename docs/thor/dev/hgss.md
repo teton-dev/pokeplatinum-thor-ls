@@ -111,6 +111,16 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   to the end. Next: trainers (HGSS's AI flags table), evolution after a battle, the caught Pokémon's naming,
   Apricorn balls, the Safari Zone and Bug-Catching Contest. Later, `gen5/` and the game-neutral parts of the bridge
   (`gen5_rom.cpp`, the conversions) move to a repository of their own (milestone 3).
+- **White HP boxes** (2026-11-12): HGSS's Gen 5 battles show White 2's light HP boxes. Both versions' palettes are in
+  either ROM's archive 11 (0x1ae and 0x1b0 White 2's, 0x1af and 0x1b1 Black 2's), so a Black 2 ROM is enough;
+  `gen5/`'s gauge patch picks them at run time (`Gen5_SetWhiteGauges`, default dark: Platinum unchanged).
+- **Team Rocket's arena** (2026-11-12): `lib/port/gen5_rocket.c` in the HGSS fork, a copy of this fork's Galactic
+  arena (`src/port/gen5_galactic.c` and `Gen5Data_PrepareGalacticArena`) with every streak Rocket red, the same
+  darkened room and stars, a red rocket ship and a crescent moon in place of Jupiter and Saturn, and a dark crimson
+  stage; background 16 terrain 1, for the grunts, the four Executives and Giovanni (`IsRocketClass`). Only seen
+  through `POKEHEARTGOLD_GEN5_ARENA=16,1` so far: HGSS's trainer battles don't go to BW2's engine yet. Found: in
+  the widescreen battle a texel of the sky is about 0.8 as wide as high on screen (not 1.8 times wider, as the
+  Galactic notes say), the texture is seen mirrored, and the ribbons' dark edges cover its rows below about 15.
 - Platinum's rain fix doesn't apply: HGSS's decompilation types the drops' work (`WeatherParticle`).
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.

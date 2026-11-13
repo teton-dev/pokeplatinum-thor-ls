@@ -427,6 +427,19 @@ int Gen5_MoveBgShown(void)
     return sMoveBgShown;
 }
 
+static int sWhiteGauges = 0;
+
+void Gen5_SetWhiteGauges(int white)
+{
+    sWhiteGauges = white;
+}
+
+// patches/src/ov168/btlv_gauge.c.patch
+int Gen5Port_WhiteGauges(void)
+{
+    return sWhiteGauges;
+}
+
 static float sWideRatio = 1.0f;
 
 fx32 Gen5_Widen(fx32 width)
