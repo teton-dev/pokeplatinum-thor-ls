@@ -131,8 +131,12 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   Four, Kimono Girls, Sages... (`TrainerClassHasBw2Sprite`). Names, class names (`msg_0730`), defeat lines (`TRMSG_LOSE`,
   or both `TRMSG_DBL_LOSE_*` for a pair), prize by class (`sPrizeMoneyTbl`), victory music by class (`SEQ_GS_WIN1`,
   `WIN3` for Gym Leaders, the Elite Four and Lance, `WINBRAIN`). Arenas: Rocket's (16, 1); Gym Leaders on the dark
-  stone hall (4, 19); Will, Koga, Bruno, Karen in BW2's Elite Four rooms (12 to 15), Lance in the Champion's (16, 0).
-  Tests: `gen5_trainer.txt` (a Rocket Grunt), and the runner's `trainer ID [ID2]`. With more than one Pokémon a
+  stone hall (4, 19); Will, Koga, Bruno, Karen in BW2's Elite Four rooms (12 to 15), Lance in the Champion's (16, 0);
+  Silver in a town (`MapHeader_GetMapType`, `MAP_TYPE_CITY_TOWN`) gets the grass field with a dirt path (0, 1), not
+  its plain green default (terrain 0) — his first battle, outside the lab in New Bark Town, and any other he starts
+  in a town; his battles elsewhere (routes, Burned Tower, Victory Road, Mt. Silver) keep whatever the field gives.
+  Tests: `gen5_trainer.txt` (a Rocket Grunt), `gen5_rival.txt` (Silver in New Bark Town), and the runner's
+  `trainer ID [ID2]`. With more than one Pokémon a
   mashed A loops in BW2's "switch?" prompt and party screen after a knockout: keep test parties to one. Not done:
   Mom's savings out of the prize, the trainers' mid-battle lines (`TRMSG_LAST_POKE`...), the player's back sprite
   (still the Platinum fork's Lucas and Dawn), the Frontier.
