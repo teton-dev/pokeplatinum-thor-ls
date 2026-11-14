@@ -47,6 +47,7 @@
 #include "charcode_convert.h"
 #include "port/gen5_data.h"
 #include "port/gen5_rom.h"
+#include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #include "port/test_script.h"
 #include "system.h"
@@ -300,15 +301,66 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
 // Every pose's rectangles that differ from another's are put into one 256x128 texture (in 4 bits a pixel, the left pixel
 // in the low nibble, as the DS's textures are), each pose being a list of quads of it. Nothing from the ROM is kept:
 // this is done for each battle
+// The classes BW2 has a sprite of: the same class (Youngster, Hiker, Ace Trainer...), and Sinnoh's Gym Leaders and
+// Cynthia from its Pokémon World Tournament (gen5/src/trainers.c). Every other class is given only the nearest one there
+// (Interviewers a Pokéstar Studios actor in a motion-capture suit, Team Galactic Team Plasma, a Camper a Backpacker,
+// Lucas and Dawn BW2's hero and heroine, which drew a black square), so Platinum's own sprite is drawn instead (seen on
+// the Thor; the owner's choice: Platinum's sprite where BW2 has no such trainer)
 static BOOL TrainerClassHasPlatinumArt(int trainerClass)
 {
-    // Lucas and Dawn as opponents too: BW2's hero and heroine classes, which they map to, drew a black square (seen on
-    // the Thor, trainer 930)
-    return (trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_ELITE_FOUR_LUCIAN)
-        || trainerClass == TRAINER_CLASS_RIVAL || trainerClass == TRAINER_CLASS_PLAYER_MALE
-        || trainerClass == TRAINER_CLASS_PLAYER_FEMALE || trainerClass == TRAINER_CLASS_DP_PLAYER_MALE
-        || trainerClass == TRAINER_CLASS_DP_PLAYER_FEMALE || trainerClass == TRAINER_CLASS_DP_PLAYER_MALE_2
-        || trainerClass == TRAINER_CLASS_DP_PLAYER_FEMALE_2;
+    switch (trainerClass) {
+    case TRAINER_CLASS_YOUNGSTER:
+    case TRAINER_CLASS_LASS:
+    case TRAINER_CLASS_TWINS:
+    case TRAINER_CLASS_HIKER:
+    case TRAINER_CLASS_BATTLE_GIRL:
+    case TRAINER_CLASS_FISHERMAN:
+    case TRAINER_CLASS_CYCLIST_MALE:
+    case TRAINER_CLASS_CYCLIST_FEMALE:
+    case TRAINER_CLASS_BLACK_BELT:
+    case TRAINER_CLASS_ARTIST:
+    case TRAINER_CLASS_BREEDER_MALE:
+    case TRAINER_CLASS_BREEDER_FEMALE:
+    case TRAINER_CLASS_POKEFAN_MALE:
+    case TRAINER_CLASS_POKEFAN_FEMALE:
+    case TRAINER_CLASS_ACE_TRAINER_MALE:
+    case TRAINER_CLASS_ACE_TRAINER_FEMALE:
+    case TRAINER_CLASS_WAITRESS:
+    case TRAINER_CLASS_VETERAN:
+    case TRAINER_CLASS_RICH_BOY:
+    case TRAINER_CLASS_LADY:
+    case TRAINER_CLASS_GENTLEMAN:
+    case TRAINER_CLASS_SOCIALITE:
+    case TRAINER_CLASS_BEAUTY:
+    case TRAINER_CLASS_POLICEMAN:
+    case TRAINER_CLASS_RANGER_MALE:
+    case TRAINER_CLASS_RANGER_FEMALE:
+    case TRAINER_CLASS_SCIENTIST:
+    case TRAINER_CLASS_SWIMMER_MALE:
+    case TRAINER_CLASS_SWIMMER_FEMALE:
+    case TRAINER_CLASS_PSYCHIC_MALE:
+    case TRAINER_CLASS_PSYCHIC_FEMALE:
+    case TRAINER_CLASS_GUITARIST:
+    case TRAINER_CLASS_ROUGHNECK:
+    case TRAINER_CLASS_WORKER:
+    case TRAINER_CLASS_SCHOOL_KID_MALE:
+    case TRAINER_CLASS_SCHOOL_KID_FEMALE:
+    case TRAINER_CLASS_LEADER_ROARK:
+    case TRAINER_CLASS_LEADER_BYRON:
+    case TRAINER_CLASS_CHAMPION_CYNTHIA:
+    case TRAINER_CLASS_LEADER_GARDENIA:
+    case TRAINER_CLASS_LEADER_WAKE:
+    case TRAINER_CLASS_LEADER_MAYLENE:
+    case TRAINER_CLASS_LEADER_FANTINA:
+    case TRAINER_CLASS_LEADER_CANDICE:
+    case TRAINER_CLASS_LEADER_VOLKNER:
+    case TRAINER_CLASS_PARASOL_LADY:
+    case TRAINER_CLASS_WAITER:
+    case TRAINER_CLASS_MAID:
+        return FALSE;
+    default:
+        return TRUE;
+    }
 }
 
 #define ART_MAX_RECTS 32
@@ -765,6 +817,39 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
     }
 }
 
+int Gear_LevelCap(void);
+
+// Nuzlocke mode's rules and the Hard level cap setting, for BW2's engine (gen5/src/runtime.c and its patches)
+static void PortNuzlockeToGen5(FieldBattleDTO *dto)
+{
+    const SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+    int cap = config != NULL && config->hardLevelCap ? Gear_LevelCap() : 0;
+    const int nuzlockeCap = NuzlockeMode_LevelCap();
+    if (nuzlockeCap > 0 && (cap <= 0 || nuzlockeCap < cap)) {
+        cap = nuzlockeCap;
+    }
+    sBattle.levelCap = cap > 0 && cap <= MAX_POKEMON_LEVEL ? cap : 0;
+    sBattle.critGuard = NuzlockeMode_CritGuard();
+    if (!sBattle.isTrainer) {
+        // The catch rule (NuzlockeMode_OnWildBattleStart ran before the battle, in encounter.c)
+        Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
+        sBattle.wildCatchRefused = !NuzlockeMode_CatchAllowed(Pokemon_GetValue(wild, MON_DATA_SPECIES, NULL),
+            Pokemon_IsShiny(wild));
+        if (sBattle.hasWild2) {
+            Pokemon *wild2 = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_2], 0);
+            sBattle.wild2CatchRefused = !NuzlockeMode_CatchAllowed(Pokemon_GetValue(wild2, MON_DATA_SPECIES, NULL),
+                Pokemon_IsShiny(wild2));
+        }
+    }
+    // BW2's text: Unicode, 0xFFFE a new line, 0xFFFF the end
+    static const char kText[] = "You've already used your catch\nfor this area!";
+    int length = 0;
+    for (const char *c = kText; *c != '\0' && length < GEN5_PORT_TEXT_LENGTH - 1; c++) {
+        sBattle.catchRefusedText[length++] = *c == '\n' ? 0xFFFE : (unsigned char)*c;
+    }
+    sBattle.catchRefusedText[length] = 0xFFFF;
+}
+
 static BOOL Init(ApplicationManager *appMan, int *state)
 {
     (void)state;
@@ -844,6 +929,10 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         { dto->bag->battleItems, BATTLE_ITEM_POCKET_SIZE },
     };
     for (int p = 0; p < (int)NELEMS(pockets); p++) {
+        // Nuzlocke mode: Poke Balls are the only items used in battle (the rest stay in the bag as they are)
+        if (NuzlockeMode_On() && pockets[p].items != dto->bag->pokeballs) {
+            continue;
+        }
         for (int i = 0; i < pockets[p].size && sBattle.itemCount < GEN5_ITEMS_MAX; i++) {
             if (pockets[p].items[i].item != ITEM_NONE && pockets[p].items[i].quantity != 0) {
                 sBattle.items[sBattle.itemCount].item = pockets[p].items[i].item;
@@ -852,6 +941,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
             }
         }
     }
+    PortNuzlockeToGen5(dto);
     sItemsBefore = sBattle.itemCount;
     memcpy(sItemCountsBefore, sBattle.items, sizeof(sBattle.items));
     // Seen, as Platinum's battle registers a wild Pokémon when it appears (BattleSystem_DexFlagSeen); a trainer's,

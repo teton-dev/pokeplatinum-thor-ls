@@ -1,6 +1,24 @@
 --- a/src/ov168/btlv_gauge.c
 +++ b/src/ov168/btlv_gauge.c
-@@ -1017,9 +1017,9 @@
+@@ -43,13 +43,10 @@
+ #define GAUGE_TILE_BLANK 0x660
+ 
+ // Archive 11's palettes of the gauges and of the rotation's back mons, one apart in each version
+-#ifdef BLACK2
+-#define GAUGE_PALETTE_FILE 0x1af
+-#define GAUGE_PALETTE_FILE_BACK 0x1b1
+-#else
+-#define GAUGE_PALETTE_FILE 0x1ae
+-#define GAUGE_PALETTE_FILE_BACK 0x1b0
+-#endif
++// Port: both are in either version's archive; the game picks one (Gen5_SetWhiteGauges, api/gen5.h)
++extern int Gen5Port_WhiteGauges(void);
++#define GAUGE_PALETTE_FILE (Gen5Port_WhiteGauges() ? 0x1ae : 0x1af)
++#define GAUGE_PALETTE_FILE_BACK (Gen5Port_WhiteGauges() ? 0x1b0 : 0x1b1)
+ 
+ // What a gauge shows of its mon, cleared when a mon is set, 0x44 bytes
+ typedef struct {
+@@ -1017,9 +1014,9 @@
          tiles[i] = 0;
      }
      if (max < dots) {
@@ -12,7 +30,7 @@
      }
      fill = rest;
      if (rest == 0 && target > 0) {
-@@ -1053,8 +1053,8 @@
+@@ -1053,8 +1050,8 @@
      } else if (target > max) {
          target = max;
      }
@@ -23,7 +41,7 @@
      diff = now - next;
      return MATH_ABS(diff);
  }
-@@ -1084,27 +1084,27 @@
+@@ -1084,27 +1081,27 @@
          ClActor_GetImageProxy(entry->nameActor, &proxy);
          if (entry->mon.side) {
              MI_CpuCopy16(
@@ -59,7 +77,7 @@
                           0x20);
          }
      }
-@@ -1126,17 +1126,17 @@
+@@ -1126,17 +1123,17 @@
          ClActor_GetImageProxy(entry->nameActor, &proxy);
          if (entry->mon.side) {
              MI_CpuCopy16(gauge->chars + top,
@@ -81,7 +99,7 @@
                           0x20);
          }
      }
-@@ -1183,7 +1183,7 @@
+@@ -1183,7 +1180,7 @@
          for (i = 0; i < 6; i++) {
              MI_CpuCopy16(
                  gauge->chars + (color + tiles[i] * 0x20),
@@ -90,7 +108,7 @@
                  0x20);
          }
          if (entry->mon.hpDelta > 0) {
-@@ -1199,7 +1199,7 @@
+@@ -1199,7 +1196,7 @@
          for (i = 0; i < 10; i++) {
              MI_CpuCopy16(
                  gauge->chars + (tiles[i] * 0x20 + 0x400),
@@ -99,7 +117,7 @@
                  0x20);
          }
          break;
-@@ -1247,10 +1247,10 @@
+@@ -1247,10 +1244,10 @@
      maxTiles[n] = maxHp * 0x20 + GAUGE_TILE_DIGITS;
      for (i = 0; i < 3; i++) {
          MI_CpuCopy16(gauge->chars + hpTiles[i],
@@ -112,7 +130,7 @@
                       0x20);
      }
  }
-@@ -1276,17 +1276,17 @@
+@@ -1276,17 +1273,17 @@
          ClActor_GetImageProxy(entry->nameActor, &proxy);
          if (entry->mon.side) {
              MI_CpuCopy16(pixels,
@@ -134,7 +152,7 @@
                           0x60);
          }
      }
-@@ -1305,7 +1305,7 @@
+@@ -1305,7 +1302,7 @@
          }
          ClActor_GetImageProxy(entry->nameActor, &proxy);
          MI_CpuCopy16(gauge->chars + tile,
@@ -143,7 +161,7 @@
      }
  }
  
-@@ -1333,7 +1333,7 @@
+@@ -1333,7 +1330,7 @@
          ClActor_GetImageProxy(entry->damageActor, &proxy);
          for (i = 0; i < 6; i++) {
              MI_CpuCopy16(gauge->chars + (tiles[i] * 0x20 + 0x6a0),
@@ -152,7 +170,7 @@
                           0x20);
          }
      }
-@@ -1615,7 +1615,7 @@
+@@ -1615,7 +1612,7 @@
  }
  
  static u32 BtlvGauge_CalcFill(u32 value, u32 max, u32 width) {

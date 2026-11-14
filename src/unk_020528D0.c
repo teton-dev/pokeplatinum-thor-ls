@@ -35,6 +35,12 @@
 #include "system.h"
 #include "text.h"
 
+#ifdef SDK_PORT
+#include <string.h>
+
+#include "port/nuzlocke_mode.h"
+#endif
+
 typedef struct {
     int unk_00;
     FieldSystem *fieldSystem;
@@ -202,6 +208,10 @@ BOOL FieldTask_BlackOutFromBattle(FieldTask *task)
 
     switch (*state) {
     case 0: {
+#ifdef SDK_PORT
+        // Nuzlocke mode: whiting out ends the run, for good (before the Center heals the party)
+        NuzlockeMode_Drop();
+#endif
         if ((fieldSystem != NULL) && (fieldSystem->saveData != NULL)) {
             Party_SetGiratinaForm(SaveData_GetParty(fieldSystem->saveData), GIRATINA_FORM_ALTERED);
         }

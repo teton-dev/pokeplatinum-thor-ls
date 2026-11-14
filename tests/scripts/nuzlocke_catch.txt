@@ -1,0 +1,129 @@
+# Nuzlocke mode, milestone 3: the catch rule in Platinum's engine (docs/thor/dev/nuzlocke.md). From nuz-normal
+# (Normal), in the fixture's area (the player's house, location 1): Poke Balls start the rule; a Starly run from
+# leaves the area to Starlys; a Bidoof is refused (the ball knocked back, "You've already used your catch..."); a
+# second Starly is caught and must be named (a blank name refused); a third is refused; a static Bidoof is caught
+# (Normal exempts static encounters); with Hard, a static Bidoof is refused. The check is the "[test] nuzlocke:" and "[test] party" lines and the shots.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_catch.txt --from nuz-normal
+
+mash A until free
+gen5-battles off
+nuzlocke state
+item 4 10
+item 1 5
+wait 40
+nuzlocke state
+# The area's first encounter, a Starly: run from it
+wild 396 3
+until battle
+until command
+wait 60
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+nuzlocke state
+# A Bidoof there: not the species that was missed. A Master Ball (the bag, the Poke Balls pocket, the Master Ball,
+# Use) is knocked back
+wild 399 3
+until battle
+until command
+wait 60
+touch 40 178
+wait 90
+touch 192 55
+wait 60
+touch 192 30
+wait 60
+touch 104 174
+wait 70
+shot catch-refused
+wait 280
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+nuzlocke state
+# Another Starly: the species that was missed may be caught, and must be named
+wild 396 3
+until battle
+until command
+wait 60
+touch 40 178
+wait 90
+touch 192 55
+wait 60
+touch 192 30
+wait 60
+touch 104 174
+mash A until naming timeout 6000
+wait 90
+shot catch-naming
+press START
+press A
+wait 30
+shot catch-blank
+# "SA" (the keyboard's S and A), then OK
+touch 160 118
+wait 10
+touch 34 99
+wait 10
+touch 216 70
+mash B until free timeout 6000
+party
+nuzlocke state
+# A third Starly: the area's catch is used, even for that species
+wild 396 3
+until battle
+until command
+wait 60
+touch 40 178
+wait 90
+touch 192 55
+wait 60
+touch 192 30
+wait 60
+touch 104 174
+wait 70
+shot catch-used
+wait 280
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+# A static encounter (as a legendary's script starts one): Normal lets it be caught whatever the area
+static 399 3
+until battle
+until command
+wait 60
+touch 40 178
+wait 90
+touch 192 55
+wait 60
+touch 192 30
+wait 60
+touch 104 174
+mash A until naming timeout 6000
+wait 30
+touch 160 118
+wait 10
+touch 216 70
+mash B until free timeout 6000
+party
+nuzlocke state
+# Hard: a static encounter counts like any other, so in this used area it is refused
+nuzlocke hard
+wait 2
+nuzlocke state
+static 399 3
+until battle
+until command
+wait 60
+touch 40 178
+wait 90
+touch 192 55
+wait 60
+touch 192 30
+wait 60
+touch 104 174
+wait 70
+shot catch-hard-static
+wait 280
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+party
+exit 0

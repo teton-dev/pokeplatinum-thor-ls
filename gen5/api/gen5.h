@@ -27,6 +27,7 @@ int Gen5_SelfCheck(char *message, int size);
 // same numbers in Gen 4 and Gen 5. Stats are left out: BW2 computes them from these.
 #define GEN5_NAME_LENGTH 11 // Characters of a Pokémon's name, with the terminator; a trainer's has 8
 #define GEN5_PARTY_MAX 6
+#define GEN5_PORT_TEXT_LENGTH 64 // The port's own short battle messages (Gen5Battle.catchRefusedText)
 
 // Major status conditions, as BW2 numbers them
 enum Gen5Status {
@@ -91,7 +92,7 @@ typedef struct Gen5Item {
 
 typedef struct Gen5Trainer {
     unsigned id; // Platinum's trainer ID
-    unsigned platinumClass;
+    unsigned platinumClass; // the game's own trainer class (Platinum's, or HGSS's: Gen5_SetGame)
     unsigned aiFlags; // Platinum's AI flags (gen5/src/trainers.c makes them BW2's)
     unsigned items[4];
     unsigned prizeBase; // The class's prize: the money for winning is its last Pokémon's level times 4 times this
@@ -156,6 +157,14 @@ typedef struct Gen5Battle {
     int caught; // A wild Pokémon was caught: caughtMon has it, caughtWild2 says which
     int caughtWild2;
     Gen5Pokemon caughtMon;
+    // Nuzlocke mode (port/nuzlocke_mode.h): the level EXP takes no Pokémon past (0: none), no critical hits but from
+    // moves that always land one, and the wild Pokémon a ball can't catch (it is knocked back as a trainer does it,
+    // with catchRefusedText: Unicode, 0xFFFE between lines, 0xFFFF after the last character)
+    int levelCap;
+    int critGuard;
+    int wildCatchRefused;
+    int wild2CatchRefused;
+    unsigned short catchRefusedText[GEN5_PORT_TEXT_LENGTH];
 } Gen5Battle;
 
 // How a battle ended, for Platinum
@@ -191,6 +200,16 @@ int Gen5_BattleFrame(void);
 void Gen5_SetWidescreen(float ratio);
 // Whether a move's full-screen background is up, for its sides to be mirrored in a wide scene
 int Gen5_MoveBgShown(void);
+
+// The game playing, by its Gen 4 version number (HeartGold 7, SoulSilver 8, Platinum 12, the default; BW2 numbers
+// them the same): the origin game of its Pokémon in BW2, and whose trainer classes Gen5Trainer.platinumClass holds
+// (gen5/src/trainers.c). Before Gen5_BattleBegin
+void Gen5_SetGame(int version);
+int Gen5_GameVersion(void);
+
+// The HP boxes' look: White 2's light ones (1) or Black 2's dark ones (0, the default). Both are in either version's
+// files. Before Gen5_BattleBegin
+void Gen5_SetWhiteGauges(int white);
 
 // In the VBlank: BW2's VBlank work (VRAM transfers, its VBlank tasks and callback)
 void Gen5_BattleVBlank(void);

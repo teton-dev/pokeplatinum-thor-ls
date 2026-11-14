@@ -42,6 +42,15 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `widescreen_gen4_battle.txt` | `turtwig` | with widescreen on, Gen 5 battles off: a wild and a trainer battle in Platinum's engine, the backdrop across the 16:9 window and the HP boxes' end caps (the check is the shots) | ~1 min |
 | `widescreen_e4.txt` | `turtwig` | with widescreen on: the Elite Four's "VS" encounter effect (Aaron's), frame by frame with `stillshot`: the band across the 16:9 window, the portraits in the middle (the check is the shots; `leader 12` for Cynthia) | ~2 min |
 | `widescreen_leader.txt` | `turtwig` | with widescreen on: Roark's "VS" encounter effect across the 16:9 window (the check is the shots) | ~20 s |
+| `nuzlocke_on.txt` | `turtwig` | Nuzlocke mode turned on: Hard refuses crit guard, Normal takes it, saved; keep it as `nuz-normal` (the check is the `nuzlocke:` lines) | ~20 s |
+| `nuzlocke_drop.txt` | `nuz-normal` | Nuzlocke mode as loaded, then turned off without saving: off and dropped, and Simple refused; keep it as `nuz-dropped` | ~20 s |
+| `nuzlocke_state.txt` | any | logs the save's Nuzlocke mode; from `nuz-dropped`, "Off, dropped" although the game is the Normal one | ~20 s |
+| `nuzlocke_rules.txt` | `nuz-normal` | the rules in Platinum's engine: IVs of 15 for Pokémon given with the mode on, a fainted Pokémon dead, no EXP at the level cap, a Pokémon Center leaving the dead at 0 HP (the check is the `party` lines) | ~2 min |
+| `nuzlocke_whiteout.txt` | `nuz-normal` | Turtwig faints to a level 100 Charizard and the player whites out: the save is "Off, dropped" and refuses Normal | ~1 min |
+| `nuzlocke_catch.txt` | `nuz-normal` | the catch rule in Platinum's engine: a run-from Starly leaves the area to Starlys, a Bidoof refused ("You've already used your catch for this area!"), a Starly caught and named (a blank name refused), then refused; a static Bidoof caught with Normal, refused with Hard (the check is the `nuzlocke:` lines and the shots) | ~4 min |
+| `nuzlocke_gen5.txt` | `nuz-normal` | Nuzlocke mode in BW2's engine: the area marked, a Master Ball knocked back with the message (the shots), no EXP at the level cap, the cap and crit guard in the log (Gen 5 builds) | ~3 min |
+| `nuzlocke_marks_dex.txt` | `caught` | gives the Pokédex (`dex`) and turns Hard on, saved: keep it as `nuz-dex` | ~20 s |
+| `nuzlocke_marks.txt` | `nuz-normal`, `nuz-dex`, or `turtwig` / `nuz-dropped` for none | the alpha mark: the main menu's CONTINUE with a red frame and a NUZLOCKE line, the save screen's window with the line, then a save (the check is the shots) | ~30 s |
 | `following_ball.txt` | `turtwig` of Following Renegade Platinum | the follower's ball effects run (with `DATA=~/thor-dev/desktop-following`; [notes](../docs/thor/dev/following-renegade.md)) | ~30 s |
 | `fairy_move.txt` | `rn-turtwig` (Renegade Platinum) | a Fairy move (Moonblast) is named and animated in a Gen 5 battle; screenshots every 20 frames (with `DATA=~/thor-dev/desktop-renegade`) | ~40 s |
 
@@ -94,8 +103,10 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `save` | saves the game, as the menu does, once the player is free |
 | `gen5-import` | imports the Black 2 or White 2 ROM in `POKEPLATINUM_GEN5_ROM` (the harness passes `GEN5_ROM`, or `~/thor-dev/PKMNB2.nds`) and waits; fails if it is refused or the self-check fails |
 | `gen5-battles on\|off` | *Settings > Gameplay > Gen 5 battles* |
+| `nuzlocke simple\|normal\|hard\|off`, `nuzlocke crit on\|off`, `nuzlocke state` | once the player is free, as *Settings > Gameplay > Nuzlocke mode* does (its warning taken as accepted), or logs the save's mode (with "has had balls" and the current area's catch state) |
 | `battle-style set\|shift` | the save's Battle Style option (Set: no free switch when the opponent sends in another Pokémon) |
 | `wild SPECIES LEVEL` | once the player is free, a wild SPECIES at LEVEL met as in tall grass (the field's own wild encounter, which the setting sends to the Gen 5 engine) |
+| `static SPECIES LEVEL` | the same as a legendary's script starts it (a scripted encounter: static for Nuzlocke mode) |
 | `item ITEM COUNT` | puts items into the bag (the item's number: 1 is the Master Ball, 4 the Poké Ball) |
 | `give SPECIES LEVEL` | a new Pokémon into the party |
 | `jump MAP X Z` | once the player is free, to map header MAP at (X, Z), as *Settings*' map jump does (420: Sandgem Town's Pokémon Center) |
@@ -106,8 +117,10 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `trainer ID` | once the player is free, a battle against Platinum's trainer ID, as its encounter starts it |
 | `trainers A B [PARTNER]` | once the player is free, a double battle against trainers A and B (as when both see the player), beside the partner trainer PARTNER if given (Cheryl 608, Riley 609, Marley 610, Buck 611, Mira 612) |
 | `lead SLOT` | the party member in SLOT (0 to 5) to the front |
+| `faint SLOT` | the party member in SLOT to 0 HP, as a battle writes it |
+| `dex` | gives the Pokédex, as Prof. Rowan does |
 | `learn MOVE` | the lead's first move becomes MOVE (its number: 127 Waterfall, 352 Water Pulse, 53 Flamethrower), with full PP |
-| `party` | logs the party, the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
+| `party` | logs the party (with IVs, EXP and the Nuzlocke dead flag), the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
 | `shot NAME` | a screenshot, `NAME.png` (the game runs on while it is taken: about 45 frames) |
 | `stillshot NAME` | the same with the game stopped on the frame just drawn, for the frames of a short effect one after another (`wait` between the shots) |
 | `log TEXT` | prints the text |

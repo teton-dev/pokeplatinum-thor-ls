@@ -4959,6 +4959,7 @@ static BOOL BtlCmd_TrySleepTalk(BattleSystem *battleSys, BattleContext *battleCt
 
 #ifdef SDK_PORT
 #include "port/cheats.h"
+#include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 int Gear_LevelCap(void);
 
@@ -4981,12 +4982,17 @@ static u32 BattleScript_PortScaleExp(Pokemon *mon, u32 exp)
 // gain before reaching the cap
 static u32 BattleScript_PortCapExp(Pokemon *mon, u32 exp)
 {
-    const SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
-    if (config == NULL || !config->hardLevelCap || exp == 0) {
+    if (exp == 0) {
         return exp;
     }
 
-    const int cap = Gear_LevelCap();
+    // The setting's cap, and Nuzlocke mode's (the same, or lower with Hard): the lower one
+    const SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+    int cap = config != NULL && config->hardLevelCap ? Gear_LevelCap() : 0;
+    const int nuzlockeCap = NuzlockeMode_LevelCap();
+    if (nuzlockeCap > 0 && (cap <= 0 || nuzlockeCap < cap)) {
+        cap = nuzlockeCap;
+    }
     if (cap <= 0 || cap > MAX_POKEMON_LEVEL) {
         return exp;
     }
@@ -10431,7 +10437,10 @@ enum CatchMonTaskDataIndex {
     CATCH_MON_MSG_INDEX = 0,
     CATCH_MON_DELAY,
     CATCH_MON_TOTAL_SHAKES,
-    CATCH_MON_REMAINING_SHAKES
+    CATCH_MON_REMAINING_SHAKES,
+#ifdef SDK_PORT
+    CATCH_MON_PORT_REFUSED, // Nuzlocke mode refused the catch (a wild Pokemon): knocked back like a trainer's
+#endif
 };
 
 static void BattleScript_CatchMonTask(SysTask *task, void *inData)
@@ -10499,7 +10508,15 @@ static void BattleScript_CatchMonTask(SysTask *task, void *inData)
         if (ov12_022368D0(data->ballRotation, 0) == FALSE) {
             u32 battleType = BattleSystem_GetBattleType(data->battleSys);
 
+#ifdef SDK_PORT
+            // Nuzlocke mode's catch rule: the ball is knocked back as a trainer does it
+            Pokemon *target = BattleSystem_GetPartyPokemon(data->battleSys, battler, data->battleCtx->selectedPartySlot[battler]);
+            data->tmpData[CATCH_MON_PORT_REFUSED] = (battleType & BATTLE_TYPE_TRAINER) == 0
+                && !NuzlockeMode_CatchAllowed(Pokemon_GetValue(target, MON_DATA_SPECIES, NULL), Pokemon_IsShiny(target));
+            if ((battleType & BATTLE_TYPE_TRAINER) || data->tmpData[CATCH_MON_PORT_REFUSED]) {
+#else
             if (battleType & BATTLE_TYPE_TRAINER) {
+#endif
                 Sound_PlayPannedEffect(SEQ_SE_DP_KON_sseq, BATTLE_SOUND_PAN_RIGHT);
                 ov12_022368C8(data->ballRotation, 2);
                 data->seqNum = SEQ_CATCH_MON_PRINT_TRAINER_BLOCKED_BALL;
@@ -10710,6 +10727,16 @@ static void BattleScript_CatchMonTask(SysTask *task, void *inData)
         }
         break;
     case SEQ_CATCH_MON_PRINT_YES_NO_GIVE_NICKNAME:
+#ifdef SDK_PORT
+        // Nuzlocke mode: no question, straight to the naming screen (which refuses a blank name)
+        if (NuzlockeMode_On()) {
+            sub_02015738(BattleSystem_GetPaletteAnimator(data->battleSys), 1);
+            PaletteData_StartFade(paletteData, PLTTBUF_MAIN_BG_F | PLTTBUF_SUB_BG_F | PLTTBUF_MAIN_OBJ_F | PLTTBUF_SUB_OBJ_F, 0xFFFF, 1, 0, 16, 0);
+            PokemonSpriteManager_StartFadeAll(monSpriteMan, 0, 16, 0, 0);
+            data->seqNum = SEQ_CATCH_MON_START_NAMING_SCREEN;
+            break;
+        }
+#endif
         int v15 = battler | (data->battleCtx->selectedPartySlot[battler]);
         BattleController_EmitShowYesNoMenu(data->battleSys, data->battleCtx, 0, BattleStrings_Text_GiveANicknameToTheCaughtPokemonYesNo, 5, 0, v15);
         data->seqNum++;
@@ -10870,6 +10897,14 @@ static void BattleScript_CatchMonTask(SysTask *task, void *inData)
 
             ov12_0223783C(data->ballRotation);
 
+#ifdef SDK_PORT
+            if (data->tmpData[CATCH_MON_PORT_REFUSED]) {
+                data->tmpData[CATCH_MON_MSG_INDEX] = BattleMessage_PortPrintAscii(data->battleSys, "You've already used your catch\nfor this area!", BattleSystem_GetTextSpeed(data->battleSys));
+                data->tmpData[CATCH_MON_DELAY] = 30;
+                data->seqNum = SEQ_CATCH_MON_DONE_TRAINER_BLOCKED_BALL;
+                break;
+            }
+#endif
             msg.id = BattleStrings_Text_TheTrainerBlockedTheBall;
             msg.tags = 0;
 

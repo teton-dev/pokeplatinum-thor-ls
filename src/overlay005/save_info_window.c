@@ -27,6 +27,12 @@
 #include "text.h"
 #include "trainer_info.h"
 
+#ifdef SDK_PORT
+#include "constants/field_base_tiles.h"
+#include "port/nuzlocke_mark.h"
+#include "port/nuzlocke_mode.h"
+#endif
+
 static void FieldSystem_SaveObjectsAndLocation(FieldSystem *fieldSystem);
 
 static const int sSaveInfoLabels[] = {
@@ -132,18 +138,35 @@ static void SaveInfoWindow_PrintText(const SaveInfoWindow *saveInfoWin)
         String_Free(buf);
 
         buf = MessageUtil_ExpandedString(saveInfoWin->strTemplate, saveInfoWin->msgLoader, sSaveInfoValues[i - 1], saveInfoWin->heapID);
-        xOffset = SAVE_INFO_WINDOW_WIDTH * 8 - Font_CalcStringWidth(FONT_SYSTEM, buf, Font_GetAttribute(FONT_SYSTEM, FONTATTR_LETTER_SPACING));
+        xOffset = saveInfoWin->width * 8 - Font_CalcStringWidth(FONT_SYSTEM, buf, Font_GetAttribute(FONT_SYSTEM, FONTATTR_LETTER_SPACING));
 
         Text_AddPrinterWithParams(saveInfoWin->window, FONT_SYSTEM, buf, xOffset, yOffset, TEXT_SPEED_NO_TRANSFER, NULL);
         String_Free(buf);
     }
+
+#ifdef SDK_PORT
+    if (saveInfoWin->nuzlockeLevel != NUZLOCKE_OFF) {
+        yOffset += fontSpacing;
+        NuzlockeMark_PrintLine(saveInfoWin->window, saveInfoWin->nuzlockeLevel, 0, NUZLOCKE_MARK_SIZE + 4, saveInfoWin->width * 8, yOffset, TEXT_COLOR(1, 2, 15));
+    }
+#endif
 }
 
 void SaveInfoWindow_Draw(SaveInfoWindow *saveInfoWin)
 {
     saveInfoWin->window = Heap_Alloc(saveInfoWin->heapID, sizeof(Window));
 
+#ifdef SDK_PORT
+    // The Nuzlocke line makes the window bigger than the room it has under the yes/no menu's tiles: it starts lower
+    // then, in the start menu's (closed by now)
+    u16 baseTile = SAVE_INFO_MESSAGE_BASE_TILE;
+    if (baseTile + saveInfoWin->width * saveInfoWin->height > BASE_TILE_YES_NO_MENU) {
+        baseTile = BASE_TILE_YES_NO_MENU - saveInfoWin->width * saveInfoWin->height;
+    }
+    Window_Add(saveInfoWin->bgConfig, saveInfoWin->window, saveInfoWin->bgLayer, 1, 1, saveInfoWin->width, saveInfoWin->height, FIELD_MESSAGE_PALETTE_INDEX, baseTile);
+#else
     Window_Add(saveInfoWin->bgConfig, saveInfoWin->window, saveInfoWin->bgLayer, 1, 1, saveInfoWin->width, saveInfoWin->height, FIELD_MESSAGE_PALETTE_INDEX, SAVE_INFO_MESSAGE_BASE_TILE);
+#endif
     LoadStandardWindowGraphics(saveInfoWin->bgConfig, saveInfoWin->bgLayer, SAVE_INFO_WINDOW_BASE_TILE, FIELD_WINDOW_PALETTE_INDEX, STANDARD_WINDOW_SYSTEM, saveInfoWin->heapID);
     Window_FillTilemap(saveInfoWin->window, Font_GetAttribute(FONT_SYSTEM, FONTATTR_BG_COLOR));
 
@@ -174,6 +197,14 @@ SaveInfoWindow *SaveInfoWindow_New(FieldSystem *fieldSystem, enum HeapID heapID,
 
     saveInfoWin->width = SAVE_INFO_WINDOW_WIDTH;
     saveInfoWin->height = SaveInfoWindow_Height(&saveInfoWin->saveInfo);
+#ifdef SDK_PORT
+    saveInfoWin->nuzlockeLevel = NuzlockeMode_Level();
+    if (saveInfoWin->nuzlockeLevel != NUZLOCKE_OFF) {
+        // A line for the mark, and a tile wider for "NUZLOCKE" and the level
+        saveInfoWin->height += 2;
+        saveInfoWin->width += 1;
+    }
+#endif
 
     return saveInfoWin;
 }

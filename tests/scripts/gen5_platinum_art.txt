@@ -1,0 +1,30 @@
+# Gen 5 battles: trainers BW2 has no sprite of are drawn with Platinum's own (the reporters were a Pokéstar Studios actor
+# in a motion-capture suit, seen on the Thor). From the turtwig fixture: the Interviewers Roxy & Oli (883, a double
+# battle), a Galactic Grunt (296), Camper Jacob (16); a shot of each trainer sliding in, then the battle mashed out.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_platinum_art.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+give 395 50
+lead 1
+trainer 883
+until battle
+wait 150
+shot interviewers
+until command timeout 6000
+mash A until free timeout 15000
+trainer 296
+until battle
+wait 150
+shot grunt
+until command timeout 6000
+mash A until free timeout 15000
+trainer 16
+until battle
+wait 150
+shot camper
+until command timeout 6000
+mash A until free timeout 15000
+exit 0

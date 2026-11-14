@@ -10,3 +10,25 @@
      if (exp == 0) {
          exp = 1;
      }
+@@ -575,6 +576,8 @@
+             if (entry->exp > 100000) {
+                 entry->exp = 100000;
+             }
++            // The port: the level cap (Nuzlocke mode's, the Hard level cap setting's): no EXP past it
++            entry->exp = Gen5_PortCapExp(mon->core.species, mon->form, mon->core.exp, entry->exp);
+         }
+     }
+     for (i = 0; i < numMons; i++) {
+@@ -879,6 +882,12 @@
+         }
+     }
+     if (BtlSetup_GetBattleType(flow->mainModule) == BTL_TYPE_WILD) {
++        // The port: Nuzlocke mode's catch rule knocks the ball back as a trainer does (btl_client.c's patch shows
++        // the port's message for it in a wild battle)
++        if (targetPos != BTL_POS_NONE && Gen5_PortCatchRefused(PokeParty_GetParam(target->core.src, 0 /* PKM_PARAM_PID */, NULL))) {
++            BtlServerCmdQueue_Put(flow->queue, SC_BALL_THROW_TRAINER, targetPos, item);
++            return TRUE;
++        }
+         if (targetPos != BTL_POS_NONE) {
+             caught = CheckBallCapture(flow, mon, target, item, &shakes, &critical);
+             if (caught) {
