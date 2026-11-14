@@ -27,6 +27,7 @@ int Gen5_SelfCheck(char *message, int size);
 // same numbers in Gen 4 and Gen 5. Stats are left out: BW2 computes them from these.
 #define GEN5_NAME_LENGTH 11 // Characters of a Pokémon's name, with the terminator; a trainer's has 8
 #define GEN5_PARTY_MAX 6
+#define GEN5_PORT_TEXT_LENGTH 64 // The port's own short battle messages (Gen5Battle.catchRefusedText)
 
 // Major status conditions, as BW2 numbers them
 enum Gen5Status {
@@ -156,6 +157,14 @@ typedef struct Gen5Battle {
     int caught; // A wild Pokémon was caught: caughtMon has it, caughtWild2 says which
     int caughtWild2;
     Gen5Pokemon caughtMon;
+    // Nuzlocke mode (port/nuzlocke_mode.h): the level EXP takes no Pokémon past (0: none), no critical hits but from
+    // moves that always land one, and the wild Pokémon a ball can't catch (it is knocked back as a trainer does it,
+    // with catchRefusedText: Unicode, 0xFFFE between lines, 0xFFFF after the last character)
+    int levelCap;
+    int critGuard;
+    int wildCatchRefused;
+    int wild2CatchRefused;
+    unsigned short catchRefusedText[GEN5_PORT_TEXT_LENGTH];
 } Gen5Battle;
 
 // How a battle ended, for Platinum

@@ -49,6 +49,7 @@
 
 #ifdef SDK_PORT
 #include "port/cheats.h"
+#include "port/nuzlocke_mode.h"
 #include "port/rom_patches.h"
 #endif
 
@@ -7173,6 +7174,13 @@ int BattleSystem_CalcCriticalMulti(BattleSystem *battleSys, BattleContext *battl
         && (defenderMoveEffects & MOVE_EFFECT_NO_CRITICAL) == FALSE) {
         criticalMul = 2;
     }
+
+#ifdef SDK_PORT
+    // Nuzlocke mode's crit guard (Platinum has no move that always lands a critical hit)
+    if (NuzlockeMode_CritGuard()) {
+        criticalMul = 1;
+    }
+#endif
 
     if (criticalMul == 2 && Battler_Ability(battleCtx, attacker) == ABILITY_SNIPER) {
         criticalMul = 3;

@@ -1,0 +1,37 @@
+# Nuzlocke mode, milestone 2: the rules in Platinum's own engine (docs/thor/dev/nuzlocke.md). From nuz-normal
+# (Normal, crit guard; Roark is next, so the level cap is his strongest Pokemon's, 14). The check is the
+# "[test] party" lines:
+# - a Bidoof and a Garchomp given with the mode on have IVs of 15 (Turtwig, made before, keeps its own);
+# - Turtwig set to 0 HP (as a battle's party update writes it) is dead;
+# - Bidoof, at the cap (level 14, its EXP 2744), beats a wild level 2 Bidoof and gains no EXP;
+# - a Pokemon Center's nurse then heals Bidoof but leaves Turtwig at 0 HP.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_rules.txt --from nuz-normal
+
+mash A until free
+gen5-battles off
+nuzlocke state
+give 445 100
+give 399 14
+faint 0
+party
+# Bidoof to the front, with Tackle first; FIGHT and Tackle (A, A) until the wild Bidoof faints
+lead 2
+learn 33
+wild 399 2
+until battle
+until command
+mash A until free timeout 9000
+party
+# A Pokemon Center's nurse (as heal_shots.txt reaches her)
+jump 6 8 5
+wait 120
+mash A until free
+press UP
+wait 10
+press A
+mash A for 900
+mash A until free timeout 6000
+party
+nuzlocke state
+exit 0

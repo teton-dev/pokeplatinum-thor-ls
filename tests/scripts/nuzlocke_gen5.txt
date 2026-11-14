@@ -1,0 +1,60 @@
+# Nuzlocke mode, milestone 4: its rules in Black 2 and White 2's engine (docs/thor/dev/nuzlocke.md). From nuz-normal
+# (Normal, crit guard; Roark's cap, 14), with Gen 5 battles on and Master Balls in the bag:
+# - a Starly run from leaves the area to Starlys ("[test] nuzlocke: ... missed 396");
+# - a Master Ball at a Bidoof there is knocked back ("Gen 5: a ball knocked back", the shot shows the message);
+# - a level 14 Bidoof (at the cap) beats a wild one and gains no EXP (its EXP stays 2744 in the "[test] party" lines);
+# - "Gen 5: level cap 14, crit guard" in the log: the battle got the cap and the crit guard.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_gen5.txt --from nuz-normal
+
+gen5-import
+gen5-battles on
+mash A until free
+item 1 5
+wait 40
+nuzlocke state
+# The area's first encounter, a Starly: run
+wild 396 3
+until battle
+until command
+wait 60
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+nuzlocke state
+# A Bidoof: BAG, POKE BALLS, the Master Ball, USE: knocked back
+wild 399 3
+until battle
+until command
+wait 60
+touch 40 180
+wait 60
+touch 192 48
+wait 60
+touch 64 33
+wait 60
+touch 108 175
+wait 160
+shot nuz-gen5-refused-1
+wait 50
+shot nuz-gen5-refused-2
+wait 50
+shot nuz-gen5-refused-3
+wait 50
+shot nuz-gen5-refused-4
+until command timeout 3000
+wait 60
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+party
+# A level 14 Bidoof in front, Tackle first: FIGHT and Tackle (A, A) until the wild one faints
+give 399 14
+lead 1
+learn 33
+wild 399 2
+until battle
+until command
+wait 60
+mash A until free timeout 9000
+party
+nuzlocke state
+exit 0

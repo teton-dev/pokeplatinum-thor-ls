@@ -1,0 +1,19 @@
+# Nuzlocke mode, milestone 2: whiting out ends the run (docs/thor/dev/nuzlocke.md). From nuz-normal, Turtwig alone
+# against a wild level 100 Charizard: it faints (dead), the player whites out, and the save's mode is "Off, dropped"
+# (the log's "Nuzlocke mode:" and "[test] nuzlocke:" lines); back home, the party is healed as in a normal game.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_whiteout.txt --from nuz-normal
+
+mash A until free
+gen5-battles off
+nuzlocke state
+wild 6 100
+until battle
+until command
+mash A until free timeout 9000
+nuzlocke state
+party
+nuzlocke normal
+wait 2
+nuzlocke state
+exit 0

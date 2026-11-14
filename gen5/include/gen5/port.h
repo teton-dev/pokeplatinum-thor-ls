@@ -118,4 +118,12 @@ void Gen5_SetMoveBgShown(int shown);
 // The 3D system's projection set again, as Gen5_Widen has it now, if the 3D system is up (g3d_system.c's patch)
 void Gen5_G3DReproject(void);
 
+// Nuzlocke mode in BW2's engine (gen5/src/runtime.c, from Gen5Battle's levelCap, critGuard and catch refusals):
+// the EXP a Pokemon may still take below the level cap (btl_server_flow_sub.c's patch), no critical hits but
+// always-critical moves' (btl_server_flow.c's), and whether a ball at the wild Pokemon of this personality is
+// knocked back (btl_server_flow_sub.c's)
+u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp);
+BOOL Gen5_PortCritGuard(void);
+BOOL Gen5_PortCatchRefused(u32 personality);
+
 #endif // GEN5_PORT_H

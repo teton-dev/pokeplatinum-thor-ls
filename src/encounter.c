@@ -52,7 +52,8 @@
 
 #ifdef SDK_PORT
 #include "port/cheats.h"
-#include "port/nuzlocke.h"
+#include "port/nuzlocke_mode.h"
+#include "port/port_game.h"
 #include "port/shiny_hunt.h"
 #endif
 
@@ -96,6 +97,23 @@ static BOOL FieldTask_CatchingTutorialEncounter(FieldTask *task);
 static BOOL FieldTask_LinkEncounterWithRecording(FieldTask *task);
 static BOOL FieldTask_WildEncounter(FieldTask *task);
 
+#ifdef SDK_PORT
+// Nuzlocke mode's catch rule: a wild battle (not the catching tutorial, the Pal Park or a link) in this area
+static void PortNuzlockeModeBattleStart(FieldBattleDTO *dto)
+{
+    const u32 notWild = BATTLE_TYPE_TRAINER | BATTLE_TYPE_LINK | BATTLE_TYPE_FRONTIER | BATTLE_TYPE_PAL_PARK
+        | BATTLE_TYPE_CATCH_TUTORIAL;
+    Party *wild = dto->parties[BATTLER_ENEMY_1];
+    if ((dto->battleType & notWild) != 0 || wild == NULL || Party_GetCurrentCount(wild) == 0) {
+        NuzlockeMode_OnWildBattleStart(0xFFFF, 0, TRUE); // not counted (and clears a pending static mark)
+        return;
+    }
+    Pokemon *mon = Party_GetPokemonBySlotIndex(wild, 0);
+    NuzlockeMode_OnWildBattleStart(PortGame_Field_LocationName(), Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL),
+        Pokemon_IsShiny(mon));
+}
+#endif
+
 static BOOL FieldTask_RunBattle(FieldTask *task)
 {
     FieldSystem *fieldSystem = FieldTask_GetFieldSystem(task);
@@ -107,7 +125,7 @@ static BOOL FieldTask_RunBattle(FieldTask *task)
 #ifdef SDK_PORT
         Cheats_OnBattleStart(dto->battleType, dto->parties[BATTLER_ENEMY_1]);
         ShinyHunt_OnBattleStart(dto->battleType, dto->parties[BATTLER_ENEMY_1]);
-        Nuzlocke_OnBattleStart(dto->battleType, dto->parties[BATTLER_ENEMY_1]);
+        PortNuzlockeModeBattleStart(dto);
 #endif
         FieldSystem_StartBattleProcess(fieldSystem, dto);
         (*state)++;
@@ -119,7 +137,7 @@ static BOOL FieldTask_RunBattle(FieldTask *task)
         }
 
 #ifdef SDK_PORT
-        Nuzlocke_OnBattleEnd(dto->battleType, dto->resultMask, dto->parties[BATTLER_PLAYER_1], dto->parties[BATTLER_ENEMY_1]);
+        NuzlockeMode_OnWildBattleEnd((dto->resultMask & 0x7) == BATTLE_RESULT_CAPTURED_MON);
 #endif
         return TRUE;
     }
@@ -562,6 +580,9 @@ void Encounter_NewVsHoneyTree(FieldTask *task, int *resultMaskPtr)
 
 void Encounter_NewVsSpeciesAtLevel(FieldTask *task, u16 species, u8 level, int *resultMaskPtr, BOOL isLegendary)
 {
+#ifdef SDK_PORT
+    NuzlockeMode_MarkStatic(); // a scripted encounter: Nuzlocke mode's areas count it only with Hard
+#endif
     FieldBattleDTO *dto;
     FieldSystem *fieldSystem = FieldTask_GetFieldSystem(task);
     RadarChain_Clear(fieldSystem->chain);
@@ -581,6 +602,9 @@ void Encounter_NewVsSpeciesAtLevel(FieldTask *task, u16 species, u8 level, int *
 
 void Encounter_NewFatefulVsSpeciesAtLevel(FieldTask *taskMan, u16 species, u8 level, int *resultMaskPtr, BOOL isLegendary)
 {
+#ifdef SDK_PORT
+    NuzlockeMode_MarkStatic(); // a scripted encounter: Nuzlocke mode's areas count it only with Hard
+#endif
     FieldBattleDTO *dto;
     FieldSystem *fieldSystem = FieldTask_GetFieldSystem(taskMan);
     RadarChain_Clear(fieldSystem->chain);

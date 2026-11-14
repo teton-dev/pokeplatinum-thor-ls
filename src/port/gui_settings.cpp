@@ -11,6 +11,7 @@
 
 #include <SDL2/SDL.h>
 
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -23,7 +24,7 @@
 #include "port/gen5_battle.h"
 #include "port/gen5_rom.h"
 #endif
-#include "port/nuzlocke.h"
+#include "port/nuzlocke_mode.h"
 #include "port/randomizer.h"
 #include "port/save_slots.h"
 #include "port/save_sync.h"
@@ -59,6 +60,103 @@ bool ConfigToggle(const char *label, const char *help, BOOL *value, bool enabled
         return true;
     }
     return false;
+}
+
+// --- Nuzlocke mode (port/nuzlocke_mode.h) ----------------------------------------------------
+
+int sNuzlockeWarnLevel = 0; // a level waiting for the rules to be accepted
+double sNuzlockeOffUntil = 0.0;
+
+const char *NuzlockeRules(int level)
+{
+    switch (level) {
+    case NUZLOCKE_SIMPLE:
+        return "Every Pokemon has IVs of 15. Your Pokemon gain no EXP past the next gym leader's strongest Pokemon's "
+               "level. A Pokemon that faints is gone for good: nothing heals it again. No items in battle (only Poke "
+               "Balls), and trainers use none. Caught Pokemon must be nicknamed. Whiting out ends the run: the mode "
+               "turns off and can never be turned on again on this save.";
+    case NUZLOCKE_NORMAL:
+        return "Simple's rules, and: once you have Poke Balls, you may catch only the first Pokemon you meet in each "
+               "area (the same species again if it got away), and nothing else there once you've caught it. Shiny "
+               "Pokemon can always be caught.";
+    case NUZLOCKE_HARD:
+        return "Normal's rules, and: the level cap is the next gym leader's weakest Pokemon's level, static "
+               "encounters (legendaries among them) count as the area's one, and there is no crit guard.";
+    }
+    return "";
+}
+
+// Everything a level asks, for the warning before it turns on (Normal and Hard build on the levels below)
+std::string NuzlockeAllRules(int level)
+{
+    std::string rules = NuzlockeRules(NUZLOCKE_SIMPLE);
+    for (int i = NUZLOCKE_NORMAL; i <= level; i++) {
+        const char *more = NuzlockeRules(i);
+        std::string extra = strchr(more, ':') + 2; // without "Simple's rules, and: "
+        extra[0] = (char)toupper((unsigned char)extra[0]);
+        rules += "\n\n" + extra;
+    }
+    return rules;
+}
+
+void DrawNuzlockeMode()
+{
+    Section("Nuzlocke mode");
+    NuzlockeModeView view;
+    NuzlockeMode_GetView(&view);
+    if (!view.hasSave) {
+        Note("Load a save (continue or start a game) to set its Nuzlocke mode.");
+        return;
+    }
+    if (view.storageError) {
+        Status("The Nuzlocke record couldn't be written to the save.", true);
+    }
+    if (view.dropped) {
+        Note("This save was a Nuzlocke run and left it: it can't be one again.");
+        return;
+    }
+    if (sNuzlockeWarnLevel != 0) {
+        std::string title = std::string("Nuzlocke mode: ") + NuzlockeMode_LevelName(sNuzlockeWarnLevel);
+        Panel(title.c_str(), NuzlockeAllRules(sNuzlockeWarnLevel).c_str());
+        Note("Turning it off later, or whiting out, ends it on this save for good.");
+        const int pressed = ButtonPair("Turn it on", "Cancel", true);
+        if (pressed == 1) {
+            NuzlockeMode_RequestLevel(sNuzlockeWarnLevel);
+        }
+        if (pressed != 0) {
+            sNuzlockeWarnLevel = 0;
+        }
+        return;
+    }
+    static const char *const kLevels[] = { "Off", "Simple", "Normal", "Hard" };
+    int level = view.level;
+    if (level == NUZLOCKE_OFF) {
+        if (Choice("Nuzlocke mode", "For this save only. Simple, Normal or Hard: the rules show before it turns on.",
+                &level, kLevels, NUZLOCKE_LEVEL_COUNT) && level != NUZLOCKE_OFF) {
+            sNuzlockeWarnLevel = level;
+        }
+        return;
+    }
+    int choice = level - 1;
+    if (Choice("Level", NuzlockeRules(level), &choice, kLevels + 1, NUZLOCKE_LEVEL_COUNT - 1)) {
+        NuzlockeMode_RequestLevel(choice + 1);
+    }
+    bool guard = view.critGuard != FALSE;
+    if (Toggle("Crit guard", "No critical hits, except from moves that always land one. Not with Hard.", &guard,
+            level != NUZLOCKE_HARD)) {
+        NuzlockeMode_RequestCritGuard(guard ? TRUE : FALSE);
+    }
+    const double now = ImGui::GetTime();
+    const bool confirming = now < sNuzlockeOffUntil;
+    if (Button(confirming ? "Tap again: it can't be turned on again###nuzOff" : "Turn Nuzlocke mode off###nuzOff",
+            "This save stops being a Nuzlocke run, for good.", confirming)) {
+        if (confirming) {
+            NuzlockeMode_RequestLevel(NUZLOCKE_OFF);
+            sNuzlockeOffUntil = 0.0;
+        } else {
+            sNuzlockeOffUntil = now + 4.0;
+        }
+    }
 }
 
 // --- Games -----------------------------------------------------------------------------------
@@ -581,27 +679,7 @@ void DrawGameplay()
         "leader's strongest Pokemon (the Champion's after 8 badges), read from the game's own trainer data. The Gear's "
         "Trainer tab shows the cap and the bosses' teams.", &config->hardLevelCap);
     DrawClock();
-    Section("Nuzlocke");
-    ConfigToggle("Nuzlocke helper", "Keeps the run's books on the Gear: each area's first wild encounter (the one "
-        "you may catch), whether you caught it, and who fainted for good. It shows; it doesn't stop anything.",
-        &config->nuzlocke);
-    const bool nuzlocke = config->nuzlocke != FALSE;
-    ConfigToggle("Dupes clause", "Species you've already caught don't count as an area's first encounter.",
-        &config->nuzlockeDupes, nuzlocke);
-    ConfigToggle("Shiny clause", "Shiny Pokemon never count, and can always be caught.", &config->nuzlockeShiny, nuzlocke);
-    ConfigToggle("Send fainted Pokemon to the PC", "After each battle, as long as someone is left to carry on.",
-        &config->nuzlockeToPC, nuzlocke);
-    static double sResetUntil = 0.0;
-    const double now = ImGui::GetTime();
-    if (Button(now < sResetUntil ? "Tap again to start over" : "Start a new run",
-            "Clears this save slot's Nuzlocke books (areas and deaths).", false, nuzlocke)) {
-        if (now < sResetUntil) {
-            Nuzlocke_Reset();
-            sResetUntil = 0.0;
-        } else {
-            sResetUntil = now + 3.0;
-        }
-    }
+    DrawNuzlockeMode();
     Section("Frame rate");
     ConfigToggle("60 FPS", "Smooth walking and scrolling: the overworld runs at 60 frames a second. Music keeps its "
                            "speed.", &config->enable60fps);

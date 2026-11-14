@@ -36,7 +36,6 @@ gen5_sources = [
     'src/ov167/battle_event.c',
     'src/ov167/battle_overlay.c',
     'src/ov167/btl_adapter.c',
-    'src/ov167/btl_client.c',
     'src/ov167/btl_field.c',
     'src/ov167/btl_handler_work.c',
     'src/ov167/btl_main.c',
@@ -257,7 +256,9 @@ gen5_patched = [
     'src/system/resonance_resort_data.c', # No Join Avenue: a catch records nothing there
     'src/ov167/btl_calc.c',           # A Platinum trainer's prize money (runtime.c), the 18-type chart (Fairy)
     'src/system/app_menu_common.c',   # Fairy's type icon: Psychic's for now
-    'src/ov167/btl_server_flow_sub.c', # Experience: a division by zero is 0, as on the DS
+    'src/ov167/btl_server_flow_sub.c', # Experience: a division by zero is 0, as on the DS; Nuzlocke mode's level
+                                       # cap and catch rule (runtime.c)
+    'src/ov167/btl_client.c',         # Nuzlocke mode's message for a ball knocked back in a wild battle
     'src/ov170/tr_ai.c',              # Jump tables' offsets read in a defined order (the trainer AI)
 ]
 

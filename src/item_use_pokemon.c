@@ -17,6 +17,10 @@
 #include "party.h"
 #include "pokemon.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_mode.h"
+#endif
+
 #define PP_UP_REQUIREMENT 5 // Moves with fewer max PP can't benefit from PP Ups (e.g. Sketch)
 
 #define MAX_EV_VITAMIN 100
@@ -133,6 +137,11 @@ static u8 UpdatePokemonFriendship(Pokemon *mon, s32 current, s32 change, u16 loc
 
 u8 Pokemon_CheckItemEffects(Pokemon *mon, u16 itemId, u16 moveSlot, enum HeapID heapID)
 {
+#ifdef SDK_PORT
+    if (NuzlockeMode_RefusesItem(mon, itemId, heapID)) {
+        return FALSE;
+    }
+#endif
     // For some reason, the original developer decided to use an array to store what should have been individual variables
     // For more clarity on what each slot is used for, and to make them look more like individual variables,
     // convenience macros vCheck... are defined defined at the top of this file.
@@ -236,6 +245,11 @@ u8 Party_CheckItemEffectsOnMember(Party *party, u16 itemId, u8 partySlot, u8 mov
 
 u8 Pokemon_ApplyItemEffects(Pokemon *mon, u16 itemId, u16 moveSlot, u16 location, enum HeapID heapID)
 {
+#ifdef SDK_PORT
+    if (NuzlockeMode_RefusesItem(mon, itemId, heapID)) {
+        return FALSE;
+    }
+#endif
     // For some reason, the original developer decided to use an array to store what should have been individual variables
     // For more clarity on what each slot is used for, and to make them look more like individual variables,
     // convenience macros vApply... are defined at the top of this file.

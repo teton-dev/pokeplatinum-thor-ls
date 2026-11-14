@@ -47,6 +47,7 @@
 #include "charcode_convert.h"
 #include "port/gen5_data.h"
 #include "port/gen5_rom.h"
+#include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #include "port/test_script.h"
 #include "system.h"
@@ -765,6 +766,39 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
     }
 }
 
+int Gear_LevelCap(void);
+
+// Nuzlocke mode's rules and the Hard level cap setting, for BW2's engine (gen5/src/runtime.c and its patches)
+static void PortNuzlockeToGen5(FieldBattleDTO *dto)
+{
+    const SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+    int cap = config != NULL && config->hardLevelCap ? Gear_LevelCap() : 0;
+    const int nuzlockeCap = NuzlockeMode_LevelCap();
+    if (nuzlockeCap > 0 && (cap <= 0 || nuzlockeCap < cap)) {
+        cap = nuzlockeCap;
+    }
+    sBattle.levelCap = cap > 0 && cap <= MAX_POKEMON_LEVEL ? cap : 0;
+    sBattle.critGuard = NuzlockeMode_CritGuard();
+    if (!sBattle.isTrainer) {
+        // The catch rule (NuzlockeMode_OnWildBattleStart ran before the battle, in encounter.c)
+        Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
+        sBattle.wildCatchRefused = !NuzlockeMode_CatchAllowed(Pokemon_GetValue(wild, MON_DATA_SPECIES, NULL),
+            Pokemon_IsShiny(wild));
+        if (sBattle.hasWild2) {
+            Pokemon *wild2 = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_2], 0);
+            sBattle.wild2CatchRefused = !NuzlockeMode_CatchAllowed(Pokemon_GetValue(wild2, MON_DATA_SPECIES, NULL),
+                Pokemon_IsShiny(wild2));
+        }
+    }
+    // BW2's text: Unicode, 0xFFFE a new line, 0xFFFF the end
+    static const char kText[] = "You've already used your catch\nfor this area!";
+    int length = 0;
+    for (const char *c = kText; *c != '\0' && length < GEN5_PORT_TEXT_LENGTH - 1; c++) {
+        sBattle.catchRefusedText[length++] = *c == '\n' ? 0xFFFE : (unsigned char)*c;
+    }
+    sBattle.catchRefusedText[length] = 0xFFFF;
+}
+
 static BOOL Init(ApplicationManager *appMan, int *state)
 {
     (void)state;
@@ -844,6 +878,10 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         { dto->bag->battleItems, BATTLE_ITEM_POCKET_SIZE },
     };
     for (int p = 0; p < (int)NELEMS(pockets); p++) {
+        // Nuzlocke mode: Poke Balls are the only items used in battle (the rest stay in the bag as they are)
+        if (NuzlockeMode_On() && pockets[p].items != dto->bag->pokeballs) {
+            continue;
+        }
         for (int i = 0; i < pockets[p].size && sBattle.itemCount < GEN5_ITEMS_MAX; i++) {
             if (pockets[p].items[i].item != ITEM_NONE && pockets[p].items[i].quantity != 0) {
                 sBattle.items[sBattle.itemCount].item = pockets[p].items[i].item;
@@ -852,6 +890,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
             }
         }
     }
+    PortNuzlockeToGen5(dto);
     sItemsBefore = sBattle.itemCount;
     memcpy(sItemCountsBefore, sBattle.items, sizeof(sBattle.items));
     // Seen, as Platinum's battle registers a wild Pokémon when it appears (BattleSystem_DexFlagSeen); a trainer's,

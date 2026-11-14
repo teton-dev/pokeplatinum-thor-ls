@@ -1,0 +1,8 @@
+# Nuzlocke mode: logs the save's mode once the game is loaded (the "[test] nuzlocke:" line). From nuz-dropped it is
+# "Off, dropped": reloading the older game didn't bring the run back.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_state.txt --from nuz-dropped
+
+mash A until free
+nuzlocke state
+exit 0

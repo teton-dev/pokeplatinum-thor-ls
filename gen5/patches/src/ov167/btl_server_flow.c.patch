@@ -36,3 +36,15 @@
      BattleEventVar_SetRewriteOnceValue(BTL_EVAR_FLAG, FALSE);
      BattleEvent_CallHandlers(flow, BTL_EVENT_SET_MOVE_MESSAGE);
      result = BattleEventVar_GetValue(BTL_EVAR_FLAG);
+@@ -6525,6 +6525,11 @@
+             }
+             stage = value;
+             critical = BtlCalc_RollCritical(stage);
++            // The port: Nuzlocke mode's crit guard (after the roll, so the random numbers go as before); moves that
++            // always land one, above, still do
++            if (Gen5_PortCritGuard()) {
++                critical = FALSE;
++            }
+         }
+         if (ReturnZero(flow->mainModule, 3)) {
+             critical = TRUE;
