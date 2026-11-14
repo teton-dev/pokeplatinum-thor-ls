@@ -455,6 +455,9 @@ typedef struct PokemonSummaryScreen {
     u8 ribbonRow;
     u8 ribbonMax;
     u8 ribbonID;
+#ifdef SDK_PORT
+    int portGraySlot; // Nuzlocke mode's gray icon palettes: 1 + the first one's slot; 0 not made yet; -1 no room
+#endif
 } PokemonSummaryScreen;
 
 BOOL PokemonSummaryScreen_ShowContestData(SaveData *saveData);

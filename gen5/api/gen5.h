@@ -75,6 +75,7 @@ typedef struct Gen5Pokemon {
 #define GEN5_PLACE_LENGTH 24
     unsigned short metPlace[GEN5_PLACE_LENGTH];
     unsigned short eggPlace[GEN5_PLACE_LENGTH];
+    unsigned dead; // Nuzlocke mode: a dead Pokémon (the party list draws it in gray)
 } Gen5Pokemon;
 
 // The player, for BW2's messages, its traded-Pokémon check (the OT's ID and name) and the money a loss costs

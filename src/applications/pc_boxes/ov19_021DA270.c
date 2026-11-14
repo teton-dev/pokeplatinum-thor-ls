@@ -1,5 +1,9 @@
 #include "applications/pc_boxes/ov19_021DA270.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_gray.h"
+#endif
+
 #include <nitro.h>
 #include <string.h>
 
@@ -17,6 +21,28 @@
 #include "pokemon_icon.h"
 #include "sprite.h"
 
+#ifdef SDK_PORT
+// Nuzlocke mode: a dead Pokémon's icon is remapped to the gray ramp in the one free OBJ palette slot
+#define PORT_GRAY_SLOT 5
+
+static void PortGrayTiles(NNSG2dCharacterData *charData, const UnkStruct_ov19_021DCD18 *icon)
+{
+    static u8 sTiles[(4 * 4) * 0x20];
+    if (!icon->portDead) {
+        return;
+    }
+    // A copy: the source may be a buffer the boxes keep for this Pokémon
+    MI_CpuCopy8(charData->pRawData, sTiles, sizeof(sTiles));
+    NuzlockeGray_RemapTiles(sTiles, sizeof(sTiles), NuzlockeGray_ObjPalette(FALSE, 2 + icon->unk_2C));
+    charData->pRawData = sTiles;
+}
+
+static int PortIconPalette(const UnkStruct_ov19_021DCD18 *icon, int palette)
+{
+    return icon->portDead ? PORT_GRAY_SLOT : palette;
+}
+#endif
+
 BOOL ov19_021DA270(UnkStruct_ov19_021DA384 *param0, UnkStruct_ov19_021D61B0 *param1, const BoxApplication *param2, SpriteList *param3, NARC *param4)
 {
     NNSG2dImagePaletteProxy v0;
@@ -27,6 +53,9 @@ BOOL ov19_021DA270(UnkStruct_ov19_021DA384 *param0, UnkStruct_ov19_021D61B0 *par
 
     NNS_G2dInitImagePaletteProxy(&v0);
     Graphics_LoadPartialPaletteFromOpenNARC(param0->unk_48, PokeIconPalettesFileIndex(), NNS_G2D_VRAM_TYPE_2DMAIN, 2 * 0x20, 10, &v0);
+#ifdef SDK_PORT
+    NuzlockeGray_RampPalette(FALSE, PORT_GRAY_SLOT);
+#endif
 
     v2 = Graphics_GetPlttDataFromOpenNARC(param0->unk_48, PokeIconPalettesFileIndex(), &v1, HEAP_ID_BOX_GRAPHICS);
 
@@ -133,6 +162,9 @@ void ov19_021DA428(UnkStruct_ov19_021DA384 *param0, BoxPokemon *boxMon, s32 para
     param7->unk_2C = PokeIconPaletteIndex(species, form, isEgg);
     param7->unk_30 = BoxPokemon_GetValue(boxMon, MON_DATA_HELD_ITEM, NULL);
     param7->unk_2E = BoxPokemon_GetValue(boxMon, MON_DATA_MARKINGS, NULL);
+#ifdef SDK_PORT
+    param7->portDead = NuzlockeGray_BoxIsDead(boxMon);
+#endif
 
     NNS_G2dInitImageProxy(&(param7->unk_04));
     NARC_ReadFromMember(param0->unk_48, param7->unk_28, 0, ((4 * 4) * 0x20 + 0x80), param0->unk_4C);
@@ -140,6 +172,9 @@ void ov19_021DA428(UnkStruct_ov19_021DA384 *param0, BoxPokemon *boxMon, s32 para
 
     v0->mappingType = GX_GetOBJVRamModeChar();
     v0->szByte = (4 * 4) * 0x20;
+#ifdef SDK_PORT
+    PortGrayTiles(v0, param7);
+#endif
 
     NNS_G2dLoadImage1DMapping(v0, param6 * 0x20, NNS_G2D_VRAM_TYPE_2DMAIN, &(param7->unk_04));
 
@@ -148,7 +183,11 @@ void ov19_021DA428(UnkStruct_ov19_021DA384 *param0, BoxPokemon *boxMon, s32 para
 
     GF_ASSERT(param7->unk_00 != NULL);
 
+#ifdef SDK_PORT
+    Sprite_SetExplicitPalette(param7->unk_00, PortIconPalette(param7, 2 + param7->unk_2C));
+#else
     Sprite_SetExplicitPalette(param7->unk_00, 2 + param7->unk_2C);
+#endif
     ov19_021DA63C(param0, param7, BoxApp_GetMonSpriteTransparencyMask(param0->unk_40));
     BoxPokemon_ExitDecryptionContext(boxMon, reencrypt);
 }
@@ -168,21 +207,35 @@ void ov19_021DA548(UnkStruct_ov19_021DA384 *param0, BoxPokemon *boxMon, u32 para
     param10->unk_2C = PokeIconPaletteIndex(param2, form, isEgg);
     param10->unk_30 = BoxPokemon_GetValue(boxMon, MON_DATA_HELD_ITEM, NULL);
     param10->unk_2E = BoxPokemon_GetValue(boxMon, MON_DATA_MARKINGS, NULL);
+#ifdef SDK_PORT
+    param10->portDead = NuzlockeGray_BoxIsDead(boxMon);
+#endif
 
     NNS_G2dInitImageProxy(&(param10->unk_04));
     NNS_G2dGetUnpackedCharacterData(param4, &v0);
 
     v0->mappingType = GX_GetOBJVRamModeChar();
     v0->szByte = (4 * 4) * 0x20;
+#ifdef SDK_PORT
+    void *const portRawData = v0->pRawData;
+    PortGrayTiles(v0, param10);
+#endif
 
     NNS_G2dLoadImage1DMapping(v0, param9 * 0x20, NNS_G2D_VRAM_TYPE_2DMAIN, &(param10->unk_04));
+#ifdef SDK_PORT
+    v0->pRawData = portRawData; // the kept buffer stays in color
+#endif
 
     v1.imageProxy = &(param10->unk_04);
     param10->unk_00 = ov19_021D785C(param0->unk_24, &v1, param5, param6, param8, NNS_G2D_VRAM_TYPE_2DMAIN);
 
     GF_ASSERT(param10->unk_00 != NULL);
 
+#ifdef SDK_PORT
+    Sprite_SetExplicitPalette(param10->unk_00, PortIconPalette(param10, 2 + param10->unk_2C));
+#else
     Sprite_SetExplicitPalette(param10->unk_00, 2 + param10->unk_2C);
+#endif
     ov19_021DA63C(param0, param10, BoxApp_GetMonSpriteTransparencyMask(param0->unk_40));
     BoxPokemon_ExitDecryptionContext(boxMon, reencrypt);
 }
@@ -259,6 +312,9 @@ void ov19_021DA754(UnkStruct_ov19_021DA384 *param0, UnkStruct_ov19_021DCD18 *par
         NNS_G2dGetUnpackedCharacterData(param0->unk_4C, &v0);
         v0->mappingType = GX_GetOBJVRamModeChar();
         v0->szByte = (4 * 4) * 0x20;
+#ifdef SDK_PORT
+        PortGrayTiles(v0, param1);
+#endif
 
         NNS_G2dLoadImage1DMapping(v0, param2 * 0x20, NNS_G2D_VRAM_TYPE_2DMAIN, &(param1->unk_04));
 
@@ -285,6 +341,9 @@ BOOL ov19_021DA7E0(UnkStruct_ov19_021DA384 *param0, UnkStruct_ov19_021DCD18 *par
 void BoxGraphics_ApplyMonInMultiSelectShading(UnkStruct_ov19_021DA384 *param0, UnkStruct_ov19_021DCD18 *param1, BOOL isSelected)
 {
     u32 v0 = ((isSelected) ? 6 : 2) + param1->unk_2C;
+#ifdef SDK_PORT
+    v0 = PortIconPalette(param1, v0);
+#endif
 
     Sprite_SetExplicitPalette(param1->unk_00, v0);
 }

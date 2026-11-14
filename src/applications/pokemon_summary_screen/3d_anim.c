@@ -1,5 +1,9 @@
 #include "applications/pokemon_summary_screen/3d_anim.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_gray.h"
+#endif
+
 #include <nitro.h>
 #include <string.h>
 
@@ -338,6 +342,9 @@ void PokemonSummaryScreen_LoadMonSprite(PokemonSummaryScreen *summaryScreen)
     summaryScreen->monSprite.sprite = PokemonSpriteManager_CreateSprite(summaryScreen->monSprite.spriteManager, &spriteTemplate, 52, 104, 0, 0, summaryScreen->monSprite.frames, NULL);
 
     PokemonSprite_SetAttribute(summaryScreen->monSprite.sprite, MON_SPRITE_FLIP_H, summaryScreen->monSprite.flip);
+#ifdef SDK_PORT
+    PokemonSprite_PortSetGray(summaryScreen->monSprite.sprite, summaryScreen->data->dataType == SUMMARY_DATA_BOX_MON ? NuzlockeGray_BoxIsDead(monData) : NuzlockeGray_IsDead(monData));
+#endif
 }
 
 void PokemonSummaryScreen_LoadMonAnimation(PokemonSummaryScreen *summaryScreen)

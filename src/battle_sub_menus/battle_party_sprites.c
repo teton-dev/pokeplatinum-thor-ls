@@ -1,5 +1,10 @@
 #include "battle_sub_menus/battle_party_sprites.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_gray.h"
+#include "port/nuzlocke_mode.h"
+#endif
+
 #include "generated/move_classes.h"
 #include "generated/pokemon_types.h"
 
@@ -24,7 +29,11 @@
 #include "unk_0208C098.h"
 
 #define SPRITE_MANAGER_CHAR_RESOURCE_CAPACITY       18
+#ifdef SDK_PORT
+#define SPRITE_MANAGER_PLTT_RESOURCE_CAPACITY       7 // and Nuzlocke mode's gray icon palettes
+#else
 #define SPRITE_MANAGER_PLTT_RESOURCE_CAPACITY       6
+#endif
 #define SPRITE_MANAGER_CELL_RESOURCE_CAPACITY       6
 #define SPRITE_MANAGER_ANIM_RESOURCE_CAPACITY       6
 #define SPRITE_MANAGER_MULTI_CELL_RESOURCE_CAPACITY 0
@@ -38,6 +47,10 @@
 
 #define PARTY_POKEMON_CHAR_RESOURCE_ID_OFFSET 45063
 #define PARTY_POKEMON_PLTT_RESOURCE_ID        45063
+#ifdef SDK_PORT
+#define PORT_GRAY_PLTT_RESOURCE_ID 45090 // Nuzlocke mode: gray copies of the icon palettes, for dead Pokémon
+static int sPortGraySlot = -1;
+#endif
 #define PARTY_POKEMON_CELL_RESOURCE_ID        45063
 #define PARTY_POKEMON_ANIM_RESOURCE_ID        45063
 
@@ -315,6 +328,19 @@ static void LoadPartyPokemonSpriteData(BattleParty *battleParty)
     SpriteSystem *spriteSystem = BattleSystem_GetSpriteSystem(battleParty->context->battleSys);
 
     SpriteSystem_LoadPaletteBufferFromOpenNarc(battleParty->palette, PLTTBUF_SUB_OBJ, spriteSystem, battleParty->spriteManager, narc, PokeIconPalettesFileIndex(), FALSE, 3, NNS_G2D_VRAM_TYPE_2DSUB, PARTY_POKEMON_PLTT_RESOURCE_ID);
+#ifdef SDK_PORT
+    // The icon palettes again, made gray in the palette buffers (which the battle copies to the screen) and on it
+    sPortGraySlot = -1;
+    if (NuzlockeMode_On()) {
+        const int slot = (s8)SpriteSystem_LoadPaletteBufferFromOpenNarc(battleParty->palette, PLTTBUF_SUB_OBJ, spriteSystem, battleParty->spriteManager, narc, PokeIconPalettesFileIndex(), FALSE, 3, NNS_G2D_VRAM_TYPE_2DSUB, PORT_GRAY_PLTT_RESOURCE_ID);
+        if (slot >= 0 && slot + NUZLOCKE_GRAY_ICON_PALETTES <= 16) {
+            NuzlockeGray_Colors(PaletteData_GetUnfadedBuffer(battleParty->palette, PLTTBUF_SUB_OBJ) + slot * 16, 16 * NUZLOCKE_GRAY_ICON_PALETTES);
+            NuzlockeGray_Colors(PaletteData_GetFadedBuffer(battleParty->palette, PLTTBUF_SUB_OBJ) + slot * 16, 16 * NUZLOCKE_GRAY_ICON_PALETTES);
+            NuzlockeGray_IconPalettesTo(TRUE, slot, slot);
+            sPortGraySlot = slot;
+        }
+    }
+#endif
     SpriteSystem_LoadCellResObjFromOpenNarc(spriteSystem, battleParty->spriteManager, narc, PokeIcon32KCellsFileIndex(), FALSE, PARTY_POKEMON_CELL_RESOURCE_ID);
     SpriteSystem_LoadAnimResObjFromOpenNarc(spriteSystem, battleParty->spriteManager, narc, PokeIcon32KAnimationFileIndex(), FALSE, PARTY_POKEMON_ANIM_RESOURCE_ID);
 
@@ -433,7 +459,15 @@ static void InitializePartyPokemonSprites(BattleParty *battleParty)
             continue;
         }
 
+#ifdef SDK_PORT
+        int palette = PokeIconPaletteIndex(battleParty->partyPokemon[i].species, battleParty->partyPokemon[i].form, battleParty->partyPokemon[i].isEgg);
+        if (sPortGraySlot >= 0 && NuzlockeGray_IsDead(battleParty->partyPokemon[i].mon)) {
+            palette += sPortGraySlot;
+        }
+        ManagedSprite_SetExplicitPalette(battleParty->sprites[PARTY_POKEMON_SPRITES_OFFSET + i], palette);
+#else
         ManagedSprite_SetExplicitPalette(battleParty->sprites[PARTY_POKEMON_SPRITES_OFFSET + i], PokeIconPaletteIndex(battleParty->partyPokemon[i].species, battleParty->partyPokemon[i].form, battleParty->partyPokemon[i].isEgg));
+#endif
     }
 }
 

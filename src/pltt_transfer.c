@@ -87,6 +87,24 @@ void PlttTransfer_MarkReservedSlots(u16 reservedMask, NNS_G2D_VRAM_TYPE vramType
     }
 }
 
+#ifdef SDK_PORT
+int PlttTransfer_PortReserveFreeSlots(int count, NNS_G2D_VRAM_TYPE vramType)
+{
+    if (sTaskManager == NULL) {
+        return -1;
+    }
+    u16 *used = vramType == NNS_G2D_VRAM_TYPE_2DMAIN ? &sTaskManager->vramTransferMain : &sTaskManager->vramTransferSub;
+    for (int slot = NUM_VRAM_PALETTES - count; slot >= 0; slot--) {
+        const u16 mask = ((1 << count) - 1) << slot;
+        if ((*used & mask) == 0) {
+            *used |= mask;
+            return slot;
+        }
+    }
+    return -1;
+}
+#endif
+
 void PlttTransfer_Free(void)
 {
     if (sTaskManager != NULL) {
