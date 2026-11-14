@@ -1,0 +1,10 @@
+--- a/include/battle/btl_server_cmd.h
++++ b/include/battle/btl_server_cmd.h
+@@ -103,6 +103,7 @@
+     SC_ABILITY_POPUP_IN,
+     SC_ABILITY_POPUP_OUT,
+     SC_MOVE_MSG,
++    SC_WEATHER_TURN, // The port: the weather at a turn's end (setter, weather, turns left)
+     // The message commands, which BtlServerCmdQueue_PutMsg writes: a message and its arguments, the _SE ones with a
+     // sound effect
+     SC_MSG_STD,

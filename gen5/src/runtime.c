@@ -801,3 +801,26 @@ void Gen5_PortCatchRefusedText(StrBuf *strbuf)
 {
     GFL_StrBufLoadString(strbuf, sNuzlocke.text);
 }
+
+// The weather's ability bar: "Rain: 4 turns remaining" (btlv_scu.c's patch); turns 0xff is a weather with no end
+void Gen5_PortWeatherText(StrBuf *strbuf, u8 weather, u8 turns)
+{
+    static const char *const names[] = { "", "Sun", "Rain", "Hail", "Sand" };
+    char text[48];
+    unsigned short chars[48];
+
+    if (weather >= 5) {
+        weather = 0;
+    }
+    if (turns == 0xff) {
+        snprintf(text, sizeof(text), "%s", names[weather]);
+    } else {
+        snprintf(text, sizeof(text), "%s: %d turn%s remaining", names[weather], turns, turns == 1 ? "" : "s");
+    }
+    int length = 0;
+    for (const char *c = text; *c != '\0'; c++) {
+        chars[length++] = (unsigned char)*c;
+    }
+    chars[length] = 0xFFFF;
+    GFL_StrBufLoadString(strbuf, chars);
+}

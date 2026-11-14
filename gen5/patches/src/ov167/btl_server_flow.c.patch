@@ -1,6 +1,24 @@
 --- a/src/ov167/btl_server_flow.c
 +++ b/src/ov167/btl_server_flow.c
-@@ -2369,7 +2369,7 @@
+@@ -105,6 +105,9 @@
+     GFL_ArcToolFree(flow->evolutionData);
+     GFL_HeapFree(flow);
+ }
++
++// The port: the Pokemon that set the weather (0xff for none: the arena's), whose side shows the weather's bar each turn
++static u8 sPortWeatherSetter = 0xff;
+ 
+ BOOL BtlServerFlow_StartBattle(BtlServerFlow *flow) {
+     BtlServerCmdQueue *queue;
+@@ -119,6 +122,7 @@
+     queue->writePtr = 0;
+     result = FALSE;
+     queue->readPtr = 0;
++    sPortWeatherSetter = 0xff;
+     weather = GetFieldEffectData(flow->mainModule)->env.weather;
+     if (weather != 0 && ServerControl_ChangeWeather(flow, weather, 0xff)) {
+         result = TRUE;
+@@ -2369,7 +2373,7 @@
      BattleEventVar_SetConstValue(BTL_EVAR_MOVE, param->move);
      BattleEventVar_SetConstValue(BTL_EVAR_MOVE_TYPE, param->type);
      BattleEventVar_SetConstValue(BTL_EVAR_REFLECTED_FLAG, param->flags.reflected);
@@ -9,7 +27,7 @@
      BattleEventVar_SetConstValue(BTL_EVAR_EFFECTIVENESS, value);
      BattleEventVar_SetRewriteOnceValue(BTL_EVAR_NO_EFFECT_FLAG, 0);
      BattleEventVar_SetRewriteOnceValue(BTL_EVAR_FLAG, 0);
-@@ -3934,7 +3934,7 @@
+@@ -3934,7 +3938,7 @@
      BattleEventVar_Push(0x1e11);
      BattleEventVar_SetConstValue(BTL_EVAR_ATTACKER, GetMonID(attacker));
      BattleEventVar_SetConstValue(BTL_EVAR_DEFENDER, GetMonID(target));
@@ -18,7 +36,7 @@
      BattleEventVar_SetValue(BTL_EVAR_CONDITION, 0);
      BattleEvent_CallHandlers(flow, BTL_EVENT_DECIDE_SPECIAL_MOVE_CONDITION);
      condition = BattleEventVar_GetValue(BTL_EVAR_CONDITION);
-@@ -3947,7 +3947,7 @@
+@@ -3947,7 +3951,7 @@
      BattleEventVar_Push(0x1e28);
      BattleEventVar_SetConstValue(BTL_EVAR_ATTACKER, GetMonID(attacker));
      BattleEventVar_SetConstValue(BTL_EVAR_DEFENDER, GetMonID(target));
@@ -27,7 +45,26 @@
      BattleEventVar_SetConstValue(BTL_EVAR_CONDITION, condition);
      BattleEvent_CallHandlers(flow, BTL_EVENT_ADD_MOVE_CONDITION_STRING);
      BattleEventVar_Pop(0x1e2e);
-@@ -6216,7 +6216,7 @@
+@@ -4673,6 +4677,7 @@
+ 
+     if (weather != 0) {
+         if (ServerControl_ChangeWeather(flow, weather, ServerEvent_IncreaseMoveWeatherTurns(flow, weather, mon) + 5)) {
++            sPortWeatherSetter = GetMonID(mon);
+             BattleMoveEffectState *effect = flow->moveEffect;
+             if (!effect->enabled) {
+                 effect->enabled = 1;
+@@ -5352,6 +5357,10 @@
+     }
+     damaged = FALSE;
+     weather = ServerEvent_GetWeather(flow);
++    if (weather != 0) {
++        // The port: the weather stays, and its bar shows what is left of it
++        BtlServerCmdQueue_Put(flow->queue, SC_WEATHER_TURN, sPortWeatherSetter, weather, FieldStatusGetWeatherTurns());
++    }
+     BtlMonSet_ResetIndex(monSet);
+     while ((mon = BtlMonSet_GetNext(monSet)) != NULL) {
+         if (!IsFainted(mon) && !GetAdditionalConditionFlag(mon, 5) && !GetAdditionalConditionFlag(mon, 4)) {
+@@ -6216,7 +6225,7 @@
      BattleEventVar_Push(0x2ccf);
      BattleEventVar_SetConstValue(BTL_EVAR_MON, GetMonID(mon));
      BattleEventVar_SetConstValue(BTL_EVAR_MOVE, actualMove);
@@ -36,7 +73,7 @@
      BattleEventVar_SetRewriteOnceValue(BTL_EVAR_FLAG, FALSE);
      BattleEvent_CallHandlers(flow, BTL_EVENT_SET_MOVE_MESSAGE);
      result = BattleEventVar_GetValue(BTL_EVAR_FLAG);
-@@ -6525,6 +6525,11 @@
+@@ -6525,6 +6534,11 @@
              }
              stage = value;
              critical = BtlCalc_RollCritical(stage);
@@ -48,3 +85,11 @@
          }
          if (ReturnZero(flow->mainModule, 3)) {
              critical = TRUE;
+@@ -8583,6 +8597,7 @@
+                 ServerDisplay_AbilityPopupAdd(handler, mon);
+             }
+             ServerControl_ChangeWeatherCore(handler, param->weather, param->duration);
++            sPortWeatherSetter = GetMonID(mon);
+             BattleHandler_SetString(handler, &param->string);
+             result = TRUE;
+             if (param->popup) {

@@ -43,9 +43,7 @@ gen5_sources = [
     'src/ov167/btl_pokeparam.c',
     'src/ov167/btl_rec.c',
     'src/ov167/btl_server.c',
-    'src/ov167/btl_server_cmd.c',
     'src/ov167/btl_string.c',
-    'src/ov167/btlv_scu.c',
     'src/ov167/handler_common.c',
     'src/ov167/item_handlers.c',
     'src/ov167/poke_type_pair.c',
@@ -55,7 +53,6 @@ gen5_sources = [
     'src/ov168/btlv_bg.c',
     'src/ov168/btlv_camera.c',
     'src/ov168/btlv_clact.c',
-    'src/ov168/btlv_effect.c',
     'src/ov168/btlv_field.c',
     'src/ov168/btlv_stage.c',
     'src/ov168/btlv_timer.c',
@@ -258,6 +255,9 @@ gen5_patched = [
     'src/ov167/btl_server_flow_sub.c', # Experience: a division by zero is 0, as on the DS; Nuzlocke mode's level
                                        # cap and catch rule (runtime.c)
     'src/ov167/btl_client.c',         # Nuzlocke mode's message for a ball knocked back in a wild battle
+    'src/ov167/btl_server_cmd.c',     # The weather's command at a turn's end (btl_server_flow.c)
+    'src/ov167/btlv_scu.c',           # The weather's bar: an ability bar in the weather's colors
+    'src/ov168/btlv_effect.c',        # The weather's particles that stay on the arena (btlv_effvm.c)
     'src/ov170/tr_ai.c',              # Jump tables' offsets read in a defined order (the trainer AI)
     'src/ov207/p_sta_info.c',         # The Summary's memo: Platinum's place names (runtime.c)
 ]
