@@ -59,6 +59,7 @@
 #ifdef SDK_PORT
 #include "port/cheats.h"
 #include "port/rom_patches.h"
+#include "port/nuzlocke_mode.h"
 #endif
 
 #define FATEFUL_ENCOUNTER_LOCATION 3002
@@ -475,6 +476,20 @@ static void sub_02073E18(BoxPokemon *boxMon, int monSpecies, int monLevel, int m
         BoxPokemon_SetValue(boxMon, MON_DATA_SPDEF_IV, &v2);
     }
 
+#ifdef SDK_PORT
+    // Nuzlocke mode: every Pokemon made has IVs of 15 (wild, gifts, trainers'); the random ones above are
+    // still drawn, so the RNG advances as it would
+    if (NuzlockeMode_On()) {
+        v2 = 15;
+        BoxPokemon_SetValue(boxMon, MON_DATA_HP_IV, &v2);
+        BoxPokemon_SetValue(boxMon, MON_DATA_ATK_IV, &v2);
+        BoxPokemon_SetValue(boxMon, MON_DATA_DEF_IV, &v2);
+        BoxPokemon_SetValue(boxMon, MON_DATA_SPEED_IV, &v2);
+        BoxPokemon_SetValue(boxMon, MON_DATA_SPATK_IV, &v2);
+        BoxPokemon_SetValue(boxMon, MON_DATA_SPDEF_IV, &v2);
+    }
+#endif
+
     v1 = SpeciesData_GetSpeciesValue(monSpecies, SPECIES_DATA_ABILITY_1);
     v2 = SpeciesData_GetSpeciesValue(monSpecies, SPECIES_DATA_ABILITY_2);
 
@@ -553,6 +568,15 @@ void Pokemon_InitAndCalcStats(Pokemon *mon, u16 monSpecies, u8 monLevel, u32 mon
 {
     Pokemon_InitWith(mon, monSpecies, monLevel, 0, TRUE, monPersonality, OTID_NOT_SET, 0);
     Pokemon_SetValue(mon, MON_DATA_COMBINED_IVS, &monCombinedIVs);
+#ifdef SDK_PORT
+    // Nuzlocke mode: a roamer made before the mode was on still has 15s
+    if (NuzlockeMode_On()) {
+        u32 iv = 15;
+        for (int i = 0; i < STAT_MAX; i++) {
+            Pokemon_SetValue(mon, MON_DATA_HP_IV + i, &iv);
+        }
+    }
+#endif
     Pokemon_CalcLevelAndStats(mon);
 }
 
@@ -1246,6 +1270,14 @@ static u32 BoxPokemon_GetDataInternal(BoxPokemon *boxMon, enum PokemonDataParam 
 
 void Pokemon_SetValue(Pokemon *mon, enum PokemonDataParam param, const void *value)
 {
+#ifdef SDK_PORT
+    // Nuzlocke mode: a dead Pokemon's HP stays 0 (Centers, PC withdrawal, ...); fainting kills
+    u16 portHP;
+    if (param == MON_DATA_HP) {
+        portHP = (u16)NuzlockeMode_FilterHP(mon, *(const u16 *)value);
+        value = &portHP;
+    }
+#endif
     if (mon->box.partyDecrypted == FALSE) {
         Pokemon_DecryptData(&mon->party, sizeof(PartyPokemon), mon->box.personality);
         Pokemon_DecryptData(&mon->box.dataBlocks, sizeof(PokemonDataBlock) * 4, mon->box.checksum);
@@ -1266,6 +1298,11 @@ void Pokemon_SetValue(Pokemon *mon, enum PokemonDataParam param, const void *val
         mon->box.checksum = Pokemon_GetDataChecksum(&mon->box.dataBlocks, sizeof(PokemonDataBlock) * 4);
         Pokemon_EncryptData(&mon->box.dataBlocks, sizeof(PokemonDataBlock) * 4, mon->box.checksum);
     }
+#ifdef SDK_PORT
+    if (param == MON_DATA_HP) {
+        NuzlockeMode_OnHPSet(mon, portHP);
+    }
+#endif
 }
 
 static void Pokemon_SetDataInternal(Pokemon *mon, enum PokemonDataParam param, const void *value)
@@ -1802,6 +1839,11 @@ static void BoxPokemon_SetDataInternal(BoxPokemon *boxMon, enum PokemonDataParam
 
 void Pokemon_IncreaseValue(Pokemon *mon, enum PokemonDataParam param, int value)
 {
+#ifdef SDK_PORT
+    if (param == MON_DATA_HP && value > 0 && NuzlockeMode_FilterHP(mon, 1) == 0) {
+        return; // a dead Pokemon (Nuzlocke mode)
+    }
+#endif
     if (mon->box.partyDecrypted == FALSE) {
         Pokemon_DecryptData(&mon->party, sizeof(PartyPokemon), mon->box.personality);
         Pokemon_DecryptData(&mon->box.dataBlocks, sizeof(PokemonDataBlock) * 4, mon->box.checksum);

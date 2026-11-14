@@ -1,0 +1,16 @@
+# Nuzlocke mode, milestone 1: turning it off, without saving the game after (from nuzlocke_on.txt's save). The check
+# is the log: Normal with crit guard as loaded, then Off and dropped, and still so after asking for Simple. Keep the
+# save file it ends with: its game is still the Normal one, but its Nuzlocke record says dropped
+# (nuzlocke_state.txt reads it back).
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_drop.txt --from nuz-normal --keep nuz-dropped
+
+mash A until free
+nuzlocke state
+nuzlocke off
+wait 2
+nuzlocke state
+nuzlocke simple
+wait 2
+nuzlocke state
+exit 0

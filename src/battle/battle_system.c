@@ -1662,6 +1662,21 @@ u8 BattleMessage_Print(BattleSystem *battleSys, MessageLoader *msgLoader, Battle
     return Text_AddPrinterWithParams(textWindow, FONT_MESSAGE, battleSys->msgBuffer, 0, 0, renderDelay, BattleMessage_Callback);
 }
 
+#ifdef SDK_PORT
+#include "../port/charcode_convert.h"
+
+// A message of the port's own (ASCII, \x01 for e acute) in the battle's text box, as BattleMessage_Print does
+u8 BattleMessage_PortPrintAscii(BattleSystem *battleSys, const char *text, int renderDelay)
+{
+    Window *textWindow = BattleSystem_GetWindow(battleSys, 0);
+    charcode_t chars[128];
+    CharCode_FromAscii(text, chars, NELEMS(chars));
+    String_CopyChars(battleSys->msgBuffer, chars);
+    Window_FillTilemap(textWindow, 0xFF);
+    return Text_AddPrinterWithParams(textWindow, FONT_MESSAGE, battleSys->msgBuffer, 0, 0, renderDelay, BattleMessage_Callback);
+}
+#endif
+
 u8 BattleMessage_PrintToWindow(BattleSystem *battleSys, Window *window, MessageLoader *msgLoader, BattleMessage *battleMsg, int xOffset, int yOffset, int flags, int alignWidth, int renderDelay)
 {
     int xAdjust;

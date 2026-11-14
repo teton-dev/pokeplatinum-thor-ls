@@ -16,13 +16,20 @@
  }
  
  void BtlvCore_StopCommandSelect(BtlvCore *core) {
-@@ -1393,8 +1395,19 @@
-     BtlString_FormatSetMsg(core->strbuf, message, args);
+@@ -1394,7 +1396,26 @@
      BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
  }
-+
-+BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId); // The port (runtime.c)
  
++BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId); // The port (runtime.c)
++
++// The port: Nuzlocke mode's "You've already used your catch for this area!" (btl_client.c's patch)
++void Gen5_PortCatchRefusedText(StrBuf *strbuf); // The port (runtime.c)
++void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core);
++void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core) {
++    Gen5_PortCatchRefusedText(core->strbuf);
++    BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++}
++
  BOOL BtlvCore_StartMsgTrainer(BtlvCore *core, u32 trainerId, u32 msgId) {
 +    // The port: trainers from 0x800 (another game's, as the Pokémon World Tournament's) have their defeat line in
 +    // the port's trainer (each of two trainers its own), not in BW2's trainer messages

@@ -53,6 +53,8 @@
 #include "res/text/bank/naming_screen.h"
 
 #ifdef SDK_PORT
+#include "../port/charcode_convert.h"
+#include "port/nuzlocke_mode.h"
 #include "port/test_script.h"
 #endif
 
@@ -2843,6 +2845,32 @@ static void NamingScreen_LoadKeyboardLayout(charcode_t out[][13], const int inde
     }
 }
 
+#ifdef SDK_PORT
+// Nuzlocke mode: a Pokemon must be given a name. A blank one (or only spaces) is refused, with a buzz and a
+// message where the prompt is.
+static BOOL NamingScreen_PortRefuseBlankName(NamingScreen *namingScreen)
+{
+    if (namingScreen->type != NAMING_SCREEN_TYPE_POKEMON || !NuzlockeMode_On()) {
+        return FALSE;
+    }
+    for (int i = 0; i < namingScreen->textCursorPos; i++) {
+        if (namingScreen->entryBuf[i] != CHAR_SPACE && namingScreen->entryBuf[i] != CHAR_EOS) {
+            return FALSE;
+        }
+    }
+
+    charcode_t chars[64];
+    CharCode_FromAscii("You must name your new Pok\x01mon!", chars, NELEMS(chars)); // \x01: e acute
+    String *message = String_Init(NELEMS(chars), HEAP_ID_NAMING_SCREEN_APP);
+    String_CopyChars(message, chars);
+    Window_FillTilemap(&namingScreen->windows[NMS_WINDOW_PROMPT], 15);
+    NamingScreen_PrintMessageOnWindowLeftAlign(&namingScreen->windows[NMS_WINDOW_PROMPT], namingScreen->type, message);
+    String_Free(message);
+    Sound_PlayEffect(SEQ_SE_DP_BOX02_sseq);
+    return TRUE;
+}
+#endif
+
 static int NamingScreen_ProcessCharacterInput(NamingScreen *namingScreen, charcode_t charCode, BOOL isButtonInput)
 {
     if (charCode == NMS_CONTROL_SPACE || charCode == NMS_CONTROL_SKIP) {
@@ -2979,6 +3007,11 @@ static int NamingScreen_ProcessCharacterInput(NamingScreen *namingScreen, charco
         }
         break;
     case NMS_BUTTON_OK:
+#ifdef SDK_PORT
+        if (NamingScreen_PortRefuseBlankName(namingScreen)) {
+            break;
+        }
+#endif
         sub_02015760(namingScreen->touchscreenIconBlinker);
         Sprite_SetDrawFlag(namingScreen->uiSprites[NMS_SPRITE_CURSOR], isButtonInput);
 
