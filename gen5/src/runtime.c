@@ -79,6 +79,8 @@ static struct {
     int refusedCount;
     u32 refused[2]; // the personalities of the wild Pokemon a ball can't catch
     unsigned short text[GEN5_PORT_TEXT_LENGTH];
+    int deadCount;
+    u32 dead[GEN5_PARTY_MAX]; // the personalities of the player's dead Pokémon, drawn in gray
 } sNuzlocke;
 
 void Gen5_MemInit(void)
@@ -362,6 +364,11 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         sNuzlocke.refused[sNuzlocke.refusedCount++] = battle->wild2.personality;
     }
     memcpy(sNuzlocke.text, battle->catchRefusedText, sizeof(sNuzlocke.text));
+    for (int i = 0; i < battle->partyCount && i < GEN5_PARTY_MAX; i++) {
+        if (battle->party[i].dead) {
+            sNuzlocke.dead[sNuzlocke.deadCount++] = battle->party[i].personality;
+        }
+    }
     if (sNuzlocke.levelCap != 0 || sNuzlocke.critGuard || sNuzlocke.refusedCount != 0) {
         printf("Gen 5: level cap %d%s, %d wild Pokémon can't be caught\n", sNuzlocke.levelCap,
             sNuzlocke.critGuard ? ", crit guard" : "", sNuzlocke.refusedCount);
@@ -746,6 +753,28 @@ u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp)
         return 0;
     }
     return exp < capExp - current ? exp : capExp - current;
+}
+
+BOOL Gen5_PortIsDead(u32 personality)
+{
+    for (int i = 0; i < sNuzlocke.deadCount; i++) {
+        if (sNuzlocke.dead[i] == personality) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void Gen5_PortGrayIconPalettes(int iconSlot, int graySlot)
+{
+    // Platinum's formula (src/port/nuzlocke_gray.c): luminance, a little darker and flatter
+    u16 *pltt = (u16 *)HW_DB_OBJ_PLTT;
+    for (int i = 0; i < 16 * 3; i++) {
+        const u16 color = pltt[iconSlot * 16 + i];
+        const int r = color & 0x1F, g = (color >> 5) & 0x1F, b = (color >> 10) & 0x1F;
+        const int y = 4 + ((r * 77 + g * 151 + b * 28) >> 8) * 3 / 4;
+        pltt[graySlot * 16 + i] = i % 16 == 0 ? color : GX_RGB(y, y, y);
+    }
 }
 
 BOOL Gen5_PortCritGuard(void)

@@ -1,0 +1,105 @@
+# Nuzlocke mode: dead Pokémon are drawn in gray (docs/thor/dev/nuzlocke.md). From nuz-normal: two Pokémon given, the
+# first of them (Bidoof, party slot 1) made dead with `faint`. The check is the shots: Bidoof gray, the others in color.
+# - battle-party, gen5-battle-party: the POKéMON list in Platinum's battles and in BW2's (Gen 5 builds);
+# - party: the party menu's icons;
+# - summary, summary-moves: Bidoof's summary (its picture) and its moves page;
+# - summary-move-info: the icon beside a move's details;
+# - pc, pc-bidoof, pc-box: the PC's party panel, Bidoof's picture in it, and Bidoof in box 1.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_gray.txt --from nuz-normal
+
+gen5-import
+mash A until free
+gen5-battles off
+give 399 5
+give 396 5
+faint 1
+party
+# Platinum's battle: its POKéMON list
+wild 396 3
+until battle
+until command
+wait 60
+touch 216 178
+wait 120
+shot battle-party
+mash B for 60
+wait 60
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+# BW2's battle: its POKéMON list
+gen5-battles on
+wild 396 3
+until battle
+until command
+wait 90
+touch 216 180
+wait 150
+objpal
+shot gen5-battle-party
+mash B for 90
+wait 60
+touch 128 180
+mash B touch 128 180 until free timeout 6000
+gen5-battles off
+# The start menu's POKéMON (its first entry without a Pokédex)
+press X
+wait 30
+press A
+wait 120
+shot party
+press RIGHT 8
+wait 20
+press A 8
+wait 40
+press A 8
+wait 120
+shot summary
+press RIGHT 8
+wait 40
+press RIGHT 8
+wait 40
+press RIGHT 8
+wait 60
+shot summary-moves
+# A move's details: the icon beside it
+press A 8
+wait 60
+shot summary-move-info
+mash B for 240
+mash B until free timeout 3000
+# The PC (Sandgem Town's Pokémon Center): SOMEONE'S PC, DEPOSIT POKéMON: the party panel, Bidoof's picture, Bidoof
+# stored in box 1; then MOVE POKéMON: box 1
+jump 420 9 6
+until free timeout 3000
+script 2018
+mash A until menu timeout 1200
+wait 30
+press A 8
+mash A until menu timeout 1200
+wait 30
+press A 8
+wait 300
+shot pc
+press RIGHT 8
+wait 90
+shot pc-bidoof
+press A 8
+wait 60
+press A 8
+wait 90
+press A 8
+wait 200
+press B 8
+wait 120
+press B 8
+mash A until menu timeout 1200
+wait 30
+press DOWN 8
+wait 10
+press DOWN 8
+wait 10
+press A 8
+wait 300
+shot pc-box
+exit 0

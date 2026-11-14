@@ -90,7 +90,12 @@ struct PokemonSprite {
     u32 polygonID : 6;
     u32 needReloadChar : 1;
     u32 needReloadPltt : 1;
+#ifdef SDK_PORT
+    u32 portGray : 1; // Nuzlocke mode: a dead Pokémon, its palette in gray
+    u32 padding_00_10 : 22;
+#else
     u32 padding_00_9 : 23;
+#endif
     PokemonSpriteTemplate template;
     PokemonSpriteTemplate templateBackup;
     PokemonSpriteTransforms transforms;
@@ -156,6 +161,10 @@ void PokemonSprite_SetPartialDraw(PokemonSprite *monSprite, int xOffset, int yOf
 void PokemonSprite_StartFade(PokemonSprite *monSprite, int initAlpha, int targetAlpha, int delay, int color);
 void PokemonSpriteManager_StartFadeAll(PokemonSpriteManager *monSpriteMan, int initAlpha, int targetAlpha, int delay, int color);
 void PokemonSprite_ClearFade(PokemonSprite *monSprite);
+#ifdef SDK_PORT
+// Nuzlocke mode: the sprite's palette in gray (a dead Pokémon), or back in color
+void PokemonSprite_PortSetGray(PokemonSprite *monSprite, BOOL gray);
+#endif
 BOOL PokemonSprite_IsFadeActive(PokemonSprite *monSprite);
 void PokemonSprite_CalcScaledYOffset(PokemonSprite *monSprite, int height);
 void PokemonSpriteTaskAnim_Init(PokemonSpriteTaskAnim *anim, const SpriteAnimFrame *animFrames);

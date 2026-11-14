@@ -92,7 +92,6 @@ gen5_sources = [
     'src/ov287/b_plist_bmp.c',
     'src/ov287/b_plist_cursor.c',
     'src/ov287/b_plist_main.c',
-    'src/ov287/b_plist_obj.c',
     # The scenario battles' screen (overlay 288)
     'src/ov288/b_scenario_graphic.c',
     'src/ov288/b_scenario_main.c',
@@ -226,6 +225,7 @@ gen5_sources = [
 
 # pokebw2's files with the port's changes (patches/), each compiled from a patched copy
 gen5_patched = [
+    'src/ov287/b_plist_obj.c',        # Nuzlocke mode: dead Pokémon's icons in gray
     'src/gfl/arc_tool.c',             # An assembly function in C
     'src/ov167/btlv_core.c',          # The command selection's event, for the test scripts (runtime.c)
     'src/gfl/arc_util.c',             # Multi-cell files in the 64-bit layout (src/g2d.c)

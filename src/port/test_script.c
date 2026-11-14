@@ -40,6 +40,7 @@
 #include "pokemon.h"
 #include "savedata/save_table.h"
 #include "pokedex.h"
+#include "hardware_palette.h"
 #include "item_use_pokemon.h"
 #include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
@@ -95,6 +96,7 @@ enum TestOp {
     OP_FAINT,
     OP_DEX,
     OP_USE,
+    OP_OBJPAL,
     OP_LEARN,
     OP_TEACH,
     OP_PARTY,
@@ -326,6 +328,10 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = strcmp(words[0], "item") == 0 ? OP_ITEM : OP_GIVE;
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "objpal") == 0) {
+        // objpal: logs which OBJ palette slots hold colors, on the main and the sub screen (to find free ones)
+        command->op = OP_OBJPAL;
         return TRUE;
     } else if (strcmp(words[0], "use") == 0 && count >= 3) {
         // use ITEM SLOT: a medicine (or Rare Candy) on the party member in SLOT, as the party menu checks and applies it
@@ -978,6 +984,22 @@ static u16 Step(void)
                 return 0;
             }
             printf("[test] item %d x%d\n", command->x, command->y);
+            Next();
+            continue;
+        case OP_OBJPAL:
+            for (int screen = 0; screen < 2; screen++) {
+                const u16 *pltt = screen == 0 ? GetHardwareMainObjPaletteAddress() : GetHardwareSubObjPaletteAddress();
+                char used[17];
+                for (int slot = 0; slot < 16; slot++) {
+                    int colors = 0;
+                    for (int c = 1; c < 16; c++) {
+                        colors += pltt[slot * 16 + c] != 0;
+                    }
+                    used[slot] = colors == 0 ? '.' : 'x';
+                }
+                used[16] = 0;
+                printf("[test] OBJ palettes (%s): %s\n", screen == 0 ? "main" : "sub", used);
+            }
             Next();
             continue;
         case OP_USE: {

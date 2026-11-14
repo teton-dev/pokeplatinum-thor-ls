@@ -1,5 +1,9 @@
 #include "applications/party_menu/sprites.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_gray.h"
+#endif
+
 #include <nitro/gx/gx_load.h>
 #include <nnsys/g2d/g2d_Image.h>
 
@@ -70,6 +74,21 @@ void PartyMenu_InitSpriteResources(PartyMenuApplication *application)
 
 #define SPECIES_ICON_PLTT_SLOT 3
 
+#ifdef SDK_PORT
+// Nuzlocke mode: a dead Pokémon's icon in gray (the gray copies of the icon palettes are made at the first one)
+static int PortIconPalette(PartyMenuApplication *application, Pokemon *mon, int palette)
+{
+    if (!NuzlockeGray_IsDead(mon)) {
+        return palette;
+    }
+    if (application->portGraySlot == 0) {
+        const int slot = NuzlockeGray_IconPalettes(FALSE, SPECIES_ICON_PLTT_SLOT);
+        application->portGraySlot = slot >= 0 ? slot + 1 : -1;
+    }
+    return application->portGraySlot > 0 ? palette - SPECIES_ICON_PLTT_SLOT + application->portGraySlot - 1 : palette;
+}
+#endif
+
 void PartyMenu_DrawMemberSpeciesIcon(PartyMenuApplication *application, u8 slot, u16 x, u16 y, NARC *narc)
 {
 #define partyMenuMember application->partyMembers[slot]
@@ -96,6 +115,9 @@ void PartyMenu_DrawMemberSpeciesIcon(PartyMenuApplication *application, u8 slot,
     template.animIdx = 0;
     template.priority = 0;
     template.plttIdx = PokeIconPaletteIndex(partyMenuMember.species, partyMenuMember.form, isEgg) + SPECIES_ICON_PLTT_SLOT;
+#ifdef SDK_PORT
+    template.plttIdx = PortIconPalette(application, mon, template.plttIdx);
+#endif
     template.vramType = NNS_G2D_VRAM_TYPE_2DMAIN;
     template.dummy18 = 0;
     template.dummy1C = 0;
@@ -123,7 +145,11 @@ void PartyMenu_LoadMemberSpeciesIcon(PartyMenuApplication *application, u8 slot)
     }
 
     Heap_Free(ncgr);
+#ifdef SDK_PORT
+    Sprite_SetExplicitPalette2(application->partyMembers[slot].sprite, PortIconPalette(application, mon, PokeIconPaletteIndex(species, form, FALSE) + SPECIES_ICON_PLTT_SLOT));
+#else
     Sprite_SetExplicitPalette2(application->partyMembers[slot].sprite, PokeIconPaletteIndex(species, form, FALSE) + SPECIES_ICON_PLTT_SLOT);
+#endif
     NARC_dtor(iconNarc);
 }
 

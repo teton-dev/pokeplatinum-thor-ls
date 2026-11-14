@@ -50,6 +50,7 @@
 #include "charcode_convert.h"
 #include "port/gen5_data.h"
 #include "port/gen5_rom.h"
+#include "port/nuzlocke_gray.h"
 #include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #include "port/test_script.h"
@@ -298,6 +299,7 @@ void Gen5_PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest)
     dest->otGender = Pokemon_GetValue(mon, MON_DATA_OT_GENDER, NULL);
     dest->isEgg = Pokemon_GetValue(mon, MON_DATA_IS_EGG, NULL);
     dest->hasNickname = Pokemon_GetValue(mon, MON_DATA_HAS_NICKNAME, NULL);
+    dest->dead = NuzlockeGray_IsDead(mon);
     Pokemon_GetValue(mon, MON_DATA_NICKNAME, name);
     Gen5_TextToGen5(name, MON_NAME_LEN + 1, dest->nickname, GEN5_NAME_LENGTH);
     Pokemon_GetValue(mon, MON_DATA_OT_NAME, otName);

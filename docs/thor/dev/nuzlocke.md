@@ -282,6 +282,32 @@ which `gen5/src/runtime.c` keeps for the patches (declared in `gen5/include/gen5
 - **Note**: tests share `build_linux` with any other session working in this checkout; a rebuild during a run kills
   it (exit code 135, SIGBUS), which looks like a crash in the game.
 
+## Dead Pokémon in gray (2026-11-14)
+
+The owner: dead Pokémon are grayed out on Platinum's screens and BW2's. A Pokémon is drawn gray while it is dead and
+the save is a Nuzlocke run (`NuzlockeGray_IsDead`, `src/port/nuzlocke_gray.c`; a dropped run's flags don't count).
+Pokémon icons share three palettes per screen, so each screen gets gray copies (`NuzlockeGray_Colors`: luminance, a
+little darker and flatter) in slots it doesn't use:
+- **Party menu** (`party_menu/sprites.c`): gray copies of its icon palettes in three slots the palette manager has free
+  (`PlttTransfer_PortReserveFreeSlots`, new), made at the first dead icon.
+- **PC boxes** (`pc_boxes/ov19_021DA270.c`): one free slot (5) only, so a ramp of 15 grays there, and a dead
+  Pokémon's icon tiles remapped to it by brightness as they're loaded (its three loaders; a `portDead` flag in the
+  icon's struct, from its padding). The big picture (`ov19_021DA92C.c`) is a `PokemonSprite`.
+- **`PokemonSprite`** (`pokemon_sprite.c`): `PokemonSprite_PortSetGray` makes its palette gray as it's loaded (the
+  unfaded copy too, so fades go from gray): the summary's picture (`3d_anim.c`) and the PC's.
+- **Summary**'s icon (moves page, `sprites.c`): gray copies of its icon palettes from the palette manager.
+- **Platinum's battles**' POKéMON list (`battle_party_sprites.c`): the icon palettes loaded a second time as a sprite
+  resource and made gray in the battle's palette buffers (which it copies to the screen); the list's palette
+  resources go from 6 to 7.
+- **BW2's battles**' POKéMON list: `Gen5Pokemon.dead` from the bridge; `b_plist_obj.c`'s new patch makes gray copies
+  of the icon palettes at sub OBJ slots 10 to 12 (free there: `objpal` shows 0 to 9 used) before the list's fade
+  buffer copies the palettes, and gives a dead Pokémon's icon those (`Gen5_PortIsDead`, `Gen5_PortGrayIconPalettes`).
+- **Test**: `nuzlocke_gray.txt` (from `nuz-normal`, a dead Bidoof): the shots of each screen above show it gray and
+  the others in color. The new test command `objpal` logs which OBJ palette slots hold colors (to find free ones).
+- **Not done**: other screens with Pokémon icons (the Daycare, trades, the Pokétch, Hall of Fame, the PC's held
+  Pokémon under the hand was not looked at apart from the box), the battle's party balls (a fainted Pokémon's is
+  already its own), BW2's summary pages from its list.
+
 ## Decisions
 
 With the owner (2026-11-13):
