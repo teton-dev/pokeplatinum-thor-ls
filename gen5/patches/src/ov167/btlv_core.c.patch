@@ -43,3 +43,30 @@
      if (TrainerMsg_CheckExists(trainerId, msgId, core->heapId)) {
          TrainerMsg_Load(trainerId, msgId, core->strbuf, core->heapId);
          BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
+@@ -1451,6 +1472,26 @@
+     return BtlvScu_WaitAbilityWinChange(core->scu, pos);
+ }
+ 
++// The port: the weather's bar (btl_client.c's patch, btlv_scu.c's patch)
++void BtlvScu_PortShowWeatherWin(BtlvScu *scu, BOOL player, u8 weather, u8 turns);
++BOOL BtlvScu_PortWaitShowWeatherWin(BtlvScu *scu, BOOL player);
++BOOL BtlvScu_PortHideWeatherWin(BtlvScu *scu, BOOL player);
++void BtlvCore_PortShowWeatherWin(BtlvCore *core, BOOL player, u8 weather, u8 turns);
++BOOL BtlvCore_PortWaitShowWeatherWin(BtlvCore *core, BOOL player);
++BOOL BtlvCore_PortHideWeatherWin(BtlvCore *core, BOOL player);
++
++void BtlvCore_PortShowWeatherWin(BtlvCore *core, BOOL player, u8 weather, u8 turns) {
++    BtlvScu_PortShowWeatherWin(core->scu, player, weather, turns);
++}
++
++BOOL BtlvCore_PortWaitShowWeatherWin(BtlvCore *core, BOOL player) {
++    return BtlvScu_PortWaitShowWeatherWin(core->scu, player);
++}
++
++BOOL BtlvCore_PortHideWeatherWin(BtlvCore *core, BOOL player) {
++    return BtlvScu_PortHideWeatherWin(core->scu, player);
++}
++
+ void BtlvCore_StartRankDownEffect(BtlvCore *core, u32 pos) {
+     BtlvEffect_StartPos(pos, 0x262);
+ }

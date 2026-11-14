@@ -1,15 +1,101 @@
 --- a/src/ov167/btl_client.c
 +++ b/src/ov167/btl_client.c
-@@ -6219,6 +6219,8 @@
-     }
+@@ -677,6 +677,8 @@
+ static BOOL BattleClient_ScStatUpEffect(BtlClient *client, s32 *seq, const u32 *args);
+ static BOOL BattleClient_ScWeatherStart(BtlClient *client, s32 *seq, const u32 *args);
+ static BOOL BattleClient_ScWeatherEnd(BtlClient *client, s32 *seq, const u32 *args);
++static BOOL BattleClient_ScWeatherTurn(BtlClient *client, s32 *seq, const u32 *args);
++void BtlvEffect_PortWeatherAmbient(u32 weather); // The port: the weather's particles (btlv_effect.c's patch)
+ static BOOL BattleClient_ScUpdateHpGauge(BtlClient *client, s32 *seq, const u32 *args);
+ static BOOL BattleClient_ScUseHeldItem(BtlClient *client, s32 *seq, const u32 *args);
+ static BOOL BattleClient_ScFaintHpGauge(BtlClient *client, s32 *seq, const u32 *args);
+@@ -4956,6 +4958,7 @@
+     { SC_DAMAGE_EFFECT, BattleClient_ScDamageEffect },
+     { SC_PLAY_BGM, BattleClient_ScPlayBgm },
+     { SC_HIDE_MSG_WINDOW, BattleClient_ScHideMsgWindow },
++    { SC_WEATHER_TURN, BattleClient_ScWeatherTurn },
+ };
+ 
+ // The message and sound effect of each weather's start
+@@ -5554,6 +5557,7 @@
+         if (BattleClient_IsChapterSkipping(client)) {
+             return TRUE;
+         }
++        BtlvEffect_PortWeatherAmbient(weather); // The port: the weather stays on the arena
+         if (weather < NELEMS(sWeatherStartTable)) {
+             BtlvEffect_Start(sWeatherStartTable[weather].se);
+         }
+@@ -5579,6 +5583,8 @@
+     case 0: {
+         u16 msg;
+ 
++        BtlvEffect_PortWeatherAmbient(0); // The port: the weather's particles go
++
+         switch ((u8)args[0]) {
+         case 1:
+             msg = 0x59;
+@@ -5609,6 +5615,51 @@
      return FALSE;
  }
-+
-+void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core); // The port (btlv_core.c's patch)
  
++// The port: the weather at a turn's end, in an ability bar of the side that set it: its name and the turns left, in the
++// weather's colors (btlv_scu.c's patch). args: the setter's Pokemon (0xff for none), the weather, the turns left (0xff
++// for no end)
++void BtlvCore_PortShowWeatherWin(BtlvCore *core, BOOL player, u8 weather, u8 turns);
++BOOL BtlvCore_PortWaitShowWeatherWin(BtlvCore *core, BOOL player);
++BOOL BtlvCore_PortHideWeatherWin(BtlvCore *core, BOOL player);
++
++static BOOL BattleClient_ScWeatherTurn(BtlClient *client, s32 *seq, const u32 *args) {
++    static u16 sWait;
++    BOOL player = FALSE;
++
++    if (args[0] != 0xff) {
++        player = IsPlayerSide(client->mainModule, GetClientSide(client->mainModule, GetClientIDFromMonID(args[0])));
++    }
++    switch (*seq) {
++    case 0:
++        if (BattleClient_IsChapterSkipping(client)) {
++            return TRUE;
++        }
++        BtlvCore_PortShowWeatherWin(client->viewCore, player, args[1], args[2]);
++        (*seq)++;
++        break;
++    case 1:
++        if (BtlvCore_PortWaitShowWeatherWin(client->viewCore, player)) {
++            sWait = 40;
++            (*seq)++;
++        }
++        break;
++    case 2:
++        if (sWait != 0) {
++            sWait--;
++        } else {
++            (*seq)++;
++        }
++        break;
++    case 3:
++        // The bar goes, and its palette comes back
++        if (BtlvCore_PortHideWeatherWin(client->viewCore, player)) {
++            return TRUE;
++        }
++        break;
++    }
++    return FALSE;
++}
++
+ static BOOL BattleClient_ScUpdateHpGauge(BtlClient *client, s32 *seq, const u32 *args) {
+     switch (*seq) {
+     case 0:
+@@ -6220,6 +6271,8 @@
+     return FALSE;
+ }
+ 
++void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core); // The port (btlv_core.c's patch)
++
  static BOOL BattleClient_ScBallThrowTrainer(BtlClient *client, s32 *seq, const u32 *args) {
      switch (*seq) {
-@@ -6228,8 +6230,14 @@
+     case 0:
+@@ -6228,8 +6281,14 @@
          break;
      case 1:
          if (!BtlvEffect_IsBusy()) {

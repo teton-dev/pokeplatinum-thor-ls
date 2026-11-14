@@ -53,3 +53,160 @@
      pos->y = FX_Mul(FX_Div(pos->y, w), FX32_CONST(3));
      pos->z = -pos->z;
  }
+@@ -4550,4 +4554,156 @@
+         }
+     }
+     return FALSE;
++}
++
++// The port: a weather that stays on the arena. A second script machine of its own runs a script the port writes (the
++// move's emitters, again every few frames), so that the weather's particles go on between the moves and the turns,
++// and the moves' own machine and its End don't stop them.
++static VM *sPortAmbientVm;
++static u8 *sPortAmbientScript;
++
++typedef struct {
++    u8 *p;
++} PortScriptWriter;
++
++static void PortScript_Command(PortScriptWriter *w, u16 id) {
++    *w->p++ = id & 0xff;
++    *w->p++ = id >> 8;
++}
++
++static void PortScript_Arg(PortScriptWriter *w, u32 value) {
++    *w->p++ = value & 0xff;
++    *w->p++ = (value >> 8) & 0xff;
++    *w->p++ = (value >> 16) & 0xff;
++    *w->p++ = value >> 24;
++}
++
++// EmitterAddAt of a resource's emitter at a place, in the move scripts' 13 arguments
++static void PortScript_EmitterAt(PortScriptWriter *w, u32 particle, u32 emitter, s32 x, s32 y, s32 z) {
++    PortScript_Command(w, 8);
++    PortScript_Arg(w, particle);
++    PortScript_Arg(w, emitter);
++    PortScript_Arg(w, x);
++    PortScript_Arg(w, y);
++    PortScript_Arg(w, z);
++    PortScript_Arg(w, 0);
++    PortScript_Arg(w, 0);
++    PortScript_Arg(w, 0);
++    PortScript_Arg(w, 0);
++    PortScript_Arg(w, 0);
++    PortScript_Arg(w, 0);
++    PortScript_Arg(w, 0x1000);
++    PortScript_Arg(w, 0x1000);
++    PortScript_Arg(w, 0x1000);
++    PortScript_Arg(w, 0x1000);
++}
++
++static void PortScript_WaitFrames(PortScriptWriter *w, u32 frames) {
++    PortScript_Command(w, 57);
++    PortScript_Arg(w, frames);
++}
++
++void BtlvEffvm_PortAmbientStop(void) {
++    if (sPortAmbientVm != NULL) {
++        BtlvEffvm *wk = VM_GetEnv(sPortAmbientVm);
++        int i;
++
++        VM_Halt(sPortAmbientVm);
++        for (i = 0; i < EFFVM_PARTICLE_CAPACITY; i++) {
++            if (wk->particles[i] != NULL) {
++                BtlvEffvm_DeleteParticle(wk->particles[i]);
++                wk->particles[i] = NULL;
++            }
++            wk->particleIds[i] = -1;
++        }
++        for (i = 0; i < wk->allocCount; i++) {
++            GFL_HeapFree(wk->allocs[i]);
++        }
++        wk->allocCount = 0;
++        wk->particleLoading = FALSE;
++    }
++    if (sPortAmbientScript != NULL) {
++        GFL_HeapFree(sPortAmbientScript);
++        sPortAmbientScript = NULL;
++    }
+ }
++
++void BtlvEffvm_PortAmbientDelete(void) {
++    BtlvEffvm_PortAmbientStop();
++    if (sPortAmbientVm != NULL) {
++        BtlvEffvm *wk = VM_GetEnv(sPortAmbientVm);
++
++        GFL_HeapFree(wk);
++        VM_Free(sPortAmbientVm);
++        sPortAmbientVm = NULL;
++    }
++}
++
++// Starts a weather's particles (BTL_WEATHER_*) for good, in place of the one that was
++void BtlvEffvm_PortAmbientStart(TCBManager *tcbManager, HeapID heapId, u32 weather) {
++    PortScriptWriter w;
++    u8 *loop;
++    u32 particle;
++
++    BtlvEffvm_PortAmbientStop();
++    if (weather < BTL_WEATHER_SUN || weather > BTL_WEATHER_SANDSTORM) {
++        return;
++    }
++    if (sPortAmbientVm == NULL) {
++        sPortAmbientVm = BtlvEffvm_Create(tcbManager, heapId);
++    }
++    sPortAmbientScript = GFL_HeapAllocate(heapId, 0x400, TRUE, "btlv_effvm.c", 0);
++    w.p = sPortAmbientScript;
++    switch (weather) {
++    case BTL_WEATHER_RAIN:
++        particle = 411;
++        break;
++    case BTL_WEATHER_SUN:
++        particle = 412;
++        break;
++    case BTL_WEATHER_HAIL:
++        particle = 428;
++        break;
++    default:
++        particle = 371;
++        break;
++    }
++    PortScript_Command(&w, 6); // ParticleLoad
++    PortScript_Arg(&w, particle);
++    loop = w.p;
++    switch (weather) {
++    case BTL_WEATHER_RAIN:
++        PortScript_EmitterAt(&w, particle, 0, -0x3000, 0x2000, 0);
++        PortScript_EmitterAt(&w, particle, 0, 0x3000, 0x2000, 0);
++        PortScript_WaitFrames(&w, 30);
++        break;
++    case BTL_WEATHER_SUN:
++        PortScript_EmitterAt(&w, particle, 0, -0x1000, 0x3000, 0);
++        PortScript_EmitterAt(&w, particle, 1, -0x1000, 0x3000, 0);
++        PortScript_EmitterAt(&w, particle, 2, -0x1000, 0x3000, 0);
++        PortScript_WaitFrames(&w, 60);
++        break;
++    case BTL_WEATHER_HAIL:
++        PortScript_EmitterAt(&w, particle, 0, 0, 0x5000, 0x6000);
++        PortScript_EmitterAt(&w, particle, 2, 0, 0x6000, 0x3000);
++        PortScript_WaitFrames(&w, 20);
++        PortScript_EmitterAt(&w, particle, 1, 0, 0x6000, 0x3000);
++        PortScript_WaitFrames(&w, 40);
++        break;
++    default:
++        PortScript_EmitterAt(&w, particle, 0, 0, 0x1000, 0);
++        PortScript_EmitterAt(&w, particle, 1, 0, 0x1000, 0);
++        PortScript_EmitterAt(&w, particle, 2, 0, 0x1000, 0);
++        PortScript_WaitFrames(&w, 45);
++        break;
++    }
++    PortScript_Command(&w, 72); // Jump back to the emitters
++    PortScript_Arg(&w, (u32)(loop - (w.p + 4)));
++    VM_LoadScript(sPortAmbientVm, sPortAmbientScript);
++}
++
++void BtlvEffvm_PortAmbientMain(void) {
++    if (sPortAmbientVm != NULL && sPortAmbientScript != NULL) {
++        VM_Run(sPortAmbientVm);
++    }
++}
