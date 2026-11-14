@@ -7,6 +7,8 @@
 #include "types.h"
 
 #include "constants/trainer_classes.h"
+#include "constants/version.h"
+#include "gen5.h"
 
 static const u16 sClasses[] = {
     [0] = TRAINER_CLASS_HERO, // PLAYER_MALE (nearest)
@@ -116,9 +118,152 @@ static const u16 sClasses[] = {
     [104] = TRAINER_CLASS_HEROINE, // DP_PLAYER_FEMALE_2 (nearest)
 };
 
-// BW2's class for Platinum's, or a Youngster's for one out of range
+
+// HeartGold and SoulSilver's classes (Gen5_SetGame), the same way. BW2 has Johto's and Kanto's Gym Leaders, Giovanni,
+// Blue, Lance and Red from its Pokémon World Tournament; for the classes it has nothing near (Team Rocket, Silver, the
+// Elite Four, Kimono Girls, Sages...), the game's bridge draws HGSS's own sprite over the class given here
+// (Gen5Trainer.hasArt), so those are only what shows if that fails
+static const u16 sHgssClasses[] = {
+    [0] = TRAINER_CLASS_HERO, // PKMN_TRAINER_ETHAN (HGSS's art)
+    [1] = TRAINER_CLASS_HEROINE, // PKMN_TRAINER_LYRA (HGSS's art)
+    [2] = TRAINER_CLASS_YOUNGSTER, // YOUNGSTER
+    [3] = TRAINER_CLASS_LASS, // LASS
+    [4] = TRAINER_CLASS_BACKPACKER_M, // CAMPER (HGSS's art)
+    [5] = TRAINER_CLASS_BACKPACKER_F, // PICNICKER (HGSS's art)
+    [6] = TRAINER_CLASS_YOUNGSTER, // BUG_CATCHER (HGSS's art)
+    [7] = TRAINER_CLASS_PARASOL_LADY, // AROMA_LADY (HGSS's art)
+    [8] = TRAINER_CLASS_TWINS, // TWINS
+    [9] = TRAINER_CLASS_HIKER, // HIKER
+    [10] = TRAINER_CLASS_BATTLE_GIRL, // BATTLE_GIRL
+    [11] = TRAINER_CLASS_FISHERMAN, // FISHERMAN
+    [12] = TRAINER_CLASS_CYCLIST_M, // CYCLIST_M
+    [13] = TRAINER_CLASS_CYCLIST_F, // CYCLIST_F
+    [14] = TRAINER_CLASS_BLACK_BELT, // BLACK_BELT
+    [15] = TRAINER_CLASS_ARTIST, // ARTIST
+    [16] = TRAINER_CLASS_PKMN_BREEDER_M, // PKMN_BREEDER_M
+    [17] = TRAINER_CLASS_PKMN_BREEDER_F, // PKMN_BREEDER_F
+    [18] = TRAINER_CLASS_PKMN_RANGER_F, // COWGIRL (HGSS's art)
+    [19] = TRAINER_CLASS_STRIKER, // JOGGER (HGSS's art)
+    [20] = TRAINER_CLASS_POKEFAN_M, // POKEFAN_M
+    [21] = TRAINER_CLASS_POKEFAN_F, // POKEFAN
+    [22] = TRAINER_CLASS_PRESCHOOLER_F, // POKE_KID (HGSS's art)
+    [23] = TRAINER_CLASS_PKMN_TRAINER_RIVAL, // RIVAL, Silver (HGSS's art)
+    [24] = TRAINER_CLASS_ACE_TRAINER_M, // ACE_TRAINER_M
+    [25] = TRAINER_CLASS_ACE_TRAINER_F, // ACE_TRAINER_F
+    [26] = TRAINER_CLASS_WAITRESS, // WAITRESS
+    [27] = TRAINER_CLASS_VETERAN_M, // VETERAN
+    [28] = TRAINER_CLASS_YOUNGSTER, // NINJA_BOY (HGSS's art)
+    [29] = TRAINER_CLASS_ROUGHNECK, // DRAGON_TAMER (HGSS's art)
+    [30] = TRAINER_CLASS_PILOT, // BIRD_KEEPER (HGSS's art)
+    [31] = TRAINER_CLASS_HARLEQUIN_32, // JUGGLER (HGSS's art)
+    [32] = TRAINER_CLASS_RICH_BOY, // RICH_BOY
+    [33] = TRAINER_CLASS_LADY, // LADY
+    [34] = TRAINER_CLASS_GENTLEMAN, // GENTLEMAN
+    [35] = TRAINER_CLASS_SOCIALITE, // SOCIALITE
+    [36] = TRAINER_CLASS_BEAUTY, // BEAUTY
+    [37] = TRAINER_CLASS_POKEFAN_M, // COLLECTOR (HGSS's art)
+    [38] = TRAINER_CLASS_POLICEMAN, // POLICEMAN
+    [39] = TRAINER_CLASS_PKMN_RANGER_M, // PKMN_RANGER_M
+    [40] = TRAINER_CLASS_PKMN_RANGER_F, // PKMN_RANGER_F
+    [41] = TRAINER_CLASS_SCIENTIST_M_52, // SCIENTIST
+    [42] = TRAINER_CLASS_SWIMMER_M, // SWIMMER_M
+    [43] = TRAINER_CLASS_SWIMMER_F, // SWIMMER_F
+    [44] = TRAINER_CLASS_PRESCHOOLER_M, // TUBER_M (HGSS's art)
+    [45] = TRAINER_CLASS_PRESCHOOLER_F, // TUBER_F (HGSS's art)
+    [46] = TRAINER_CLASS_FISHERMAN, // SAILOR (HGSS's art)
+    [47] = TRAINER_CLASS_LADY, // KIMONO_GIRL (HGSS's art)
+    [48] = TRAINER_CLASS_HIKER, // RUIN_MANIAC (HGSS's art)
+    [49] = TRAINER_CLASS_PSYCHIC_M, // PSYCHIC_M
+    [50] = TRAINER_CLASS_PSYCHIC_F, // PSYCHIC_F
+    [51] = TRAINER_CLASS_GENTLEMAN, // PI (HGSS's art)
+    [52] = TRAINER_CLASS_GUITARIST, // GUITARIST
+    [53] = TRAINER_CLASS_ACE_TRAINER_M, // ACE_TRAINER_M_GS
+    [54] = TRAINER_CLASS_ACE_TRAINER_F, // ACE_TRAINER_F_GS
+    [55] = TRAINER_CLASS_TEAM_PLASMA_GRUNT_M, // TEAM_ROCKET (HGSS's art)
+    [56] = TRAINER_CLASS_ACE_TRAINER_F, // SKIER (HGSS's art)
+    [57] = TRAINER_CLASS_ROUGHNECK, // ROUGHNECK
+    [58] = TRAINER_CLASS_HARLEQUIN_32, // CLOWN (HGSS's art)
+    [59] = TRAINER_CLASS_WORKER_26, // WORKER
+    [60] = TRAINER_CLASS_SCHOOL_KID_M, // SCHOOL_KID_M
+    [61] = TRAINER_CLASS_SCHOOL_KID_F, // SCHOOL_KID_F
+    [62] = TRAINER_CLASS_TEAM_PLASMA_GRUNT_F, // TEAM_ROCKET_F (HGSS's art)
+    [63] = TRAINER_CLASS_ROUGHNECK, // BURGLAR (HGSS's art)
+    [64] = TRAINER_CLASS_ROUGHNECK, // FIREBREATHER (HGSS's art)
+    [65] = TRAINER_CLASS_BIKER, // BIKER
+    [66] = TRAINER_CLASS_FALKNER, // LEADER_FALKNER
+    [67] = TRAINER_CLASS_BUGSY, // LEADER_BUGSY
+    [68] = TRAINER_CLASS_SCIENTIST_M_52, // POKE_MANIAC (HGSS's art)
+    [69] = TRAINER_CLASS_PILOT, // BIRD_KEEPER_GS (HGSS's art)
+    [70] = TRAINER_CLASS_WHITNEY, // LEADER_WHITNEY
+    [71] = TRAINER_CLASS_HIKER, // RANCHER (HGSS's art)
+    [72] = TRAINER_CLASS_MORTY, // LEADER_MORTY
+    [73] = TRAINER_CLASS_PRYCE, // LEADER_PRYCE
+    [74] = TRAINER_CLASS_JASMINE, // LEADER_JASMINE
+    [75] = TRAINER_CLASS_CHUCK, // LEADER_CHUCK
+    [76] = TRAINER_CLASS_CLAIR, // LEADER_CLAIR
+    [77] = TRAINER_CLASS_LADY, // TEACHER (HGSS's art)
+    [78] = TRAINER_CLASS_SCIENTIST_M_52, // SUPER_NERD (HGSS's art)
+    [79] = TRAINER_CLASS_GENTLEMAN, // SAGE (HGSS's art)
+    [80] = TRAINER_CLASS_PARASOL_LADY, // PARASOL_LADY
+    [81] = TRAINER_CLASS_WAITER, // WAITER
+    [82] = TRAINER_CLASS_PSYCHIC_F, // MEDIUM (HGSS's art)
+    [83] = TRAINER_CLASS_WORKER_26, // CAMERAMAN (HGSS's art)
+    [84] = TRAINER_CLASS_GIRL_IN_SUIT_224, // REPORTER (HGSS's art)
+    [85] = TRAINER_CLASS_LADY, // IDOL (HGSS's art)
+    [86] = TRAINER_CLASS_LANCE, // CHAMPION (Lance)
+    [87] = TRAINER_CLASS_ELITE_FOUR_GRIMSLEY, // ELITE_FOUR_WILL (HGSS's art)
+    [88] = TRAINER_CLASS_ELITE_FOUR_SHAUNTAL, // ELITE_FOUR_KAREN (HGSS's art)
+    [89] = TRAINER_CLASS_ELITE_FOUR_MARSHAL, // ELITE_FOUR_KOGA (HGSS's art)
+    [90] = TRAINER_CLASS_ACE_TRAINER_F, // PKMN_TRAINER_CHERYL (HGSS's art)
+    [91] = TRAINER_CLASS_ACE_TRAINER_M, // PKMN_TRAINER_RILEY (HGSS's art)
+    [92] = TRAINER_CLASS_ACE_TRAINER_M, // PKMN_TRAINER_BUCK (HGSS's art)
+    [93] = TRAINER_CLASS_PRESCHOOLER_F, // PKMN_TRAINER_MIRA (HGSS's art)
+    [94] = TRAINER_CLASS_ACE_TRAINER_F, // PKMN_TRAINER_MARLEY (HGSS's art)
+    [95] = TRAINER_CLASS_HERO, // PKMN_TRAINER_FTR_LUCAS (HGSS's art)
+    [96] = TRAINER_CLASS_HEROINE, // PKMN_TRAINER_FTR_DAWN (HGSS's art)
+    [97] = TRAINER_CLASS_SUBWAY_BOSS_INGO, // TOWER_TYCOON (HGSS's art)
+    [98] = TRAINER_CLASS_BROCK, // LEADER_BROCK
+    [99] = TRAINER_CLASS_LADY, // HALL_MATRON (HGSS's art)
+    [100] = TRAINER_CLASS_SUBWAY_BOSS_EMMET, // FACTORY_HEAD (HGSS's art)
+    [101] = TRAINER_CLASS_HARLEQUIN_32, // ARCADE_STAR (HGSS's art)
+    [102] = TRAINER_CLASS_WAITER, // CASTLE_VALET (HGSS's art)
+    [103] = TRAINER_CLASS_MISTY, // LEADER_MISTY
+    [104] = TRAINER_CLASS_LT_SURGE, // LEADER_LT_SURGE
+    [105] = TRAINER_CLASS_ERIKA, // LEADER_ERIKA
+    [106] = TRAINER_CLASS_JANINE, // LEADER_JANINE
+    [107] = TRAINER_CLASS_SABRINA, // LEADER_SABRINA
+    [108] = TRAINER_CLASS_BLAINE, // LEADER_BLAINE
+    [109] = TRAINER_CLASS_RED, // PKMN_TRAINER_RED
+    [110] = TRAINER_CLASS_BLUE, // LEADER_BLUE
+    [111] = TRAINER_CLASS_GENTLEMAN, // ELDER (HGSS's art)
+    [112] = TRAINER_CLASS_ELITE_FOUR_MARSHAL, // ELITE_FOUR_BRUNO (HGSS's art)
+    [113] = TRAINER_CLASS_SCIENTIST_M_52, // SCIENTIST_GS (HGSS's art)
+    [114] = TRAINER_CLASS_TEAM_PLASMA_GRUNT_F, // EXECUTIVE_ARIANA (HGSS's art)
+    [115] = TRAINER_CLASS_ACE_TRAINER_M, // BOARDER (HGSS's art)
+    [116] = TRAINER_CLASS_TEAM_PLASMA_GRUNT_M, // EXECUTIVE_ARCHER (HGSS's art)
+    [117] = TRAINER_CLASS_TEAM_PLASMA_GRUNT_M, // EXECUTIVE_PROTON (HGSS's art)
+    [118] = TRAINER_CLASS_TEAM_PLASMA_GRUNT_M, // EXECUTIVE_PETREL (HGSS's art)
+    [119] = TRAINER_CLASS_GENTLEMAN, // PASSERBY (HGSS's art)
+    [120] = TRAINER_CLASS_GENTLEMAN, // MYSTERY_MAN, Eusine (HGSS's art)
+    [121] = TRAINER_CLASS_ACE_TRAINER_M, // DOUBLE_TEAM (HGSS's art)
+    [122] = TRAINER_CLASS_BACKERS_M, // YOUNG_COUPLE (HGSS's art)
+    [123] = TRAINER_CLASS_LANCE, // PKMN_TRAINER_LANCE
+    [124] = TRAINER_CLASS_GIOVANNI, // ROCKET_BOSS
+    [125] = TRAINER_CLASS_HERO, // PKMN_TRAINER_LUCAS_DP (HGSS's art)
+    [126] = TRAINER_CLASS_HEROINE, // PKMN_TRAINER_DAWN_DP (HGSS's art)
+    [127] = TRAINER_CLASS_HERO, // PKMN_TRAINER_LUCAS_PT (HGSS's art)
+    [128] = TRAINER_CLASS_HEROINE, // PKMN_TRAINER_DAWN_PT (HGSS's art)
+};
+
+// BW2's class for the game's (Gen5_SetGame), or a Youngster's for one out of range
 u32 Gen5_TrainerClass(u32 platinumClass)
 {
+    const int version = Gen5_GameVersion();
+    if (version == VERSION_HEARTGOLD || version == VERSION_SOULSILVER) {
+        // Ethan is HGSS's class 0, which the table can't tell from an empty slot
+        return platinumClass < NELEMS(sHgssClasses) && (sHgssClasses[platinumClass] != 0 || platinumClass == 0)
+            ? sHgssClasses[platinumClass] : TRAINER_CLASS_YOUNGSTER;
+    }
     if (platinumClass < NELEMS(sClasses) && sClasses[platinumClass] != 0) {
         return sClasses[platinumClass];
     }
@@ -127,7 +272,8 @@ u32 Gen5_TrainerClass(u32 platinumClass)
 
 // Platinum's trainer AI flags as BW2's. Each flag is one of the AI's scripts, run in bit order, and BW2's first eleven
 // are Platinum's (basic, attack evaluation, expert, setup, risky, extremes, Baton Pass, tag, HP check, weather,
-// harassment), reworked for Gen 5: a trainer keeps the AI level Platinum gave it. Platinum's flags for wild
+// harassment), reworked for Gen 5: a trainer keeps the AI level Platinum gave it. HeartGold and SoulSilver number
+// theirs the same way, so they share this table. Platinum's flags for wild
 // battles (roamers, the Safari Zone, the catching tutorial, bits 29 to 31) are BW2's 11 to 13. Renegade Platinum and
 // HeartGold/SoulSilver, which number their flags as Platinum does, get their own table here if theirs differ.
 static const u8 sPlatinumAIFlags[32] = {

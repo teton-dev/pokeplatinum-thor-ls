@@ -20,6 +20,12 @@
 #include "savedata_misc.h"
 #include "string_gf.h"
 
+#ifdef SDK_PORT
+#include <string.h>
+
+#include "port/nuzlocke_mode.h"
+#endif
+
 static void TrainerData_BuildParty(FieldBattleDTO *dto, int battler, enum HeapID heapID);
 
 void Trainer_Encounter(FieldBattleDTO *dto, const SaveData *saveData, enum HeapID heapID)
@@ -35,6 +41,12 @@ void Trainer_Encounter(FieldBattleDTO *dto, const SaveData *saveData, enum HeapI
 
         Trainer_Load(dto->trainerIDs[i], &trdata);
         dto->trainer[i] = trdata;
+#ifdef SDK_PORT
+        // Nuzlocke mode: trainers lose their bag items (their Pokemon keep held ones)
+        if (NuzlockeMode_On()) {
+            memset(dto->trainer[i].header.items, 0, sizeof(dto->trainer[i].header.items));
+        }
+#endif
 
         if (trdata.header.trainerType == TRAINER_CLASS_RIVAL) {
             CharCode_Copy(dto->trainer[i].name, rivalName);

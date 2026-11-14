@@ -571,6 +571,23 @@ int Gear_LevelCap(void)
     return boss != NULL ? boss->aceLevel : 0;
 }
 
+// The next gym boss's weakest Pokemon's level (Nuzlocke mode's Hard cap; not in gear_data.h, which
+// is port-common's)
+int Gear_LevelCapLow(void)
+{
+    const GearBoss *boss = Gear_Boss(Gear_NextGymBoss());
+    if (boss == NULL || boss->partyCount == 0) {
+        return 0;
+    }
+    int low = boss->party[0].level;
+    for (int i = 1; i < boss->partyCount; i++) {
+        if (boss->party[i].level < low) {
+            low = boss->party[i].level;
+        }
+    }
+    return low;
+}
+
 void Gear_GetTrainer(GearTrainer *out)
 {
     memset(out, 0, sizeof(*out));

@@ -4,15 +4,19 @@ The player's back sprites in Gen 5 battles (teton-dev/pokeplatinum-thor-ls)
 Files:
   gen5/art/sheets/trainer_dawn_fullspritesheet.png
   gen5/art/sheets/trainer_lucas_fullspritesheet.png
-  gen5/art/dawn_back.png, gen5/art/lucas_back.png (converted from the sheets by gen5/tools/player_back.py)
+  gen5/art/sheets/trainer_ethan_fullspritesheet.png
+  gen5/art/sheets/trainer_lyra_fullspritesheet.png
+  gen5/art/dawn_back.png, gen5/art/lucas_back.png, gen5/art/ethan_back.png, gen5/art/lyra_back.png (converted from
+  the sheets by gen5/tools/player_back.py)
 
 Credits:
   Dawn: PokemonBrendan
   Lucas: tebited15
+  Ethan, Lyra: the owner's sheets (artists to be credited here)
 
 This is original art, not taken from any game. It was commissioned by the owner of this fork, and it is included in
 this repository, and built into the app, with the owner's permission. It is not covered by the repository's MIT
 license or by the GPL of the Gen 5 battle code: ask the owner and the artists before using it anywhere else.
 
-The characters drawn, Lucas and Dawn, are Nintendo, Game Freak and Creatures' Pokémon characters. This project is
+The characters drawn, Lucas, Dawn, Ethan and Lyra, are Nintendo, Game Freak and Creatures' Pokémon characters. This project is
 not affiliated with or endorsed by them.

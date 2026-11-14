@@ -92,7 +92,9 @@ BOOL PortGame_Config_GetNuzlocke(PortNuzlockeConfig *out)
     if (config == NULL) {
         return FALSE;
     }
-    out->enabled = config->nuzlocke;
+    // Upstream's Nuzlocke helper is replaced by Nuzlocke mode (port/nuzlocke_mode.h, Settings > Gameplay): always
+    // off here, whatever an older config says, so its books and the Gear's display of them stay out of the way
+    out->enabled = FALSE;
     out->dupes = config->nuzlockeDupes;
     out->shiny = config->nuzlockeShiny;
     out->toPC = config->nuzlockeToPC;

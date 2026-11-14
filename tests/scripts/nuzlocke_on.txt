@@ -1,0 +1,19 @@
+# Nuzlocke mode, milestone 1: turning it on for a save (docs/thor/dev/nuzlocke.md). The log's "[test] nuzlocke:" and
+# "Nuzlocke mode:" lines are the check: Off, then Hard (crit guard refused), then Normal with crit guard, saved.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_on.txt --from turtwig --keep nuz-normal
+
+mash A until free
+nuzlocke state
+nuzlocke hard
+wait 2
+nuzlocke crit on
+wait 2
+nuzlocke state
+nuzlocke normal
+wait 2
+nuzlocke crit on
+wait 2
+nuzlocke state
+save
+exit 0

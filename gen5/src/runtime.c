@@ -24,6 +24,7 @@
 #include "gfl/ui.h"
 #include "gen5.h"
 #include "gen5/player_back.h"
+#include "pml/personal.h"
 #include "pml/poke_party.h"
 #include "pml/species_names.h"
 #include "save/bag.h"
@@ -70,6 +71,15 @@ static BtlSetup *sSetup;
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
+
+// Nuzlocke mode (Gen5Battle's levelCap, critGuard and catch refusals), for the port's patches (gen5/port.h)
+static struct {
+    int levelCap;
+    BOOL critGuard;
+    int refusedCount;
+    u32 refused[2]; // the personalities of the wild Pokemon a ball can't catch
+    unsigned short text[GEN5_PORT_TEXT_LENGTH];
+} sNuzlocke;
 
 void Gen5_MemInit(void)
 {
@@ -153,7 +163,7 @@ static PartyPkm *NewPkm(const Gen5Pokemon *src)
     // Before Gen 5 the nature is the PID's; Gen 5 keeps it in a field of its own
     PokeParty_SetParam(pkm, PKM_PARAM_NATURE, src->personality % 25);
     // Pokémon from Platinum: their ability slot comes from the PID's lowest bit, as for any Gen 4 Pokémon
-    PokeParty_SetParam(pkm, PKM_PARAM_ORIGIN_GAME, VERSION_PLATINUM);
+    PokeParty_SetParam(pkm, PKM_PARAM_ORIGIN_GAME, Gen5_GameVersion());
     for (int i = 0; i < 4; i++) {
         PokeParty_SetParam(pkm, PKM_PARAM_MOVE1 + i, src->moves[i]);
         PokeParty_SetParam(pkm, PKM_PARAM_MOVE1_PP_UP + i, src->ppUps[i]);
@@ -262,7 +272,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     copyTrainerName(info, battle->player.name);
     setIDAsUInt(info, battle->player.id);
     setTrainerGender(info, battle->player.gender);
-    PlayerInfo_SetVersion(info, VERSION_PLATINUM);
+    PlayerInfo_SetVersion(info, Gen5_GameVersion());
     // The money a loss takes is checked against what the player has (CalcLossMoney)
     getTrainerGameInfoAddress(SaveControl_GetInstance())->cash = battle->player.money;
     Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
@@ -285,6 +295,21 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, GameRecords_GetSize(), TRUE, __FILE__, __LINE__));
     PokeParty *party = NewParty(battle->party, battle->partyCount);
     Gen5_SetBattleGameData(party, info, config, bag, bagCursor, pokedex, records);
+
+    memset(&sNuzlocke, 0, sizeof(sNuzlocke));
+    sNuzlocke.levelCap = battle->levelCap;
+    sNuzlocke.critGuard = battle->critGuard != 0;
+    if (!battle->isTrainer && battle->wildCatchRefused) {
+        sNuzlocke.refused[sNuzlocke.refusedCount++] = battle->wild.personality;
+    }
+    if (!battle->isTrainer && battle->hasWild2 && battle->wild2CatchRefused) {
+        sNuzlocke.refused[sNuzlocke.refusedCount++] = battle->wild2.personality;
+    }
+    memcpy(sNuzlocke.text, battle->catchRefusedText, sizeof(sNuzlocke.text));
+    if (sNuzlocke.levelCap != 0 || sNuzlocke.critGuard || sNuzlocke.refusedCount != 0) {
+        printf("Gen 5: level cap %d%s, %d wild Pokémon can't be caught\n", sNuzlocke.levelCap,
+            sNuzlocke.critGuard ? ", crit guard" : "", sNuzlocke.refusedCount);
+    }
 
     sSetup = Keep(BtlSetup_Create(HEAPID_PORT_BATTLE));
     BtlSetup_Reset(sSetup);
@@ -425,6 +450,32 @@ void Gen5_SetMoveBgShown(int shown)
 int Gen5_MoveBgShown(void)
 {
     return sMoveBgShown;
+}
+
+// The game playing: Gen 4's version number (BW2's for its Pokémon's origin game), Platinum's unless set
+static int sGameVersion = VERSION_PLATINUM;
+
+void Gen5_SetGame(int version)
+{
+    sGameVersion = version;
+}
+
+int Gen5_GameVersion(void)
+{
+    return sGameVersion;
+}
+
+static int sWhiteGauges = 0;
+
+void Gen5_SetWhiteGauges(int white)
+{
+    sWhiteGauges = white;
+}
+
+// patches/src/ov168/btlv_gauge.c.patch
+int Gen5Port_WhiteGauges(void)
+{
+    return sWhiteGauges;
 }
 
 static float sWideRatio = 1.0f;
@@ -569,7 +620,7 @@ int Gen5_SummaryBegin(const Gen5Summary *summary, const char *gen5Dir)
     copyTrainerName(info, summary->player.name);
     setIDAsUInt(info, summary->player.id);
     setTrainerGender(info, summary->player.gender);
-    PlayerInfo_SetVersion(info, VERSION_PLATINUM);
+    PlayerInfo_SetVersion(info, Gen5_GameVersion());
     Config *config = Keep(Config_Create(HEAPID_PORT_BATTLE));
     Config_SetTextSpeed(config, 1);
     Config_SetTextSpeed(&getTrainerDataBlkAddress(SaveControl_GetInstance())->config, 1);
@@ -626,4 +677,37 @@ enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary)
     default:
         return GEN5_SUMMARY_BACK;
     }
+}
+
+u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp)
+{
+    if (sNuzlocke.levelCap <= 0 || sNuzlocke.levelCap > 100 || exp == 0) {
+        return exp;
+    }
+    const u32 capExp = PML_UtilGetPkmLvExp(species, form, (u16)sNuzlocke.levelCap);
+    if (current >= capExp) {
+        return 0;
+    }
+    return exp < capExp - current ? exp : capExp - current;
+}
+
+BOOL Gen5_PortCritGuard(void)
+{
+    return sNuzlocke.critGuard;
+}
+
+BOOL Gen5_PortCatchRefused(u32 personality)
+{
+    for (int i = 0; i < sNuzlocke.refusedCount; i++) {
+        if (sNuzlocke.refused[i] == personality) {
+            printf("Gen 5: a ball knocked back (Nuzlocke mode)\n");
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void Gen5_PortCatchRefusedText(StrBuf *strbuf)
+{
+    GFL_StrBufLoadString(strbuf, sNuzlocke.text);
 }

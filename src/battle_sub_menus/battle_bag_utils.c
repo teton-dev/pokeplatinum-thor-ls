@@ -5,6 +5,18 @@
 #include "bag.h"
 #include "item.h"
 
+#ifdef SDK_PORT
+#include "constants/items.h"
+
+#include "port/nuzlocke_mode.h"
+
+// Nuzlocke mode: Poke Balls are the only items used in battle
+static s32 PortBattlePocketMask(u16 item, s32 mask)
+{
+    return NuzlockeMode_On() ? (mask & BATTLE_POCKET_MASK_POKE_BALLS) : mask;
+}
+#endif
+
 // Order is dictated by the bit shifts associated with each pocket. See items.h
 static const u8 sBattlePocketIndexes[] = {
     BATTLE_POCKET_INDEX_POKE_BALLS,
@@ -20,7 +32,11 @@ BOOL BattleBag_CanUseLastUsedItem(BattleBag *battleBag)
         return FALSE;
     }
 
-    if (Bag_CanRemoveItem(battleBag->context->bag, battleBag->context->lastUsedItem, 1, battleBag->context->heapID) == FALSE) {
+    if (Bag_CanRemoveItem(battleBag->context->bag, battleBag->context->lastUsedItem, 1, battleBag->context->heapID) == FALSE
+#ifdef SDK_PORT
+        || PortBattlePocketMask(battleBag->context->lastUsedItem, Item_LoadParam(battleBag->context->lastUsedItem, ITEM_PARAM_BATTLE_POCKET, battleBag->context->heapID)) == 0
+#endif
+    ) {
         battleBag->context->lastUsedItem = ITEM_NONE;
         battleBag->context->lastUsedItemPocket = ITEM_BATTLE_CATEGORY_RECOVER_HP;
         return FALSE;
@@ -54,6 +70,9 @@ void BattleBag_Init(BattleBag *battleBag)
 
             if (!(bagItem->item == ITEM_NONE || bagItem->quantity == 0)) {
                 s32 bagItemBattlePocketMask = Item_LoadParam(bagItem->item, ITEM_PARAM_BATTLE_POCKET, battleBag->context->heapID);
+#ifdef SDK_PORT
+                bagItemBattlePocketMask = PortBattlePocketMask(bagItem->item, bagItemBattlePocketMask);
+#endif
 
                 for (u32 l = 0; l < BATTLE_POCKET_MAX; l++) {
                     if ((bagItemBattlePocketMask & (1 << l)) == FALSE) {

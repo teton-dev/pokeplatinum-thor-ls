@@ -308,6 +308,9 @@ u8 BattleMessage_PrintTrainerMessage(BattleSystem *battleSys, int trainerID, int
  * @return
  */
 u8 BattleMessage_Print(BattleSystem *battleSys, MessageLoader *msgLoader, BattleMessage *battleMsg, int renderDelay);
+#ifdef SDK_PORT
+u8 BattleMessage_PortPrintAscii(BattleSystem *battleSys, const char *text, int renderDelay);
+#endif
 u8 BattleMessage_PrintToWindow(BattleSystem *battleSys, Window *window, MessageLoader *msgLoader, BattleMessage *battleMsg, int xOffset, int yOffset, int param6, int param7, int renderDelay);
 
 #endif // POKEPLATINUM_BATTLE_BATTLE_SYSTEM_H

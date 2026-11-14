@@ -57,6 +57,8 @@
 #ifdef SDK_PORT
 #include <stdio.h>
 
+#include "port/nuzlocke_mark.h"
+#include "port/nuzlocke_mode.h"
 #include "port/save_slots.h"
 #include "port/save_version.h"
 
@@ -92,6 +94,32 @@ FS_EXTERN_OVERLAY(overlay98);
 #define WIRELESS_ISONS_TILESET_SIZE   (WIRELESS_ICONS_TILESET_HEIGHT * WIRELESS_ICONS_TILESET_WIDTH)
 
 #define CONTINUE_WINDOW_MARGIN 32
+
+#ifdef SDK_PORT
+// Red copies of the unfocused (2) and focused (3) frame palettes, for a Nuzlocke save's CONTINUE
+#define NUZLOCKE_UNFOCUSED_FRAME_PLTT 5
+#define NUZLOCKE_FOCUSED_FRAME_PLTT   6
+
+// A color turned red: its strongest channel goes to red, the others to the weakest (greys stay grey)
+static GXRgb PortRedden(GXRgb color)
+{
+    int r = color & 0x1F, g = (color >> 5) & 0x1F, b = (color >> 10) & 0x1F;
+    int max = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    int min = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    if (max - min < 4) {
+        return color;
+    }
+    return GX_RGB(max, min, min);
+}
+
+static void PortLoadNuzlockeFramePalettes(void)
+{
+    for (int i = 0; i < 16; i++) {
+        *HW_BG_A_PLTT_COLOR(NUZLOCKE_UNFOCUSED_FRAME_PLTT, i) = PortRedden(*HW_BG_A_PLTT_COLOR(2, i));
+        *HW_BG_A_PLTT_COLOR(NUZLOCKE_FOCUSED_FRAME_PLTT, i) = PortRedden(*HW_BG_A_PLTT_COLOR(3, i));
+    }
+}
+#endif
 
 #define SCROLL_ARROWS_OFFSET 8
 
@@ -239,6 +267,7 @@ typedef struct MainMenuAppData {
 #ifdef SDK_PORT
     BOOL emptySlot; // this save slot has no game, but others do: show NEW GAME, not the intro
     int pendingSlotSwitch; // slot to load once the menu has faded out, or -1
+    int nuzlockeLevel; // the slot's game is a Nuzlocke run: the alpha mark, and a red frame
 #endif
 } MainMenuAppData;
 
@@ -650,6 +679,9 @@ static void InitMainMenuGraphics(MainMenuAppData *appData)
     LoadStandardWindowGraphics(appData->bgConfig, BG_LAYER_MAIN_0, FOCUSED_OPTION_FRAME_BASE_TILE, 3, STANDARD_WINDOW_FIELD, HEAP_ID_MAIN_MENU);
 
     *HW_BG_A_PLTT_COLOR(2, 1) = UNFOCUSED_OPTION_BG_COLOR;
+#ifdef SDK_PORT
+    PortLoadNuzlockeFramePalettes();
+#endif
 }
 
 static void LoadScrollArrowsSprites(MainMenuAppData *appData)
@@ -789,6 +821,14 @@ static BOOL RenderContinueOption(MainMenuAppData *appData, enum MainMenuOption o
         SetTemplateNumberCustomFormatting(strTemplate, Pokedex_CountSeen(appData->pokedex));
         PrintRightAlignedWithMargin(window->window, msgLoader, strTemplate, textColor, MainMenuOptions_Text_SeenSpeciesCount, TEXT_LINES(4));
     }
+
+#ifdef SDK_PORT
+    if (appData->nuzlockeLevel != NUZLOCKE_OFF) {
+        int line = appData->pokedexObtained ? 5 : 4;
+        u16 right = Window_GetWidth(window->window) * TILE_WIDTH_PIXELS - CONTINUE_WINDOW_MARGIN;
+        NuzlockeMark_PrintLine(window->window, appData->nuzlockeLevel, CONTINUE_WINDOW_MARGIN - NUZLOCKE_MARK_SIZE - 4, CONTINUE_WINDOW_MARGIN, right, TEXT_LINES(line), textColor);
+    }
+#endif
 
     Window_DrawStandardFrame(window->window, FALSE, window->frameBaseTile, window->framePltt);
 
@@ -1048,11 +1088,16 @@ static void RenderOptionsFrames(MainMenuAppData *appData, enum MainMenuOption fo
             continue;
         }
 
+#ifdef SDK_PORT
+        BOOL red = i == MAIN_MENU_OPTION_CONTINUE && appData->nuzlockeLevel != NUZLOCKE_OFF;
+#else
+        BOOL red = FALSE;
+#endif
         if (i == focusedOption) {
-            Window_DrawStandardFrame(&appData->optionWindows[i], TRUE, FOCUSED_OPTION_FRAME_BASE_TILE, 3);
+            Window_DrawStandardFrame(&appData->optionWindows[i], TRUE, FOCUSED_OPTION_FRAME_BASE_TILE, red ? NUZLOCKE_FOCUSED_FRAME_PLTT : 3);
             Bg_ChangeTilemapRectPalette(appData->bgConfig, BG_LAYER_MAIN_0, Window_GetXPos(&appData->optionWindows[i]), Window_GetYPos(&appData->optionWindows[i]), Window_GetWidth(&appData->optionWindows[i]), Window_GetHeight(&appData->optionWindows[i]), 0);
         } else {
-            Window_DrawStandardFrame(&appData->optionWindows[i], TRUE, UNFOCUSED_OPTION_FRAME_BASE_TILE, 2);
+            Window_DrawStandardFrame(&appData->optionWindows[i], TRUE, UNFOCUSED_OPTION_FRAME_BASE_TILE, red ? NUZLOCKE_UNFOCUSED_FRAME_PLTT : 2);
             Bg_ChangeTilemapRectPalette(appData->bgConfig, BG_LAYER_MAIN_0, Window_GetXPos(&appData->optionWindows[i]), Window_GetYPos(&appData->optionWindows[i]), Window_GetWidth(&appData->optionWindows[i]), Window_GetHeight(&appData->optionWindows[i]), 1);
         }
     }
@@ -1204,6 +1249,9 @@ static void DoColorCycleStep(MainMenuAppData *appData)
         appData->focusedBorderCycleIndex = 0;
     }
 
+#ifdef SDK_PORT
+    *HW_BG_A_PLTT_COLOR(NUZLOCKE_FOCUSED_FRAME_PLTT, 6) = PortRedden(sFocusedOptionBorderColors[appData->focusedBorderCycleIndex]);
+#endif
     *focusedOptionBorderColor = sFocusedOptionBorderColors[appData->focusedBorderCycleIndex++];
 }
 
@@ -1254,6 +1302,10 @@ static BOOL MainMenu_Init(ApplicationManager *appMan, int *unused)
         appData->isNewGame = FALSE;
         appData->emptySlot = TRUE;
     }
+
+    // A Nuzlocke run's CONTINUE has one more line (the mark) when its last one is taken
+    appData->nuzlockeLevel = appData->isNewGame || appData->emptySlot ? NUZLOCKE_OFF : NuzlockeMode_LevelOfSave(TrainerInfo_ID(appData->trainerInfo));
+    sOptions[MAIN_MENU_OPTION_CONTINUE].height = TEXT_LINES_TILES(appData->nuzlockeLevel != NUZLOCKE_OFF && appData->pokedexObtained ? 6 : 5);
 #endif
 
     Sound_ConfigureBGMChannelsAndReverb(SOUND_CHANNEL_CONFIG_DEFAULT);

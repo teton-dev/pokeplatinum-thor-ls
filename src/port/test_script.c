@@ -39,6 +39,7 @@
 #include "pokemon.h"
 #include "savedata/save_table.h"
 #include "pokedex.h"
+#include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #ifdef GEN5_BATTLES
 #include "port/gen5_battle.h"
@@ -78,6 +79,7 @@ enum TestOp {
     OP_HALL_OF_FAME,
     OP_GEN5_SETTING,
     OP_BATTLE_STYLE,
+    OP_NUZLOCKE,
     OP_WILD,
     OP_JUMP,
     OP_FLY,
@@ -87,6 +89,8 @@ enum TestOp {
     OP_ITEM,
     OP_GIVE,
     OP_LEAD,
+    OP_FAINT,
+    OP_DEX,
     OP_LEARN,
     OP_TEACH,
     OP_PARTY,
@@ -324,6 +328,15 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_LEAD;
         command->x = atoi(words[1]);
         return TRUE;
+    } else if (strcmp(words[0], "faint") == 0 && count >= 2) {
+        // faint SLOT: the party member in SLOT to 0 HP, as a battle's party update writes it
+        command->op = OP_FAINT;
+        command->x = atoi(words[1]);
+        return TRUE;
+    } else if (strcmp(words[0], "dex") == 0) {
+        // dex: the Pokedex, as Prof. Rowan gives it
+        command->op = OP_DEX;
+        return TRUE;
     } else if (strcmp(words[0], "learn") == 0 && count >= 2) {
         // learn MOVE: the lead's first move becomes MOVE (a move's number, 127 is Waterfall), with its PP full
         command->op = OP_LEARN;
@@ -406,9 +419,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
-    } else if (strcmp(words[0], "wild") == 0 && count >= 3) {
-        // A wild SPECIES at LEVEL, met as in tall grass (the field's own wild encounter), once the player is free
+    } else if ((strcmp(words[0], "wild") == 0 || strcmp(words[0], "static") == 0) && count >= 3) {
+        // wild SPECIES LEVEL: met as in tall grass (the field's own wild encounter), once the player is free;
+        // static SPECIES LEVEL: a scripted encounter, as a legendary's script starts it
         command->op = OP_WILD;
+        command->map = strcmp(words[0], "static") == 0;
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
         command->condition = COND_FREE;
@@ -430,6 +445,25 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_BATTLE_STYLE;
         command->frames = strcmp(words[1], "set") == 0;
         return strcmp(words[1], "set") == 0 || strcmp(words[1], "shift") == 0;
+    } else if (strcmp(words[0], "nuzlocke") == 0 && count >= 2) {
+        // nuzlocke simple|normal|hard|off, nuzlocke crit on|off: as Settings > Gameplay > Nuzlocke mode does (the
+        // warning taken as accepted); nuzlocke state: logs the save's mode. Once the player is free.
+        static const char *const kLevels[] = { "off", "simple", "normal", "hard" };
+        command->op = OP_NUZLOCKE;
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        for (int i = 0; i < NUZLOCKE_LEVEL_COUNT; i++) {
+            if (strcmp(words[1], kLevels[i]) == 0) {
+                command->x = i;
+                return TRUE;
+            }
+        }
+        if (strcmp(words[1], "crit") == 0 && count >= 3) {
+            command->x = strcmp(words[2], "on") == 0 ? 11 : 10;
+            return strcmp(words[2], "on") == 0 || strcmp(words[2], "off") == 0;
+        }
+        command->x = 20;
+        return strcmp(words[1], "state") == 0;
     } else if (strcmp(words[0], "gen5-import") == 0) {
         // Imports the Black 2 / White 2 ROM in POKEPLATINUM_GEN5_ROM, as the settings do, and waits for it
         command->op = OP_GEN5_IMPORT;
@@ -894,7 +928,8 @@ static u16 Step(void)
                 }
                 return 0;
             }
-            if (!GUI_CreateMon_StartWildEncounter(command->x, command->y)) {
+            if (!(command->map ? GUI_CreateMon_StartBattle(command->x, command->y, 0, 0)
+                               : GUI_CreateMon_StartWildEncounter(command->x, command->y))) {
                 Fail(command, "the wild encounter couldn't start");
                 return 0;
             }
@@ -942,6 +977,23 @@ static u16 Step(void)
             printf("[test] party slot %d to the front\n", command->x);
             Next();
             continue;
+        case OP_FAINT: {
+            Party *party = SaveData_GetParty(SaveData_Ptr());
+            if (command->x < 0 || command->x >= Party_GetCurrentCount(party)) {
+                Fail(command, "no Pokemon in that slot");
+                return 0;
+            }
+            u32 hp = 0;
+            Pokemon_SetValue(Party_GetPokemonBySlotIndex(party, command->x), MON_DATA_HP, &hp);
+            printf("[test] party slot %d fainted\n", command->x);
+            Next();
+            continue;
+        }
+        case OP_DEX:
+            Pokedex_ObtainPokedex(SaveData_GetPokedex(SaveData_Ptr()));
+            printf("[test] the Pokedex obtained\n");
+            Next();
+            continue;
         case OP_LEARN: {
             Pokemon *lead = Party_GetPokemonBySlotIndex(SaveData_GetParty(SaveData_Ptr()), 0);
             u32 move = command->x;
@@ -982,6 +1034,11 @@ static u16 Step(void)
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_HP, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_MAX_HP, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_HAS_NICKNAME, NULL));
+                printf("[test] party %d: IVs %u/%u/%u/%u/%u/%u EXP %u%s\n", i,
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_HP_IV, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_ATK_IV, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_DEF_IV, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_SPEED_IV, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_SPATK_IV, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_SPDEF_IV, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_EXPERIENCE, NULL), NuzlockeMode_IsDead(mon) ? ", dead (Nuzlocke)" : "");
             }
             Bag *bag = SaveData_GetBag(save);
             printf("[test] bag: %u Potions, %u Master Balls, %u Poke Balls\n", (unsigned)Bag_GetItemQuantity(bag, 17, HEAP_ID_APPLICATION),
@@ -1037,6 +1094,30 @@ static u16 Step(void)
             Options_SetBattleStyle(SaveData_GetOptions(SaveData_Ptr()),
                 command->frames ? OPTIONS_BATTLE_STYLE_SET : OPTIONS_BATTLE_STYLE_SHIFT);
             printf("[test] battle style %s\n", command->frames ? "set" : "shift");
+            Next();
+            continue;
+        case OP_NUZLOCKE:
+            if (!ConditionMet(command)) {
+                if (TimedOut(elapsed, command->timeout, sTest.commandStartMs)) {
+                    Fail(command, "the player was never free");
+                }
+                return 0;
+            }
+            // Requests are applied by NuzlockeMode_Update, at the end of this frame
+            if (command->x < NUZLOCKE_LEVEL_COUNT) {
+                NuzlockeMode_RequestLevel(command->x);
+            } else if (command->x < 20) {
+                NuzlockeMode_RequestCritGuard(command->x == 11);
+            } else {
+                u16 areaSpecies = 0;
+                const u16 location = PortGame_Field_LocationName();
+                const int area = NuzlockeMode_AreaState(location, &areaSpecies);
+                printf("[test] nuzlocke: %s%s%s%s; area %u %s %u\n", NuzlockeMode_LevelName(NuzlockeMode_Level()),
+                    NuzlockeMode_CritGuard() ? ", crit guard" : "", NuzlockeMode_WasDropped() ? ", dropped" : "",
+                    NuzlockeMode_BallsReceived() ? ", has had balls" : "", location,
+                    area == NUZLOCKE_AREA_CAUGHT ? "caught" : area == NUZLOCKE_AREA_MISSED ? "missed" : "open",
+                    areaSpecies);
+            }
             Next();
             continue;
         case OP_SHOT:

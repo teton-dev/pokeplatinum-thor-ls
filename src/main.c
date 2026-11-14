@@ -36,6 +36,7 @@
 #ifdef SDK_PORT
 #include "port/frame_rate.h"
 #include "port/gba_slot.h"
+#include "port/nuzlocke_mode.h"
 #include "port/following_hack.h"
 #include "port/rom_patches.h"
 #include "port/save_sync.h"
@@ -191,6 +192,7 @@ void NitroMain(void)
 #ifdef SDK_PORT
         FrameRate_Update();
         SaveSync_Update();
+        NuzlockeMode_Update();
 #endif
 
         if (CommSys_Update()) {

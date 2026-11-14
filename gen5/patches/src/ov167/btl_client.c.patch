@@ -1,0 +1,28 @@
+--- a/src/ov167/btl_client.c
++++ b/src/ov167/btl_client.c
+@@ -6219,6 +6219,8 @@
+     }
+     return FALSE;
+ }
++
++void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core); // The port (btlv_core.c's patch)
+ 
+ static BOOL BattleClient_ScBallThrowTrainer(BtlClient *client, s32 *seq, const u32 *args) {
+     switch (*seq) {
+@@ -6228,8 +6230,14 @@
+         break;
+     case 1:
+         if (!BtlvEffect_IsBusy()) {
+-            Btlv_StringParam_Setup(&client->strParam, BTLV_STR_STD, 0x43);
+-            BtlvCore_StartMsg(client->viewCore, &client->strParam);
++            // The port: in a wild battle, Nuzlocke mode's catch rule knocked the ball back (btl_server_flow_sub.c's
++            // patch): its own message
++            if (BtlSetup_GetBattleType(client->mainModule) == BTL_TYPE_WILD) {
++                BtlvCore_PortStartMsgCatchRefused(client->viewCore);
++            } else {
++                Btlv_StringParam_Setup(&client->strParam, BTLV_STR_STD, 0x43);
++                BtlvCore_StartMsg(client->viewCore, &client->strParam);
++            }
+             (*seq)++;
+         }
+         break;
