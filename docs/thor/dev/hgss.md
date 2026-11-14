@@ -228,5 +228,8 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   laid out as Dawn's (armless standing pose, arm pieces added). Ethan's poses have their near arms drawn in, so only
   the far arm is added to the throw, and BW2's "ball up" shows him standing, "ball higher" and "winding up" with his arm
   over his head. His sheet's backing is noisy (compression), snapped to one colour (`backing_tolerance`). Previewed with
-  `player_back.py preview`; not yet built or seen in a battle (needs `desktop.sh build` in the HGSS fork and
-  `gen5_wild.txt` / `gen5_rival.txt`).
+  `player_back.py preview`, and now seen in an actual battle too (2026-11-14, `gen5_player_back.txt` and
+  `gen5_player_back_girl.txt`, `tests/README.md`): Ethan's throw is clean. Lyra's has a to-do — her near arm (the
+  one added to Dawn's armless pose) shows a gap of bare skin colour between her sleeve's cuff and the glove during
+  the throw, where Ethan's drawn-in arm has none; `gen5/tools/player_back.py` or her sheet likely needs the glove
+  moved in (or the cuff extended) to close it.
