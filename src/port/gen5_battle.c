@@ -431,14 +431,16 @@ typedef struct ArtRect {
 static const u8 sArtObjWidth[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
 static const u8 sArtObjHeight[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
 
-static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
+// back: Platinum's back sprite of the class (a partner beside the player) rather than its front one
+static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest, BOOL back)
 {
-    const int base = trainerClass * 5; // TRAINER_CLASS_NUM_FILETYPES: tiles, palette, cells, animations, scan
-    const u32 tileSize = NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base);
+    const int narcIndex = back ? NARC_INDEX_POKETOOL__TRGRA__TRBGRA : NARC_INDEX_POKETOOL__TRGRA__TRFGRA;
+    const int base = (back ? SpriteSystem_TrainerClassBackSpriteIndex(trainerClass) : trainerClass) * 5; // TRAINER_CLASS_NUM_FILETYPES: tiles, palette, cells, animations, scan
+    const u32 tileSize = NARC_GetMemberSizeByIndexPair(narcIndex, base);
     const u8 *tiles = Heap_Alloc(HEAP_ID_APPLICATION, tileSize);
-    const u8 *palette = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1));
-    const u8 *cells = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2));
-    const u8 *anims = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 3));
+    const u8 *palette = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(narcIndex, base + 1));
+    const u8 *cells = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(narcIndex, base + 2));
+    const u8 *anims = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(narcIndex, base + 3));
     ArtRect *rects = Heap_Alloc(HEAP_ID_APPLICATION, sizeof(ArtRect) * ART_MAX_RECTS);
     u8 *pool = Heap_Alloc(HEAP_ID_APPLICATION, ART_POOL_SIZE);
     int poolUsed = 0;
@@ -447,10 +449,10 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
     int left = 0, top = 0, right = 0, bottom = 0;
     BOOL first = TRUE;
 
-    NARC_ReadWholeMemberByIndexPair((void *)tiles, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base);
-    NARC_ReadWholeMemberByIndexPair((void *)palette, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1);
-    NARC_ReadWholeMemberByIndexPair((void *)cells, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2);
-    NARC_ReadWholeMemberByIndexPair((void *)anims, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 3);
+    NARC_ReadWholeMemberByIndexPair((void *)tiles, narcIndex, base);
+    NARC_ReadWholeMemberByIndexPair((void *)palette, narcIndex, base + 1);
+    NARC_ReadWholeMemberByIndexPair((void *)cells, narcIndex, base + 2);
+    NARC_ReadWholeMemberByIndexPair((void *)anims, narcIndex, base + 3);
 
     // NCGR: "RGCN" header 16 bytes, "RAHC" section: tiles from 0x30. NCLR: colors from 0x28. NCER: "KBEC" body at 0x18:
     // cell count (u16), attributes (u16), the cells' offset (u32), mapping, the VRAM transfer table's offset (u32) from
@@ -533,29 +535,57 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
             }
             x = x >= 256 ? x - 512 : x;
             y = y >= 128 ? y - 256 : y;
-            const int w = sArtObjWidth[shape][size];
-            const int h = sArtObjHeight[shape][size];
+            const int ow = sArtObjWidth[shape][size];
+            const int oh = sArtObjHeight[shape][size];
             const int firstTile = (attr2 & 0x3FF) * 2;
-            if (dest->artQuadCount >= GEN5_ART_MAX_QUADS || rectCount >= ART_MAX_RECTS || poolUsed + w * h > ART_POOL_SIZE) {
+            if (dest->artQuadCount >= GEN5_ART_MAX_QUADS || rectCount >= ART_MAX_RECTS || poolUsed + ow * oh > ART_POOL_SIZE) {
+                printf("Gen 5: art class %d: out of quads (%d), rectangles (%d) or pool (%d)\n", trainerClass, dest->artQuadCount, rectCount, poolUsed);
                 ok = FALSE;
                 break;
             }
             ArtRect *rect = &rects[rectCount];
-            rect->width = w;
-            rect->height = h;
+            rect->width = ow;
+            rect->height = oh;
             rect->pixels = pool + poolUsed;
-            for (int py = 0; py < h; py++) {
-                for (int px = 0; px < w; px++) {
-                    const int tile = firstTile + (py / 8) * (w / 8) + px / 8;
+            for (int py = 0; py < oh; py++) {
+                for (int px = 0; px < ow; px++) {
+                    const int tile = firstTile + (py / 8) * (ow / 8) + px / 8;
                     const u32 offset = source + tile * 32 + (py % 8) * 4 + (px % 8) / 2;
                     u8 pixel = 0;
                     if (offset < dataSize) {
                         const u8 pair = tileData[offset];
                         pixel = (px & 1) ? pair >> 4 : pair & 15;
                     }
-                    rect->pixels[py * w + px] = pixel;
+                    rect->pixels[py * ow + px] = pixel;
                 }
             }
+            // Crop the transparent borders (the back sprites' poses wouldn't fit the texture otherwise); a piece with
+            // nothing in it is left out
+            int cropL = ow, cropR = -1, cropT = oh, cropB = -1;
+            for (int py = 0; py < oh; py++) {
+                for (int px = 0; px < ow; px++) {
+                    if (rect->pixels[py * ow + px] != 0) {
+                        cropL = px < cropL ? px : cropL;
+                        cropR = px > cropR ? px : cropR;
+                        cropT = py < cropT ? py : cropT;
+                        cropB = py > cropB ? py : cropB;
+                    }
+                }
+            }
+            if (cropR < 0) {
+                continue;
+            }
+            const int cw = cropR - cropL + 1;
+            const int ch = cropB - cropT + 1;
+            for (int py = 0; py < ch; py++) {
+                memmove(rect->pixels + py * cw, rect->pixels + (py + cropT) * ow + cropL, cw);
+            }
+            x += cropL;
+            y += cropT;
+            rect->width = cw;
+            rect->height = ch;
+            const int w = cw;
+            const int h = ch;
             int index = rectCount;
             for (int r = 0; r < rectCount; r++) {
                 if (rects[r].width == w && rects[r].height == h && memcmp(rects[r].pixels, rect->pixels, w * h) == 0) {
@@ -595,22 +625,34 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
         }
         order[j + 1] = v;
     }
-    int cursorX = 0, cursorY = 0, rowHeight = 0;
+    // A skyline: each rectangle (tallest first) goes where it sits lowest, leftmost; the small ones fill the gaps
+    int skyline[256];
+    for (int x = 0; x < 256; x++) {
+        skyline[x] = 0;
+    }
     for (int i = 0; ok && i < rectCount; i++) {
         ArtRect *rect = &rects[order[i]];
-        if (cursorX + rect->width > 256) {
-            cursorX = 0;
-            cursorY += rowHeight;
-            rowHeight = 0;
+        int bestX = -1, bestY = 128;
+        for (int x = 0; x + rect->width <= 256; x++) {
+            int top = 0;
+            for (int k = x; k < x + rect->width; k++) {
+                top = skyline[k] > top ? skyline[k] : top;
+            }
+            if (top + rect->height <= 128 && top < bestY) {
+                bestY = top;
+                bestX = x;
+            }
         }
-        if (cursorY + rect->height > 128) {
+        if (bestX < 0) {
+            printf("Gen 5: art class %d: the %d rectangles don't fit the texture (%d placed)\n", trainerClass, rectCount, i);
             ok = FALSE;
             break;
         }
-        rect->x = cursorX;
-        rect->y = cursorY;
-        cursorX += rect->width;
-        rowHeight = rect->height > rowHeight ? rect->height : rowHeight;
+        rect->x = bestX;
+        rect->y = bestY;
+        for (int k = bestX; k < bestX + rect->width; k++) {
+            skyline[k] = bestY + rect->height;
+        }
         for (int py = 0; py < rect->height; py++) {
             for (int px = 0; px < rect->width; px++) {
                 const int tx = rect->x + px;
@@ -658,6 +700,7 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
     dest->artWidth = width;
     dest->artHeight = height;
     dest->hasArt = ok && dest->artQuadCount > 0;
+    printf("Gen 5: Platinum's %s art of class %d (index %d): %s, %d cells, %d quads, %dx%d\n", back ? "back" : "front", trainerClass, base / 5, dest->hasArt ? "ok" : "FAILED", cellCount, dest->artQuadCount, width, height);
     Heap_Free((void *)tiles);
     Heap_Free((void *)palette);
     Heap_Free((void *)cells);
@@ -667,7 +710,14 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
 }
 
 // name and the line it says when beaten from Platinum's messages, and its class's prize (battle_script.c's table)
+static void TrainerToGen5Ex(FieldBattleDTO *dto, int battler, Gen5Trainer *dest, BOOL partner);
 static void TrainerToGen5(FieldBattleDTO *dto, int battler, Gen5Trainer *dest)
+{
+    TrainerToGen5Ex(dto, battler, dest, FALSE);
+}
+
+// partner: the art is Platinum's back sprite of the class, whatever the class (a placeholder for the Gen 5 style ones)
+static void TrainerToGen5Ex(FieldBattleDTO *dto, int battler, Gen5Trainer *dest, BOOL partner)
 {
     const Trainer *trainer = &dto->trainer[battler];
     const int id = dto->trainerIDs[battler];
@@ -676,7 +726,9 @@ static void TrainerToGen5(FieldBattleDTO *dto, int battler, Gen5Trainer *dest)
     dest->id = id;
     dest->platinumClass = trainer->header.trainerType;
     dest->aiFlags = trainer->header.aiMask;
-    if (TrainerClassHasPlatinumArt(dest->platinumClass)) {
+    if (partner) {
+        TrainerArtToGen5(dest->platinumClass, dest, TRUE);
+    } else if (TrainerClassHasPlatinumArt(dest->platinumClass)) {
         // Lucas and Dawn in their Platinum outfits: Platinum's data gives some of their trainers Diamond and Pearl's
         // classes, whose pictures are the old outfits (the owner's choice: Platinum's everywhere)
         int artClass = dest->platinumClass;
@@ -685,7 +737,7 @@ static void TrainerToGen5(FieldBattleDTO *dto, int battler, Gen5Trainer *dest)
         } else if (artClass == TRAINER_CLASS_DP_PLAYER_FEMALE || artClass == TRAINER_CLASS_DP_PLAYER_FEMALE_2) {
             artClass = TRAINER_CLASS_PLAYER_FEMALE;
         }
-        TrainerArtToGen5(artClass, dest);
+        TrainerArtToGen5(artClass, dest, FALSE);
     }
     for (int i = 0; i < MAX_TRAINER_ITEMS && i < 4; i++) {
         dest->items[i] = trainer->header.items[i];
@@ -969,7 +1021,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     // The partner (Cheryl, Riley, Buck, Marley, Mira, Barry), whom BW2's AI plays beside the player
     if ((dto->battleType & BATTLE_TYPE_AI) && dto->trainerIDs[BATTLER_PLAYER_2] != 0) {
         sBattle.hasPartner = TRUE;
-        TrainerToGen5(dto, BATTLER_PLAYER_2, &sBattle.partner);
+        TrainerToGen5Ex(dto, BATTLER_PLAYER_2, &sBattle.partner, TRUE);
     }
     // The pockets with what a battle can use. The DTO's bag goes back into the save after the battle
     const struct {
