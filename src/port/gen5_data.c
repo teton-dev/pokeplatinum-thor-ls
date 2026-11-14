@@ -291,6 +291,9 @@ static void EnsureMoveMap(void)
         return;
     }
     sMapBuilt = TRUE;
+    // Every move as itself first: the vanilla game's map (without it the table stayed zero, and Gen 5 battles got no
+    // moves and gave the Pokemon back none)
+    BuildMoveMap(NULL);
     sFairy = RomPatches_Info()->extraType;
     u32 size = 0;
     u8 *moves = ReadWhole("poketool/waza/pl_waza_tbl.narc", &size);

@@ -55,6 +55,8 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `nuzlocke_shiny.txt` | `nuz-normal` | a run-from Starly leaves the area to Starlys; a shiny Bidoof (`wild ... shiny`) is caught all the same and the area still reads "missed 396" | ~1 min |
 | `nuzlocke_items.txt` | `nuz-normal` | Rare Candy refused at the cap, a dead Pokémon refusing Potion and Revive (`use`), Hard's cap of 12, Roark's Potions taken, and the battle bag's HP/PP pocket empty in both engines (the log and the shots; Gen 5 builds) | ~2 min |
 | `nuzlocke_crit.txt` | `nuz-normal` | 24 Razor Leafs at a level 100 Metapod with the crit guard: the log's "a critical hit guarded" lines (chance: none in 24 turns is about 4%) | ~2 min |
+| `nuzlocke_crit_gen5.txt` | `nuz-normal` | the same in BW2's engine: the log's "Gen 5: a critical hit guarded" lines (Gen 5 builds) | ~2 min |
+| `gen5_keep_moves.txt` | `turtwig` | Turtwig's Tackle in BW2's engine, then its moves after the battle: still Tackle and Withdraw, Tackle a PP down (the `party` lines; Gen 5 builds) | ~1 min |
 | `following_ball.txt` | `turtwig` of Following Renegade Platinum | the follower's ball effects run (with `DATA=~/thor-dev/desktop-following`; [notes](../docs/thor/dev/following-renegade.md)) | ~30 s |
 | `fairy_move.txt` | `rn-turtwig` (Renegade Platinum) | a Fairy move (Moonblast) is named and animated in a Gen 5 battle; screenshots every 20 frames (with `DATA=~/thor-dev/desktop-renegade`) | ~40 s |
 
@@ -126,7 +128,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `dex` | gives the Pokédex, as Prof. Rowan does |
 | `use ITEM SLOT` | an item (a medicine, Rare Candy) on the party member in SLOT, as the party menu checks and applies it; logs the result |
 | `learn MOVE` | the lead's first move becomes MOVE (its number: 127 Waterfall, 352 Water Pulse, 53 Flamethrower), with full PP |
-| `party` | logs the party (with IVs, EXP and the Nuzlocke dead flag), the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
+| `party` | logs the party (with IVs, EXP, the Nuzlocke dead flag and the moves with their PP), the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
 | `shot NAME` | a screenshot, `NAME.png` (the game runs on while it is taken: about 45 frames) |
 | `stillshot NAME` | the same with the game stopped on the frame just drawn, for the frames of a short effect one after another (`wait` between the shots) |
 | `log TEXT` | prints the text |
