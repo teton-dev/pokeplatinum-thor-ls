@@ -799,6 +799,17 @@ Owner's decisions on the open items (2026-11-11):
 - The stat raise/lower particles look mostly fine; slightly off, probably alpha or transparency (low priority).
 - Summary ribbons can be ignored; turn Gen 5 screens off to see them.
 
+## Moves lost in Gen 5 battles (fixed 2026-11-14)
+
+From a3087bcb3 (2026-11-11, the Team Galactic arena, which added the move map for hacks' moves) to 2026-11-14, a
+vanilla Platinum ROM got an all-zero move map: `EnsureMoveMap` (`src/port/gen5_data.c`) built the map only for a
+hack's moves table, and the static table stayed zero. Every Pokémon went into BW2's battles with no moves (both
+sides used Struggle; a wild Pokémon "has no moves left") and came back with none, saved as such. Fixed by building
+the identity map first. `gen5_keep_moves.txt` checks a Pokémon's moves through a Gen 5 battle; `party` now logs moves.
+
+On the owner's Thor, slot 2 ("Player", 523 hours, imported 2026-11-12 06:34 and saved at 06:35) has its six party
+Pokémon with no moves; slot 1 is intact. The Pokémon in boxes don't go through battles.
+
 ## Renegade Platinum (2026-11-11, milestone 8, first part)
 
 A game whose Pokémon and move files aren't vanilla Platinum's (the hash of `pl_personal.narc` and `pl_waza_tbl.narc`:

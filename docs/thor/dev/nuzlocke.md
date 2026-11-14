@@ -272,8 +272,11 @@ which `gen5/src/runtime.c` keeps for the patches (declared in `gen5/include/gen5
     It is chance: none in 24 turns has odds of about 4%.
   - Still passing: `nuzlocke_catch`, `nuzlocke_rules`, `nuzlocke_whiteout`, `nuzlocke_gen5`, `nuzlocke_marks`,
     `first_battle`.
-- **Not checked**: the crit guard in BW2's engine (its patch logs nothing; another session is changing `gen5/` now);
-  a double wild battle beside a partner and the Safari Zone; the Rare Candy refusal through the bag's own screens
+- **The crit guard in BW2's engine**: its patch now asks `Gen5_PortCritGuard` only for a critical hit rolled, which
+  logs "Gen 5: a critical hit guarded". `nuzlocke_crit_gen5.txt` (Gen 5 battles on): 4 guarded in 24 turns. Writing
+  it turned up the Gen 5 bridge losing every move with a vanilla ROM (since 2026-11-11; `gen5-battles.md`, "Moves
+  lost in Gen 5 battles"), fixed with it: before, BW2's battles were all Struggle, so the guard had no hits to see.
+- **Not checked**: a double wild battle beside a partner and the Safari Zone; the Rare Candy refusal through the bag's own screens
   (the test calls the functions they use); the fossil, Eevee and Porygon offers in play (the same code as the
   starter's, matched by their messages).
 - **Note**: tests share `build_linux` with any other session working in this checkout; a rebuild during a run kills

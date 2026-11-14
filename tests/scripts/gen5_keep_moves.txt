@@ -1,0 +1,22 @@
+# Gen 5 battles: Pokémon keep their moves (docs/thor/dev/gen5-battles.md). With a vanilla Platinum ROM the bridge's
+# move map was all zero until 2026-11-14: BW2's battles got no moves (Struggle) and gave the party back none. Turtwig
+# uses Tackle in BW2's engine, the battle ends, and Turtwig still has Tackle (33) and Withdraw (110), Tackle a PP down. The check is
+# the `party` lines ("moves 33/34 110/40"). Gen 5 builds.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_keep_moves.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+party
+wild 399 2
+until battle
+until command
+wait 60
+touch 128 95
+wait 30
+touch 64 54
+# Bidoof faints or Turtwig runs: either way, back to the field
+mash B touch 128 178 until free timeout 6000
+party
+exit 0

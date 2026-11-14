@@ -1088,6 +1088,11 @@ static u16 Step(void)
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_DEF_IV, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_SPEED_IV, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_SPATK_IV, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_SPDEF_IV, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_EXPERIENCE, NULL), NuzlockeMode_IsDead(mon) ? ", dead (Nuzlocke)" : "");
+                printf("[test] party %d: moves %u/%u %u/%u %u/%u %u/%u\n", i,
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE1, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE1_PP, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE2, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE2_PP, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE3, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE3_PP, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE4, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE4_PP, NULL));
             }
             Bag *bag = SaveData_GetBag(save);
             printf("[test] bag: %u Potions, %u Master Balls, %u Poke Balls\n", (unsigned)Bag_GetItemQuantity(bag, 17, HEAP_ID_APPLICATION),
