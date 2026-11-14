@@ -301,15 +301,66 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
 // Every pose's rectangles that differ from another's are put into one 256x128 texture (in 4 bits a pixel, the left pixel
 // in the low nibble, as the DS's textures are), each pose being a list of quads of it. Nothing from the ROM is kept:
 // this is done for each battle
+// The classes BW2 has a sprite of: the same class (Youngster, Hiker, Ace Trainer...), and Sinnoh's Gym Leaders and
+// Cynthia from its Pokémon World Tournament (gen5/src/trainers.c). Every other class is given only the nearest one there
+// (Interviewers a Pokéstar Studios actor in a motion-capture suit, Team Galactic Team Plasma, a Camper a Backpacker,
+// Lucas and Dawn BW2's hero and heroine, which drew a black square), so Platinum's own sprite is drawn instead (seen on
+// the Thor; the owner's choice: Platinum's sprite where BW2 has no such trainer)
 static BOOL TrainerClassHasPlatinumArt(int trainerClass)
 {
-    // Lucas and Dawn as opponents too: BW2's hero and heroine classes, which they map to, drew a black square (seen on
-    // the Thor, trainer 930)
-    return (trainerClass >= TRAINER_CLASS_ELITE_FOUR_AARON && trainerClass <= TRAINER_CLASS_ELITE_FOUR_LUCIAN)
-        || trainerClass == TRAINER_CLASS_RIVAL || trainerClass == TRAINER_CLASS_PLAYER_MALE
-        || trainerClass == TRAINER_CLASS_PLAYER_FEMALE || trainerClass == TRAINER_CLASS_DP_PLAYER_MALE
-        || trainerClass == TRAINER_CLASS_DP_PLAYER_FEMALE || trainerClass == TRAINER_CLASS_DP_PLAYER_MALE_2
-        || trainerClass == TRAINER_CLASS_DP_PLAYER_FEMALE_2;
+    switch (trainerClass) {
+    case TRAINER_CLASS_YOUNGSTER:
+    case TRAINER_CLASS_LASS:
+    case TRAINER_CLASS_TWINS:
+    case TRAINER_CLASS_HIKER:
+    case TRAINER_CLASS_BATTLE_GIRL:
+    case TRAINER_CLASS_FISHERMAN:
+    case TRAINER_CLASS_CYCLIST_MALE:
+    case TRAINER_CLASS_CYCLIST_FEMALE:
+    case TRAINER_CLASS_BLACK_BELT:
+    case TRAINER_CLASS_ARTIST:
+    case TRAINER_CLASS_BREEDER_MALE:
+    case TRAINER_CLASS_BREEDER_FEMALE:
+    case TRAINER_CLASS_POKEFAN_MALE:
+    case TRAINER_CLASS_POKEFAN_FEMALE:
+    case TRAINER_CLASS_ACE_TRAINER_MALE:
+    case TRAINER_CLASS_ACE_TRAINER_FEMALE:
+    case TRAINER_CLASS_WAITRESS:
+    case TRAINER_CLASS_VETERAN:
+    case TRAINER_CLASS_RICH_BOY:
+    case TRAINER_CLASS_LADY:
+    case TRAINER_CLASS_GENTLEMAN:
+    case TRAINER_CLASS_SOCIALITE:
+    case TRAINER_CLASS_BEAUTY:
+    case TRAINER_CLASS_POLICEMAN:
+    case TRAINER_CLASS_RANGER_MALE:
+    case TRAINER_CLASS_RANGER_FEMALE:
+    case TRAINER_CLASS_SCIENTIST:
+    case TRAINER_CLASS_SWIMMER_MALE:
+    case TRAINER_CLASS_SWIMMER_FEMALE:
+    case TRAINER_CLASS_PSYCHIC_MALE:
+    case TRAINER_CLASS_PSYCHIC_FEMALE:
+    case TRAINER_CLASS_GUITARIST:
+    case TRAINER_CLASS_ROUGHNECK:
+    case TRAINER_CLASS_WORKER:
+    case TRAINER_CLASS_SCHOOL_KID_MALE:
+    case TRAINER_CLASS_SCHOOL_KID_FEMALE:
+    case TRAINER_CLASS_LEADER_ROARK:
+    case TRAINER_CLASS_LEADER_BYRON:
+    case TRAINER_CLASS_CHAMPION_CYNTHIA:
+    case TRAINER_CLASS_LEADER_GARDENIA:
+    case TRAINER_CLASS_LEADER_WAKE:
+    case TRAINER_CLASS_LEADER_MAYLENE:
+    case TRAINER_CLASS_LEADER_FANTINA:
+    case TRAINER_CLASS_LEADER_CANDICE:
+    case TRAINER_CLASS_LEADER_VOLKNER:
+    case TRAINER_CLASS_PARASOL_LADY:
+    case TRAINER_CLASS_WAITER:
+    case TRAINER_CLASS_MAID:
+        return FALSE;
+    default:
+        return TRUE;
+    }
 }
 
 #define ART_MAX_RECTS 32
