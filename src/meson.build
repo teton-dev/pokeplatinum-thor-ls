@@ -1026,6 +1026,7 @@ pokeplatinum_c += files(
     'port/game_platinum.c',
     'port/rom_patches.c',
     'port/randomizer.c',
+    'port/nuzlocke_mark.c',
     'port/nuzlocke_mode.c',
     'port/nuzlocke_platinum.c',
     'port/soft_reset.c',

@@ -337,6 +337,22 @@ void NuzlockeMode_Drop(void)
     Write();
 }
 
+int NuzlockeMode_LevelOfSave(u32 saveId)
+{
+    NuzlockeRecord record, best;
+    BOOL found = FALSE;
+    for (int i = 0; i < RecordCount(); i++) {
+        if (ReadRecord(i, &record) && record.saveId == saveId && (!found || record.counter > best.counter)) {
+            best = record;
+            found = TRUE;
+        }
+    }
+    if (!found || best.dropped || best.level >= NUZLOCKE_LEVEL_COUNT) {
+        return NUZLOCKE_OFF;
+    }
+    return best.level;
+}
+
 void NuzlockeMode_GetView(NuzlockeModeView *out)
 {
     *out = sView;

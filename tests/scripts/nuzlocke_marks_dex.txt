@@ -1,0 +1,12 @@
+# Nuzlocke mode, milestone 5: a Hard run with a Pokédex (the test command `dex`), for nuzlocke_marks.txt (its CONTINUE has a sixth line then).
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_marks_dex.txt --from caught --keep nuz-dex
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_marks.txt --from nuz-dex
+
+mash A until free
+dex
+nuzlocke hard
+wait 2
+nuzlocke state
+save
+exit 0

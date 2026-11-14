@@ -46,6 +46,9 @@ typedef struct SaveInfoWindow {
     SaveInfo saveInfo;
     int width;
     int height;
+#ifdef SDK_PORT
+    int nuzlockeLevel; // the mark's line, with Nuzlocke mode on
+#endif
 } SaveInfoWindow;
 
 void SaveInfoWindow_Draw(SaveInfoWindow *saveInfoWin);

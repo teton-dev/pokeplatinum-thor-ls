@@ -77,10 +77,10 @@ recalculation, and the Gen 5 bridge's results.
 | Whiteout | Platinum's blackout task | the bridge's lost result reaches the same task |
 | Dead flag | set on fainting (end of battle, from the party) | the same, from the results |
 
-**The marks.** The alpha mark is redrawn as an original pixel sprite (the PNG in `~/thor-dev/art` is a fan's
-drawing, by jormxdos, and isn't committed). The save screen's info window (start menu > Save) gets the icon; the
-main menu's Continue box draws it under the slot's info and swaps its frame palette to red. `SaveSlotInfo` gains the
-mode so the menu knows without loading the save.
+**The marks.** The alpha mark is a 16x16 pixel version of the owner's alpha icon (the PNG in `~/thor-dev/art`, a
+drawing by jormxdos, which isn't committed itself). The save screen's info window (start menu > Save) gets the icon;
+the main menu's Continue box draws it under the slot's info and swaps its frame palette to red. The menu reads the
+mode from the records in the loaded slot's save image (milestone 5), so `SaveSlotInfo` (port-common's) is unchanged.
 
 ## Milestones (proposed)
 
@@ -90,7 +90,7 @@ mode so the menu knows without loading the save.
    forced nicknames, whiteout ends it.
 3. ~~**The catch rule**~~ (Normal and Hard) in Platinum's engine (done, below), with the message and the ball knocked back.
 4. ~~**The same in BW2's engine**~~ through the bridge and patches (cap, crit guard, items, catch lock) (done, below).
-5. **The marks** on the save screen and the main menu.
+5. ~~**The marks**~~ on the save screen and the main menu (done, below).
 6. **Scripted tests** (`tests/scripts`): a Nuzlocke fixture; a faint then a Center visit (still 0 HP); a whiteout
    (mode off, can't be turned on); a second encounter on a used route (ball refused); the same with a shiny; the
    level cap in both engines.
@@ -229,6 +229,27 @@ which `gen5/src/runtime.c` keeps for the patches (declared in `gen5/include/gen5
   pass.
 - **Not checked**: the crit guard's effect (only that the battle has it), the balls-only bag on screen, a double wild
   battle's second Pokémon.
+
+## Milestone 5: the marks (done, 2026-11-13)
+
+- **The mark**: `src/port/nuzlocke_mark.c`, a 16x16 pixel version of the owner's alpha icon (traced down from the PNG,
+  then tidied by hand to be symmetric), drawn into a window with the font palette: red (color 3), the eyes in the
+  window's background (15). `NuzlockeMark_PrintLine` prints a line of it: the mark, "NUZLOCKE" and the level's name.
+- **The save screen** (`src/overlay005/save_info_window.c`): with the mode on, the info window gets that line under
+  the others and is a tile wider for it. With a Pokédex the bigger window doesn't fit under the yes/no menu's tiles
+  (`BASE_TILE_YES_NO_MENU`, 0x21F), so its tiles start lower, in the start menu's (closed by then).
+- **The main menu** (`src/main_menu/main_menu.c`): `NuzlockeMode_LevelOfSave` reads the loaded slot's records for its
+  trainer ID (a dropped run reads as Off). CONTINUE gets the line (on the fourth line without a Pokédex; a sixth one,
+  the window a line taller, with it) and red frames: palettes 5 and 6 are red copies of the unfocused (2) and focused
+  (3) frame palettes (a color's strongest channel goes to red, the others to its weakest; greys stay grey), and the
+  focused frame's color cycle runs in red too.
+- **Tests** (pass on the desktop): `nuzlocke_marks.txt` shots the main menu and the save screen, then saves.
+  From `nuz-normal` (Normal, no Pokédex) and `nuz-dex` (Hard with a Pokédex: `nuzlocke_marks_dex.txt` from
+  `caught`, with the new test command `dex`) the marks are there, with red frames; from `turtwig` and `nuz-dropped`
+  the screens are as before.
+- **Not checked**: the red unfocused frame on screen (DOWN doesn't move the main menu's focus in test runs, nor does
+  B close `full100`'s journal on loading; the menu ignores the D-pad on frames where it redraws its options). The
+  Thor. The fixture `thor-rowan` crashes on its first frame, with or without this milestone's changes.
 
 ## Decisions
 

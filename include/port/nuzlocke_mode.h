@@ -45,6 +45,8 @@ BOOL NuzlockeMode_CritGuard(void); // never with Hard
 BOOL NuzlockeMode_WasDropped(void);
 // Whiting out: the run is over (off, and dropped for good)
 void NuzlockeMode_Drop(void);
+// The level of a save that isn't running, read from the records in the loaded slot's save image (the main menu)
+int NuzlockeMode_LevelOfSave(u32 saveId);
 
 // GUI
 void NuzlockeMode_GetView(NuzlockeModeView *out);
