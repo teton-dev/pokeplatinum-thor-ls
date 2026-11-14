@@ -51,6 +51,10 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `nuzlocke_gen5.txt` | `nuz-normal` | Nuzlocke mode in BW2's engine: the area marked, a Master Ball knocked back with the message (the shots), no EXP at the level cap, the cap and crit guard in the log (Gen 5 builds) | ~3 min |
 | `nuzlocke_marks_dex.txt` | `caught` | gives the Pokédex (`dex`) and turns Hard on, saved: keep it as `nuz-dex` | ~20 s |
 | `nuzlocke_marks.txt` | `nuz-normal`, `nuz-dex`, or `turtwig` / `nuz-dropped` for none | the alpha mark: the main menu's CONTINUE with a red frame and a NUZLOCKE line, the save screen's window with the line, then a save (the check is the shots) | ~30 s |
+| `nuzlocke_starter_name.txt` | `nuz-normal` | Sandgem Lab's nickname offer for the starter: No asks again, Yes names it ("nickname 1" in the `party` line) | ~1 min |
+| `nuzlocke_shiny.txt` | `nuz-normal` | a run-from Starly leaves the area to Starlys; a shiny Bidoof (`wild ... shiny`) is caught all the same and the area still reads "missed 396" | ~1 min |
+| `nuzlocke_items.txt` | `nuz-normal` | Rare Candy refused at the cap, a dead Pokémon refusing Potion and Revive (`use`), Hard's cap of 12, Roark's Potions taken, and the battle bag's HP/PP pocket empty in both engines (the log and the shots; Gen 5 builds) | ~2 min |
+| `nuzlocke_crit.txt` | `nuz-normal` | 24 Razor Leafs at a level 100 Metapod with the crit guard: the log's "a critical hit guarded" lines (chance: none in 24 turns is about 4%) | ~2 min |
 | `following_ball.txt` | `turtwig` of Following Renegade Platinum | the follower's ball effects run (with `DATA=~/thor-dev/desktop-following`; [notes](../docs/thor/dev/following-renegade.md)) | ~30 s |
 | `fairy_move.txt` | `rn-turtwig` (Renegade Platinum) | a Fairy move (Moonblast) is named and animated in a Gen 5 battle; screenshots every 20 frames (with `DATA=~/thor-dev/desktop-renegade`) | ~40 s |
 
@@ -103,9 +107,9 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `save` | saves the game, as the menu does, once the player is free |
 | `gen5-import` | imports the Black 2 or White 2 ROM in `POKEPLATINUM_GEN5_ROM` (the harness passes `GEN5_ROM`, or `~/thor-dev/PKMNB2.nds`) and waits; fails if it is refused or the self-check fails |
 | `gen5-battles on\|off` | *Settings > Gameplay > Gen 5 battles* |
-| `nuzlocke simple\|normal\|hard\|off`, `nuzlocke crit on\|off`, `nuzlocke state` | once the player is free, as *Settings > Gameplay > Nuzlocke mode* does (its warning taken as accepted), or logs the save's mode (with "has had balls" and the current area's catch state) |
+| `nuzlocke simple\|normal\|hard\|off`, `nuzlocke crit on\|off`, `nuzlocke state` | once the player is free, as *Settings > Gameplay > Nuzlocke mode* does (its warning taken as accepted), or logs the save's mode (with "has had balls", the current area's catch state and the level cap) |
 | `battle-style set\|shift` | the save's Battle Style option (Set: no free switch when the opponent sends in another Pokémon) |
-| `wild SPECIES LEVEL` | once the player is free, a wild SPECIES at LEVEL met as in tall grass (the field's own wild encounter, which the setting sends to the Gen 5 engine) |
+| `wild SPECIES LEVEL [shiny]` | once the player is free, a wild SPECIES at LEVEL met as in tall grass (the field's own wild encounter, which the setting sends to the Gen 5 engine); `shiny` makes it shiny |
 | `static SPECIES LEVEL` | the same as a legendary's script starts it (a scripted encounter: static for Nuzlocke mode) |
 | `item ITEM COUNT` | puts items into the bag (the item's number: 1 is the Master Ball, 4 the Poké Ball) |
 | `give SPECIES LEVEL` | a new Pokémon into the party |
@@ -120,6 +124,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `lead SLOT` | the party member in SLOT (0 to 5) to the front |
 | `faint SLOT` | the party member in SLOT to 0 HP, as a battle writes it |
 | `dex` | gives the Pokédex, as Prof. Rowan does |
+| `use ITEM SLOT` | an item (a medicine, Rare Candy) on the party member in SLOT, as the party menu checks and applies it; logs the result |
 | `learn MOVE` | the lead's first move becomes MOVE (its number: 127 Waterfall, 352 Water Pulse, 53 Flamethrower), with full PP |
 | `party` | logs the party (with IVs, EXP and the Nuzlocke dead flag), the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |
 | `shot NAME` | a screenshot, `NAME.png` (the game runs on while it is taken: about 45 frames) |

@@ -1,0 +1,66 @@
+# Nuzlocke mode: items (docs/thor/dev/nuzlocke.md). From nuz-normal (Normal; the next leader is Roark, whose strongest
+# Pokémon is level 14 and weakest 12):
+# - Rare Candy (the test command `use`, as the party menu checks and applies an item) does nothing at the cap and
+#   raises a level 13 Pokémon to it, then nothing;
+# - a dead Pokémon takes no Potion and no Revive;
+# - with Hard the cap is 12;
+# - Roark's two Potions are taken ("Nuzlocke mode: trainer 246's 2 items taken");
+# - the bag in battle has nothing but Poké Balls: Platinum's other pockets are empty (its HP/PP RESTORE shot), and
+#   so is BW2's (its gen5-bag-hp-pp shot; Gen 5 builds).
+# The check is the log's lines and the shots.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_items.txt --from nuz-normal
+
+gen5-import
+mash A until free
+gen5-battles off
+item 4 10
+item 17 5
+item 28 2
+item 50 3
+nuzlocke state
+# Rare Candy: refused at the cap (14), taken below it
+give 399 14
+use 50 1
+give 399 13
+use 50 2
+use 50 2
+party
+# A dead Pokémon: no Potion, no Revive
+faint 2
+use 17 2
+use 28 2
+party
+# Hard: the cap is the leader's weakest Pokémon's level
+nuzlocke hard
+wait 2
+nuzlocke state
+# BW2's bag in a wild battle: only the Balls pocket
+gen5-battles on
+wild 396 3
+until battle
+until command
+wait 90
+touch 40 180
+wait 90
+shot gen5-bag
+touch 64 48
+wait 60
+shot gen5-bag-hp-pp
+mash B for 90
+wait 30
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+gen5-battles off
+# Roark, in Platinum's engine: his items taken; the bag's HP/PP RESTORE pocket is empty although there are Potions
+trainer 246
+until battle
+until command timeout 6000
+wait 60
+touch 40 178
+wait 90
+shot bag
+touch 64 55
+wait 60
+shot bag-hp-pp
+exit 0

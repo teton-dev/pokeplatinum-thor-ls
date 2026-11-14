@@ -86,14 +86,14 @@ mode from the records in the loaded slot's save image (milestone 5), so `SaveSlo
 
 1. ~~**The state and the switch**~~ (done, below): the save block, the dead flag, turning the mode on, changing the level, turning it
    off (and never on again), the warning pop-up, the crit guard checkbox (refused with Hard).
-2. **The rules in Platinum's engine** (mostly done, below): IVs, caps, the dead flag everywhere HP is restored, no items, trainers' items,
+2. ~~**The rules in Platinum's engine**~~ (done, below; checked in milestone 6): IVs, caps, the dead flag everywhere HP is restored, no items, trainers' items,
    forced nicknames, whiteout ends it.
 3. ~~**The catch rule**~~ (Normal and Hard) in Platinum's engine (done, below), with the message and the ball knocked back.
 4. ~~**The same in BW2's engine**~~ through the bridge and patches (cap, crit guard, items, catch lock) (done, below).
 5. ~~**The marks**~~ on the save screen and the main menu (done, below).
-6. **Scripted tests** (`tests/scripts`): a Nuzlocke fixture; a faint then a Center visit (still 0 HP); a whiteout
+6. ~~**Scripted tests**~~ (`tests/scripts`): a Nuzlocke fixture; a faint then a Center visit (still 0 HP); a whiteout
    (mode off, can't be turned on); a second encounter on a used route (ball refused); the same with a shiny; the
-   level cap in both engines.
+   level cap in both engines (done, below, with the starter's nickname).
 7. **HGSS**: the shared part moved out (as `gen5/` will be), HGSS's hooks (its first Poké Balls come from Elm's aide;
    Kanto's gyms after Johto's eight, then Red).
 
@@ -154,8 +154,8 @@ Each hook is behind `SDK_PORT` and does nothing with the mode off. The per-game 
 - **Nicknames**: after a catch in Platinum's engine, no "Give a nickname?" question: straight to the naming screen.
   The naming screen (`NAMING_SCREEN_TYPE_POKEMON`, with the mode on) refuses a blank or all-spaces name with a buzz and
   "You must name your new Pokémon!" in its prompt box; the Gen 5 bridge's naming screen after a BW2 catch is the same
-  screen. **Not done**: the starter's (Sandgem lab) question is in its field script, still a yes/no; other Platinum
-  gifts don't offer a name.
+  screen. Gifts that offer a name in their field scripts (the starter in Sandgem Lab, revived fossils, Eevee, Porygon)
+  ask again on No: milestone 6.
 - **Whiteout**: `FieldTask_BlackOutFromBattle` calls `NuzlockeMode_Drop()` first, so the party is then healed as in a
   normal game (dead flags stay on the Pokémon but no longer count).
 - **Tests** (pass on the desktop): the test command `party` also logs IVs, EXP and the dead flag; `faint SLOT` sets a
@@ -164,9 +164,8 @@ Each hook is behind `SDK_PORT` and does nothing with the mode off. The per-game 
   Pokémon Center's nurse heals Bidoof and leaves Turtwig at 0 HP. `nuzlocke_whiteout.txt`: Turtwig faints to a wild
   Charizard in Platinum's engine (dead), the player whites out, the save is "Off, dropped" and refuses Normal. A
   switch after a faint was too timing-dependent to script (battle messages wait in real time).
-- **Not checked yet**: the battle bag showing only balls, trainers' items, the crit guard, Rare Candy at the cap, the
-  Hard (low) cap. All were built, none was seen working. (The forced naming screen and its refusal were seen in
-  milestone 3's `nuzlocke_catch.txt`.)
+- **Checked in milestone 6**: the battle bag showing only balls, trainers' items, the crit guard, Rare Candy at the
+  cap, the Hard (low) cap. (The forced naming screen and its refusal were seen in milestone 3's `nuzlocke_catch.txt`.)
 
 ## Milestone 3: the catch rule (done in Platinum's engine, 2026-11-13)
 
@@ -199,8 +198,8 @@ Each hook is behind `SDK_PORT` and does nothing with the mode off. The per-game 
   question and refuses a blank name; the area is then "caught 396" and a third Starly is refused; a static Bidoof
   (the new test command `static SPECIES LEVEL`) is caught with Normal and refused with Hard. `nuzlocke state` logs
   "has had balls" and the current area's state. `nuzlocke_rules.txt` and `gen5_catch.txt` still pass.
-- **Not checked**: a shiny (the test commands can't make one), a double wild battle beside a partner, the Safari
-  Zone (Great Marsh: its balls are the Safari Balls, the same throw).
+- **Not checked**: a double wild battle beside a partner, the Safari Zone (Great Marsh: its balls are the Safari Balls,
+  the same throw). A shiny: milestone 6.
 
 ## Milestone 4: the rules in BW2's engine (done, 2026-11-13)
 
@@ -227,8 +226,8 @@ which `gen5/src/runtime.c` keeps for the patches (declared in `gen5/include/gen5
   this area!" in BW2's text box); a level 14 Bidoof at Roark's cap wins and keeps 2744 EXP; the log's "Gen 5: level
   cap 14, crit guard" shows what the battle got. `gen5_catch`, `gen5_trainer`, `gen5_loss` and `nuzlocke_catch` still
   pass.
-- **Not checked**: the crit guard's effect (only that the battle has it), the balls-only bag on screen, a double wild
-  battle's second Pokémon.
+- **Not checked**: the crit guard's effect (only that the battle has it), a double wild battle's second Pokémon. The
+  balls-only bag on screen: milestone 6.
 
 ## Milestone 5: the marks (done, 2026-11-13)
 
@@ -251,6 +250,35 @@ which `gen5/src/runtime.c` keeps for the patches (declared in `gen5/include/gen5
   B close `full100`'s journal on loading; the menu ignores the D-pad on frames where it redraws its options). The
   Thor. The fixture `thor-rowan` crashes on its first frame, with or without this milestone's changes.
 
+## Milestone 6: scripted tests (done, 2026-11-14)
+
+- **Gift nicknames** (`src/scrcmd.c`): with the mode on, No to a gift's nickname offer asks again (a buzz, then the
+  same yes/no). The scripts come from the player's ROM, so the offers are told apart in C by the message the yes/no
+  follows (`ScrCmd_Message` keeps the last one's bank and number): the starter (Sandgem Lab), revived fossils (Mining
+  Museum), Eevee (Hearthome City) and Porygon (Veilstone City). Renegade Platinum may number its texts differently.
+- **Test commands**: `wild SPECIES LEVEL shiny` (the wild Pokémon made again with a shiny personality for the player),
+  `use ITEM SLOT` (an item on a party member, through `Pokemon_CheckItemEffects` and `Pokemon_ApplyItemEffects` as
+  the party menu uses them), `dex` (milestone 5), and `nuzlocke state` logs the level cap. The log also has
+  "Nuzlocke mode: trainer N's K items taken" and "Nuzlocke mode: a critical hit guarded".
+- **Tests** (pass on the desktop, from `nuz-normal`):
+  - `nuzlocke_starter_name.txt`: into Sandgem Lab, the professor's offer: No asks again, Yes names the starter
+    ("nickname 1"). From `turtwig` (the mode off) No is taken and the scene goes on.
+  - `nuzlocke_shiny.txt`: a run-from Starly leaves the area to Starlys; a shiny Bidoof is caught there all the same
+    (named, IVs 15) and the area still reads "missed 396".
+  - `nuzlocke_items.txt`: Rare Candy does nothing at the cap (14) and raises a level 13 Bidoof to it; a dead
+    Pokémon takes no Potion or Revive; Hard's cap is 12 (Roark's weakest); Roark's two Potions are taken; the
+    battle bag's HP/PP pocket is empty with Potions in the bag, in both engines (the shots).
+  - `nuzlocke_crit.txt`: 24 Razor Leafs at a level 100 Metapod; the run had 5 critical hits rolled and guarded.
+    It is chance: none in 24 turns has odds of about 4%.
+  - Still passing: `nuzlocke_catch`, `nuzlocke_rules`, `nuzlocke_whiteout`, `nuzlocke_gen5`, `nuzlocke_marks`,
+    `first_battle`.
+- **Not checked**: the crit guard in BW2's engine (its patch logs nothing; another session is changing `gen5/` now);
+  a double wild battle beside a partner and the Safari Zone; the Rare Candy refusal through the bag's own screens
+  (the test calls the functions they use); the fossil, Eevee and Porygon offers in play (the same code as the
+  starter's, matched by their messages).
+- **Note**: tests share `build_linux` with any other session working in this checkout; a rebuild during a run kills
+  it (exit code 135, SIGBUS), which looks like a crash in the game.
+
 ## Decisions
 
 With the owner (2026-11-13):
@@ -265,4 +293,5 @@ With the owner (2026-11-13):
 Taken as defaults, to change if the owner says otherwise:
 - Poké Balls are the only items usable in battle.
 - Rare Candies (and other level-raising items) don't work past the cap, like EXP.
-- Gift Pokémon that offer a nickname (the starter among them) must be named too, not only caught ones.
+- Gift Pokémon that offer a nickname (the starter among them) must be named too, not only caught ones. The owner
+  (2026-11-14): No to the offer just asks again.
