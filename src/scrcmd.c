@@ -241,6 +241,37 @@ typedef struct {
 #endif
 } UnkStruct_02040F28;
 
+#ifdef SDK_PORT
+#include "generated/text_banks.h"
+#include "port/nuzlocke_mode.h"
+#include "sound_playback.h"
+#include "res/text/bank/hearthome_city_northwest_house.h"
+#include "res/text/bank/mining_museum.h"
+#include "res/text/bank/sandgem_town_pokemon_research_lab.h"
+#include "res/text/bank/veilstone_city_northeast_house.h"
+
+// Nuzlocke mode: every gift offering a nickname must be named, so No to the offer asks again. The offers are
+// told apart by the message the yes/no follows (the scripts come from the player's ROM, so they can't be changed).
+static u16 sPortLastMessageBank = 0xFFFF;
+static u16 sPortLastMessageID;
+
+static BOOL PortIsNicknameOffer(void)
+{
+    static const u16 kOffers[][2] = {
+        { TEXT_BANK_SANDGEM_TOWN_POKEMON_RESEARCH_LAB, SandgemTownLab_Text_GiveItANickname }, // the starter
+        { TEXT_BANK_MINING_MUSEUM, MiningMuseum_Text_GiveNickname }, // revived fossils
+        { TEXT_BANK_HEARTHOME_CITY_NORTHWEST_HOUSE, HearthomeCityNorthwestHouse_Text_WouldYouLikeToNicknameEevee },
+        { TEXT_BANK_VEILSTONE_CITY_NORTHEAST_HOUSE, VeilstoneCityNortheastHouse_Text_AskNicknamePorygon },
+    };
+    for (int i = 0; i < NELEMS(kOffers); i++) {
+        if (sPortLastMessageBank == kOffers[i][0] && sPortLastMessageID == kOffers[i][1]) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+#endif
+
 static BOOL ScrCmd_Noop(ScriptContext *ctx);
 static BOOL ScrCmd_Dummy(ScriptContext *ctx);
 static BOOL ScrCmd_End(ScriptContext *ctx);
@@ -1333,6 +1364,10 @@ static BOOL ScrCmd_Message(ScriptContext *ctx)
 {
     u8 messageID = ScriptContext_ReadByte(ctx);
 
+#ifdef SDK_PORT
+    sPortLastMessageBank = ctx->loader->bankID;
+    sPortLastMessageID = messageID;
+#endif
     ScriptMessage_Show(ctx, ctx->loader, messageID, TRUE, NULL);
     ScriptContext_Pause(ctx, ScriptContext_WaitForFinishedPrinting);
 
@@ -1807,6 +1842,15 @@ static BOOL ScriptContext_WaitForYesNoResult(ScriptContext *ctx)
     if (result == MENU_NOTHING_CHOSEN) {
         return FALSE;
     }
+
+#ifdef SDK_PORT
+    // No to a nickname offer with Nuzlocke mode on: the question again
+    if (result != MENU_YES && NuzlockeMode_On() && PortIsNicknameOffer()) {
+        Sound_PlayEffect(SEQ_SE_DP_BOX02_sseq);
+        *menu = Menu_MakeYesNoChoice(fieldSystem->bgConfig, &sYesNoWindowTemplate, 1024 - (18 + 12) - 9, 11, 4);
+        return FALSE;
+    }
+#endif
 
     if (result == MENU_YES) {
         *destVar = MENU_YES;

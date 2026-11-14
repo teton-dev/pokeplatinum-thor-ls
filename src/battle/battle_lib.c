@@ -48,6 +48,8 @@
 #include "res/text/bank/battle_strings.h"
 
 #ifdef SDK_PORT
+#include <stdio.h>
+
 #include "port/cheats.h"
 #include "port/nuzlocke_mode.h"
 #include "port/rom_patches.h"
@@ -7178,6 +7180,9 @@ int BattleSystem_CalcCriticalMulti(BattleSystem *battleSys, BattleContext *battl
 #ifdef SDK_PORT
     // Nuzlocke mode's crit guard (Platinum has no move that always lands a critical hit)
     if (NuzlockeMode_CritGuard()) {
+        if (criticalMul > 1) {
+            printf("Nuzlocke mode: a critical hit guarded\n");
+        }
         criticalMul = 1;
     }
 #endif

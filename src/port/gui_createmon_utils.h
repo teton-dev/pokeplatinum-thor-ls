@@ -17,6 +17,8 @@ int GUI_CreateMon_StartTrainerBattle(int trainer1, int trainer2, int partner);
 // A wild speciesNo at level met as in tall grass: the field's own wild encounter (its blackout, Poke Radar and the
 // rest), which Settings > Gameplay > Gen 5 battles sends to the Gen 5 engine. FALSE if the player isn't free
 int GUI_CreateMon_StartWildEncounter(int speciesNo, int level);
+// The same, a shiny one when shiny is TRUE (the test command wild SPECIES LEVEL shiny)
+int GUI_CreateMon_StartWildEncounterShiny(int speciesNo, int level, BOOL shiny);
 
 #ifdef __cplusplus
 }

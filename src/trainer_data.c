@@ -21,6 +21,7 @@
 #include "string_gf.h"
 
 #ifdef SDK_PORT
+#include <stdio.h>
 #include <string.h>
 
 #include "port/nuzlocke_mode.h"
@@ -44,7 +45,14 @@ void Trainer_Encounter(FieldBattleDTO *dto, const SaveData *saveData, enum HeapI
 #ifdef SDK_PORT
         // Nuzlocke mode: trainers lose their bag items (their Pokemon keep held ones)
         if (NuzlockeMode_On()) {
+            int taken = 0;
+            for (int j = 0; j < (int)NELEMS(dto->trainer[i].header.items); j++) {
+                taken += dto->trainer[i].header.items[j] != 0;
+            }
             memset(dto->trainer[i].header.items, 0, sizeof(dto->trainer[i].header.items));
+            if (taken > 0) {
+                printf("Nuzlocke mode: trainer %d's %d items taken\n", (int)dto->trainerIDs[i], taken);
+            }
         }
 #endif
 
