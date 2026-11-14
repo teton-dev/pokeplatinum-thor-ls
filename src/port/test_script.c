@@ -90,6 +90,7 @@ enum TestOp {
     OP_GIVE,
     OP_LEAD,
     OP_FAINT,
+    OP_DEX,
     OP_LEARN,
     OP_TEACH,
     OP_PARTY,
@@ -331,6 +332,10 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         // faint SLOT: the party member in SLOT to 0 HP, as a battle's party update writes it
         command->op = OP_FAINT;
         command->x = atoi(words[1]);
+        return TRUE;
+    } else if (strcmp(words[0], "dex") == 0) {
+        // dex: the Pokedex, as Prof. Rowan gives it
+        command->op = OP_DEX;
         return TRUE;
     } else if (strcmp(words[0], "learn") == 0 && count >= 2) {
         // learn MOVE: the lead's first move becomes MOVE (a move's number, 127 is Waterfall), with its PP full
@@ -984,6 +989,11 @@ static u16 Step(void)
             Next();
             continue;
         }
+        case OP_DEX:
+            Pokedex_ObtainPokedex(SaveData_GetPokedex(SaveData_Ptr()));
+            printf("[test] the Pokedex obtained\n");
+            Next();
+            continue;
         case OP_LEARN: {
             Pokemon *lead = Party_GetPokemonBySlotIndex(SaveData_GetParty(SaveData_Ptr()), 0);
             u32 move = command->x;

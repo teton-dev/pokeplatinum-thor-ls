@@ -1,0 +1,43 @@
+# Nuzlocke mode, milestone 5: the alpha mark (docs/thor/dev/nuzlocke.md). The main menu's CONTINUE has a red frame
+# (focused or not) and a NUZLOCKE line with the mark and the level; so has the save screen's info window (start menu >
+# SAVE). The check is the shots.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_marks.txt --from nuz-normal
+#
+# From turtwig or nuz-dropped, none of it: no mark, the usual frames.
+#
+# From nuz-dex (nuzlocke_marks_dex.txt), a Hard run with a Pokédex: the mark on a sixth line.
+
+# The opening, the title screen, then the main menu
+wait 240
+press A
+wait 90
+press A
+# The menu fades in in real time, then waits for a key
+wait 300
+stillshot main_menu
+# The menu runs at 30 Hz: a key held for 8 frames
+press DOWN 8
+wait 60
+shot main_menu_unfocused
+press UP 8
+wait 60
+press A
+mash A until free
+
+# SAVE is third from the bottom (EXIT, OPTIONS, SAVE), with or without a Pokédex: up from the top wraps
+press X
+wait 30
+press UP
+press UP
+press UP
+wait 10
+shot start_menu
+press A
+wait 60
+shot save_screen
+# YES: the game saves with the bigger window up, and the mode is still on
+press A
+mash A until free
+nuzlocke state
+exit 0
