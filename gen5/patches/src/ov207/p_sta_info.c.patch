@@ -1,0 +1,18 @@
+--- a/src/ov207/p_sta_info.c
++++ b/src/ov207/p_sta_info.c
+@@ -531,8 +531,15 @@
+         }
+     }
+ }
++
++StrBuf *Gen5_PortPlaceName(u32 location, HeapID heapId); // The port (runtime.c)
+ 
+ static StrBuf *PStaInfo_GetPlaceName(PStatusWork *wk, PStaInfoWork *info, u32 location) {
++    // The port: the Pokémon are Platinum's, met at Platinum's places, whose names the port has
++    StrBuf *portName = Gen5_PortPlaceName(location, wk->heapId);
++    if (portName != NULL) {
++        return portName;
++    }
+     u32 file = MetLocation_GetNameFile(location);
+     u32 index = MetLocation_GetNameIndex(location);
+ 

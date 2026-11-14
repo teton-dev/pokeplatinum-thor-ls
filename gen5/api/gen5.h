@@ -65,6 +65,16 @@ typedef struct Gen5Pokemon {
     unsigned hasNickname;
     unsigned short nickname[GEN5_NAME_LENGTH]; // Unicode, 0xFFFF after the last character
     unsigned short otName[8];
+    // Where and when it was met, and hatched from an egg (eggLocation 0: not), in Platinum's numbers, with the places'
+    // names in Platinum's text (the Summary's trainer memo; BW2's place lists are Unova's)
+    unsigned metLocation;
+    unsigned metYear, metMonth, metDay;
+    unsigned eggLocation;
+    unsigned eggYear, eggMonth, eggDay;
+    unsigned fateful;
+#define GEN5_PLACE_LENGTH 24
+    unsigned short metPlace[GEN5_PLACE_LENGTH];
+    unsigned short eggPlace[GEN5_PLACE_LENGTH];
 } Gen5Pokemon;
 
 // The player, for BW2's messages, its traded-Pokémon check (the OT's ID and name) and the money a loss costs

@@ -28,6 +28,7 @@
 #include "sprite_system.h"
 #ifdef GEN5_BATTLES
 #include "port/gen5_battle.h"
+#include "port/gen5_summary.h"
 #endif
 
 #include "camera.h"
@@ -96,6 +97,15 @@ static BOOL Gen5BattleShown(void)
 {
 #ifdef GEN5_BATTLES
     return Gen5Battle_IsShown();
+#else
+    return FALSE;
+#endif
+}
+
+static BOOL Gen5SummaryShown(void)
+{
+#ifdef GEN5_BATTLES
+    return Gen5Summary_IsActive();
 #else
     return FALSE;
 #endif
@@ -264,6 +274,12 @@ void Widescreen_Update(void)
         wide = TRUE;
         // A screen's 3D sprites (the PC's and Summary's Pokemon) are placed as 2D: libntr keeps them in the 4:3 middle
         scale3D = TRUE;
+        if (Gen5SummaryShown()) {
+            // BW2's Summary: its grid backdrop (BG3) scrolls, so its edge columns changed every frame and the sides
+            // flickered (seen on the Thor); it is drawn across them from its tilemap instead, which repeats seamlessly
+            wideBgs = 1 << 3;
+            edgeBgs &= ~(1 << 3);
+        }
     }
     // Platinum's battle draws its Pokemon as 3D quads for a 4:3 screen: narrowed so they keep their shape
     SIM_SetWidescreenSceneOptions(scale3D || wideBattle, wideBgs);
