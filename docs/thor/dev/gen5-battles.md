@@ -887,6 +887,8 @@ of standing Pokémon that faced the defeated one, which can be 0: the DS gives 0
 
 ## Weather that stays, and its ability bar (2026-11-14)
 
+(Doubles: checked with `gen5_weather_doubles.txt`: Twins Liv & Liz and Tristan with Jacob show the bar on the player's side with "4", then "3 turns remaining", and the rain stays; in the Cheryl battle Turtwig fainted early and no bar was caught. The bar's text sits in the middle of the bar, line 13 of its bitmap.)
+
 BW2 plays a weather move's animation once (Rain Dance's rain, Hail's flakes...) and then shows no weather on the arena
 at all; each turn it only damages (sand, hail). Two additions, both patches (no pokebw2 change):
 
@@ -917,5 +919,5 @@ still pass, and `desktop.sh gen5-check` (Android's arm64 compile too) has 0 fail
 Open: not checked on the Thor; the rain, hail and sand are thin or sparse compared with the moves' own bursts (the
 cadence and emitter positions are guesses, in `BtlvEffvm_PortAmbientStart`); the sandstorm's emitters are at the arena's
 middle, not on the attacker; the bar's brightness mapping gives no gradient across it beyond the file's own shading; the
-text is English only; doubles and a second weather change in one turn are untested; the replay and Pokéstar Studios
+text is English only; a second weather change in one turn is untested; the replay and Pokéstar Studios
 (chapter skipping) skip the bar and the particles.
