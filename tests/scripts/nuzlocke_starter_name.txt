@@ -1,0 +1,35 @@
+# Nuzlocke mode: the starter must be named (docs/thor/dev/nuzlocke.md). In Sandgem Lab, Prof. Rowan offers to
+# nickname it; with the mode on, No asks again, then Yes opens the naming screen. The check is the `party` line
+# ("nickname 1") and the shots.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_starter_name.txt --from nuz-normal
+#
+# From turtwig (the mode off) No is taken: the after-no shot shows the professor going on, and the run stops waiting
+# for a naming screen that doesn't come.
+
+mash A until free
+nuzlocke state
+# Into the lab at its door: the scene that gives the Pokédex starts (VAR_SANDGEM_TOWN_LAB_STATE is still 0)
+jump 422 7 14
+mash A until menu timeout 6000
+wait 20
+shot offer
+press B
+wait 30
+shot after-no
+# With the mode on, the question is up again: Yes; with it off, the scene goes on without naming
+mash B until menu timeout 600
+press A
+mash A until naming timeout 600
+wait 60
+shot naming
+# "SA", then OK
+touch 160 118
+wait 10
+touch 34 99
+wait 10
+touch 216 70
+# "You're happy with the nickname?": Yes, then the rest of the scene
+mash A until free timeout 6000
+party
+exit 0

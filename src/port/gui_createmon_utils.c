@@ -129,6 +129,11 @@ int GUI_CreateMon_StartTrainerBattle(int trainer1, int trainer2, int partner)
 
 int GUI_CreateMon_StartWildEncounter(int speciesNo, int level)
 {
+    return GUI_CreateMon_StartWildEncounterShiny(speciesNo, level, FALSE);
+}
+
+int GUI_CreateMon_StartWildEncounterShiny(int speciesNo, int level, BOOL shiny)
+{
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
     if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)
         || Party_GetCurrentCount(SaveData_GetParty(fieldSystem->saveData)) == 0
@@ -139,6 +144,12 @@ int GUI_CreateMon_StartWildEncounter(int speciesNo, int level)
     FieldBattleDTO *dto = FieldBattleDTO_New(HEAP_ID_FIELD2, BATTLE_TYPE_WILD_MON);
     FieldBattleDTO_Init(dto, fieldSystem);
     CreateWildMon_Scripted(fieldSystem, speciesNo, level, dto);
+    if (shiny) {
+        // Made again with a shiny personality for its OT (the player)
+        Pokemon *mon = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
+        u32 otID = Pokemon_GetValue(mon, MON_DATA_OT_ID, NULL);
+        Pokemon_InitWith(mon, speciesNo, level, INIT_IVS_RANDOM, TRUE, Pokemon_FindShinyPersonality(otID), OTID_SET, otID);
+    }
     Encounter_NewVsWild(fieldSystem, dto);
     return TRUE;
 }

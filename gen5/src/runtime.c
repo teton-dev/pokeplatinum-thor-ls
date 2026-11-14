@@ -750,6 +750,10 @@ u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp)
 
 BOOL Gen5_PortCritGuard(void)
 {
+    // Asked for each critical hit rolled
+    if (sNuzlocke.critGuard) {
+        printf("Gen 5: a critical hit guarded\n");
+    }
     return sNuzlocke.critGuard;
 }
 
