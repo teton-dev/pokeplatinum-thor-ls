@@ -92,6 +92,14 @@ const Gen5BackSprite *Gen5_TrainerFrontArt(u32 trainerClass) {
     return NULL;
 }
 
+const Gen5BackSprite *Gen5_PartnerBackArt(void) {
+    FrontArt *art = &sFront[2];
+    if (!art->set) {
+        return NULL;
+    }
+    return art->adds++ == 0 && art->animated.seqCount > 0 ? &art->animated : &art->still;
+}
+
 const Gen5BackSprite *PlayerBack_ForTrainerClass(u32 trainerClass) {
     // HeartGold and SoulSilver: their own player characters, Ethan and Lyra
     const int version = Gen5_GameVersion();

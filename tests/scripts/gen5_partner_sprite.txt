@@ -1,0 +1,54 @@
+# Gen 5 battles: the partner's back sprite (Platinum's, a placeholder) shown during the battle's introduction.
+#   tools/docker/desktop.sh test tests/scripts/gen5_partner_sprite.txt --from turtwig
+gen5-import
+gen5-battles on
+mash A until free
+give 395 50
+trainers 1 16 608
+until battle
+wait 60
+shot partner-intro-1
+wait 40
+shot partner-intro-2
+wait 40
+shot partner-intro-3
+wait 40
+shot partner-intro-4
+wait 40
+shot partner-intro-5
+wait 40
+shot partner-intro-6
+wait 30
+shot partner-intro-7
+wait 30
+shot partner-intro-8
+wait 30
+shot partner-intro-9
+wait 30
+shot partner-intro-10
+wait 30
+shot partner-intro-11
+wait 30
+shot partner-intro-12
+wait 30
+shot partner-intro-13
+wait 30
+shot partner-intro-14
+wait 30
+shot partner-intro-15
+wait 30
+shot partner-intro-16
+wait 30
+shot partner-intro-17
+wait 30
+shot partner-intro-18
+wait 30
+shot partner-intro-19
+wait 30
+shot partner-intro-20
+wait 30
+shot partner-intro-21
+wait 30
+shot partner-intro-22
+until command timeout 6000
+shot partner-command

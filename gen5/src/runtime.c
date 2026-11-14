@@ -404,6 +404,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     }
     Gen5_SetTrainerArt(0, 0, NULL);
     Gen5_SetTrainerArt(1, 0, NULL);
+    Gen5_SetTrainerArt(2, 0, NULL);
     // Two Pokémon a side: one trainer's two, two trainers' one each (BW2's multi mode 4, the second trainer as client
     // 3), or with a partner (mode 3 against two trainers, 5 in the wild: the partner is client 2)
     sSetup->battleStyle = battle->doubles ? BTL_STYLE_DOUBLE : BTL_STYLE_SINGLE;
@@ -414,7 +415,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
             sSetup->fieldSituation.multiMode = 4;
         }
         if (battle->hasPartner) {
-            SetupTrainer(2, &battle->partner, -1);
+            SetupTrainer(2, &battle->partner, 2);
             sSetup->fieldSituation.multiMode = battle->hasTrainer2 ? 3 : 5;
         }
         // The first trainer's defeat line, for BW2's code that reads it from here (btl_string.c); the port's patch of
@@ -442,7 +443,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         Gen5Pokemon wild[2] = { battle->wild, battle->wild2 };
         sSetup->party[1] = NewParty(wild, battle->hasWild2 ? 2 : 1);
         if (battle->hasPartner) {
-            SetupTrainer(2, &battle->partner, -1);
+            SetupTrainer(2, &battle->partner, 2);
             sSetup->fieldSituation.multiMode = 5;
         }
     }
