@@ -1,0 +1,18 @@
+# Gen 5 battles: an egg in the party shows as an egg in the battle's Pokémon screen (seen on the Thor: a Happiny egg was
+# "Happiny"). From the turtwig fixture: an egg of Happiny, a wild battle, POKEMON on the touch screen; a shot of the list.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_egg.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+egg 440
+party
+wild 396 2
+until battle
+until command timeout 6000
+wait 30
+touch 217 167
+wait 90
+shot egg-party
+exit 0

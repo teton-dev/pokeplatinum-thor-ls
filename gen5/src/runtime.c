@@ -147,6 +147,44 @@ static void *Keep(void *block)
     return block;
 }
 
+// The names of the places the Pokémon handed to BW2 were met at, by Platinum's place number (Gen5_PortPlaceName)
+#define PLACES_MAX (GEN5_PARTY_MAX * 2 * 4)
+static struct {
+    unsigned location;
+    unsigned short name[GEN5_PLACE_LENGTH];
+} sPlaces[PLACES_MAX];
+static int sPlaceCount;
+
+static void AddPlace(unsigned location, const unsigned short *name)
+{
+    if (name[0] == 0xFFFF) {
+        return;
+    }
+    for (int i = 0; i < sPlaceCount; i++) {
+        if (sPlaces[i].location == location) {
+            return;
+        }
+    }
+    if (sPlaceCount < PLACES_MAX) {
+        sPlaces[sPlaceCount].location = location;
+        memcpy(sPlaces[sPlaceCount].name, name, sizeof(sPlaces[sPlaceCount].name));
+        sPlaceCount++;
+    }
+}
+
+// The name of Platinum's place `location` (p_sta_info.c's patch), into a new StrBuf; NULL for one it doesn't have
+StrBuf *Gen5_PortPlaceName(u32 location, HeapID heapId)
+{
+    for (int i = 0; i < sPlaceCount; i++) {
+        if (sPlaces[i].location == location) {
+            StrBuf *str = GFL_StrBufCreate(GEN5_PLACE_LENGTH + 1, heapId);
+            GFL_StrBufLoadString(str, sPlaces[i].name);
+            return str;
+        }
+    }
+    return NULL;
+}
+
 // A Platinum Pokémon in BW2's format (Gen5Pokemon has what both keep). The PID is the encryption key, so it is
 // given at creation; the rest is set field by field, then the stats are computed from it
 static PartyPkm *NewPkm(const Gen5Pokemon *src)
@@ -176,12 +214,29 @@ static PartyPkm *NewPkm(const Gen5Pokemon *src)
     PokeParty_SetParam(pkm, PKM_PARAM_POKEBALL, src->ball);
     PokeParty_SetParam(pkm, PKM_PARAM_POKERUS, src->pokerus);
     PokeParty_SetParam(pkm, PKM_PARAM_MET_LEVEL, src->metLevel);
+    // Where and when it was met (the Summary's memo): Platinum's place numbers, whose names come from the port
+    // (Gen5_PortPlaceName, p_sta_info.c's patch)
+    PokeParty_SetParam(pkm, PKM_PARAM_MET_LOCATION, src->metLocation);
+    PokeParty_SetParam(pkm, PKM_PARAM_MET_YEAR, src->metYear);
+    PokeParty_SetParam(pkm, PKM_PARAM_MET_MONTH, src->metMonth);
+    PokeParty_SetParam(pkm, PKM_PARAM_MET_DAY, src->metDay);
+    PokeParty_SetParam(pkm, PKM_PARAM_EGG_LOCATION, src->eggLocation);
+    PokeParty_SetParam(pkm, PKM_PARAM_EGG_YEAR, src->eggYear);
+    PokeParty_SetParam(pkm, PKM_PARAM_EGG_MONTH, src->eggMonth);
+    PokeParty_SetParam(pkm, PKM_PARAM_EGG_DAY, src->eggDay);
+    PokeParty_SetParam(pkm, PKM_PARAM_FATEFUL_ENCOUNTER, src->fateful);
+    AddPlace(src->metLocation, src->metPlace);
+    AddPlace(src->eggLocation, src->eggPlace);
     PokeParty_SetParam(pkm, PKM_PARAM_OT_GENDER, src->otGender);
     PokeParty_SetParam(pkm, PKM_PARAM_IS_EGG, src->isEgg);
     PokeParty_SetParam(pkm, PKM_PARAM_OT_NAME_RAW, (uptr)src->otName);
     // A Pokémon without a nickname keeps BW2's name for its species
     if (src->hasNickname) {
         PokeParty_SetParam(pkm, PKM_PARAM_NICKNAME_RAW, (uptr)src->nickname);
+    } else if (src->isEgg) {
+        // An egg's name ("Egg") is in its nickname, as BW2's eggs have theirs, but isn't a nickname: without it BW2 showed
+        // the species' name (seen on the Thor: "Happiny" in the battle's party list)
+        PokeParty_SetParam(pkm, PKM_PARAM_NICKNAME_RAW_KEEP_FLAG, (uptr)src->nickname);
     }
     PokeParty_RecalcStats(pkm);
     PokeParty_SetParam(pkm, PKM_PARAM_HP, src->hp);
@@ -265,6 +320,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     }
     GFL_HeapCreateChild(HEAPID_USER, HEAPID_PORT_BATTLE, HEAP_PORT_BATTLE_SIZE);
     sBattleBlockCount = 0;
+    sPlaceCount = 0;
 
     // What BW2's field would take from its game data (BtlSetup_LoadGameData). The player is Platinum's; the bag,
     // Pokédex and records are empty for now (milestone 4)
@@ -615,6 +671,7 @@ int Gen5_SummaryBegin(const Gen5Summary *summary, const char *gen5Dir)
     }
     GFL_HeapCreateChild(HEAPID_USER, HEAPID_PORT_BATTLE, HEAP_PORT_BATTLE_SIZE);
     sBattleBlockCount = 0;
+    sPlaceCount = 0;
 
     PlayerInfo *info = Keep(PlayerInfo_Create(HEAPID_PORT_BATTLE));
     copyTrainerName(info, summary->player.name);

@@ -29,6 +29,7 @@
 #include "item_use_functions.h"
 #include "unk_0203D1B8.h"
 #include "enc_effects.h"
+#include "overlay005/daycare.h"
 #include "overlay005/encounter_effect.h"
 #include "bag.h"
 #include "constants/heap.h"
@@ -88,6 +89,7 @@ enum TestOp {
     OP_LEADER,
     OP_ITEM,
     OP_GIVE,
+    OP_EGG,
     OP_LEAD,
     OP_FAINT,
     OP_DEX,
@@ -322,6 +324,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = strcmp(words[0], "item") == 0 ? OP_ITEM : OP_GIVE;
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
+        return TRUE;
+    } else if (strcmp(words[0], "egg") == 0 && count >= 2) {
+        // egg SPECIES: an egg of SPECIES into the party, as the script command that gives one makes it
+        command->op = OP_EGG;
+        command->x = atoi(words[1]);
         return TRUE;
     } else if (strcmp(words[0], "lead") == 0 && count >= 2) {
         // lead SLOT: the party member in SLOT (0 to 5) to the front
@@ -972,6 +979,22 @@ static u16 Step(void)
             printf("[test] gave species %d at level %d\n", command->x, command->y);
             Next();
             continue;
+        case OP_EGG: {
+            SaveData *save = SaveData_Ptr();
+            Party *party = SaveData_GetParty(save);
+            if (Party_GetCurrentCount(party) >= MAX_PARTY_SIZE) {
+                Fail(command, "the party is full");
+                return 0;
+            }
+            Pokemon *egg = Pokemon_New(HEAP_ID_APPLICATION);
+            Pokemon_Init(egg);
+            Egg_CreateEgg(egg, command->x, 1, SaveData_GetTrainerInfo(save), 3, 0);
+            Party_AddPokemon(party, egg);
+            Heap_Free(egg);
+            printf("[test] gave an egg of species %d\n", command->x);
+            Next();
+            continue;
+        }
         case OP_LEAD:
             Party_SwapSlots(SaveData_GetParty(SaveData_Ptr()), 0, command->x);
             printf("[test] party slot %d to the front\n", command->x);
