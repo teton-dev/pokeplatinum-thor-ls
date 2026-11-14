@@ -144,7 +144,7 @@
          }
 -        GFL_TextRendererDrawToBitmap(win->bitmap, x1, 0x12, scu->abilityStrbuf, scu->smallFont);
 +        // The port: the weather's line is in the bar's middle
-+        GFL_TextRendererDrawToBitmap(win->bitmap, x1, win->portWeather != 0 ? 9 : 0x12, scu->abilityStrbuf, scu->smallFont);
++        GFL_TextRendererDrawToBitmap(win->bitmap, x1, win->portWeather != 0 ? 13 : 0x12, scu->abilityStrbuf, scu->smallFont);
      }
  }
  
