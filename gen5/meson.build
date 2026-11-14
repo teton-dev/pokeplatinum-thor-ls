@@ -71,7 +71,6 @@ gen5_sources = [
     'src/ov169/field_handlers.c',
     # The trainer AI (overlay 170)
     # The Pokémon summary screen (overlay 207)
-    'src/ov207/p_sta_info.c',
     'src/ov207/p_sta_oam.c',
     'src/ov207/p_sta_ribbon.c',
     'src/ov207/p_sta_skill.c',
@@ -260,6 +259,7 @@ gen5_patched = [
                                        # cap and catch rule (runtime.c)
     'src/ov167/btl_client.c',         # Nuzlocke mode's message for a ball knocked back in a wild battle
     'src/ov170/tr_ai.c',              # Jump tables' offsets read in a defined order (the trainer AI)
+    'src/ov207/p_sta_info.c',         # The Summary's memo: Platinum's place names (runtime.c)
 ]
 
 # The port's own code in place of pokebw2's: where BW2's battle meets what the port has instead of BW2's field,

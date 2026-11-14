@@ -295,6 +295,9 @@ In slices, each tested on the desktop:
     after the battle (`event_battle_return.c`), which the port doesn't build.
   - BW2 records a catch in Join Avenue, which the port has none of: `resonance_resort_data.c`'s patch returns when
     Join Avenue isn't loaded (it crashed).
+  - Eggs (2026-11-13, from the Thor: a Happiny egg was "Happiny" in the battle's party list): Platinum keeps an egg's name
+    in its nickname without the nickname flag, so it wasn't passed and BW2 showed the species' name; it is passed now
+    without the flag (`PKM_PARAM_NICKNAME_RAW_KEEP_FLAG`). Test: `gen5_egg.txt` (the test command `egg SPECIES`).
   - Not yet: Platinum's "Give a nickname?" question before the naming screen and its message that a Pokémon went
     to the PC; the Pokédex entry screen for a new species; a catch with every box full (Platinum doesn't let a ball
     be thrown then; BW2 doesn't know Platinum's boxes, and the Pokémon isn't kept).

@@ -115,6 +115,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `app NAME` | once the player is free, opens `bag`, `journal`, `townmap`, `flymap` or `party` over the overworld; nothing returns to the field from it, so the script ends in it |
 | `leader N` | once the player is free, plays Gym Leader encounter effect N (0: Roark, 1: Gardenia... 7: Volkner, 8: Aaron... 11: Lucian, 12: Cynthia) over the overworld |
 | `trainer ID` | once the player is free, a battle against Platinum's trainer ID, as its encounter starts it |
+| `egg SPECIES` | an egg of SPECIES into the party (as the script command that gives one makes it) |
 | `trainers A B [PARTNER]` | once the player is free, a double battle against trainers A and B (as when both see the player), beside the partner trainer PARTNER if given (Cheryl 608, Riley 609, Marley 610, Buck 611, Mira 612) |
 | `lead SLOT` | the party member in SLOT (0 to 5) to the front |
 | `faint SLOT` | the party member in SLOT to 0 HP, as a battle writes it |

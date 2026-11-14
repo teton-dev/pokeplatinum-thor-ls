@@ -1,0 +1,20 @@
+# Gen 5 screens: the Summary's first page, its trainer memo (OT name, met date and place) and frame, as stillshots a few
+# frames apart (seen on the Thor: the frame flickered, the OT and the memo were empty). From the turtwig fixture.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_summary_memo.txt --from turtwig
+
+gen5-import
+gen5-screens on
+mash A until free
+wait 30
+app summary
+wait 240
+stillshot memo-a
+wait 1
+stillshot memo-b
+wait 1
+stillshot memo-c
+press RIGHT
+wait 120
+stillshot memo-skills
+exit 0

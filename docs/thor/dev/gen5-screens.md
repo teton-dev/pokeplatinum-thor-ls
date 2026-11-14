@@ -167,6 +167,16 @@ Done on the desktop (`tests/scripts/gen5_summary.txt`, `gen5_party.txt`, widescr
   Pokemon was shifted left of its panel). The BW2 party's grid backdrop is mirrored across the sides (seamless); the
   Summary's frame is extended, which reads well on the desktop. **Platinum's PC** (`BoxAppMan_Init`) is wide the same
   way: its layers' edges continue, its panels and Pokemon stay in the middle.
+- **The trainer memo** (2026-11-13, from the Thor: no date or place): the met and egg dates, places and the fateful
+  flag go with each Pokémon (`Gen5Pokemon`), with the places' names in Platinum's text, as its own Summary names them
+  (`PlaceToGen5`, `gen5_battle.c`: maps, the special places, events). BW2 names a place from its own Unova lists, so
+  `p_sta_info.c`'s patch asks the port first (`Gen5_PortPlaceName`, `runtime.c`). "11/8/2026, Route 201, Met at Lv. 5"
+  for the turtwig fixture's starter (`gen5_summary_memo.txt`). The OT showed on the desktop.
+- **The frame flickered in widescreen** (2026-11-13, from the Thor): the grid backdrop (the top screen's BG3, the sub
+  engine) scrolls a pixel right and down every 4 frames, and its sides were its edge columns, which changed with each
+  step. It is drawn across the sides from its tilemap now (`wideBgs`, `src/port/widescreen.c`), which repeats seamlessly;
+  libntr did that for the main engine only (`libntr_wide_subtop_bgs.patch`: the sub engine on top too).
+  `widescreen_summary_flicker.txt` shoots it one frame at a time.
 - Not done: markings written back from the Summary, Platinum's ribbons and contest data in BW2's Summary, the Thor.
 
 ## Platinum's party menu in widescreen (2026-11-11)

@@ -25,7 +25,10 @@
 #include "generated/trainers.h"
 #include "generated/trainer_message_types.h"
 #include "message.h"
+#include "res/text/bank/mystery_gift_event_names.h"
+#include "res/text/bank/special_met_location_names.h"
 #include "sound_playback.h"
+#include "unk_02017038.h"
 #include "trainer_data.h"
 #include "bag.h"
 #include "game_options.h"
@@ -224,6 +227,44 @@ static u32 StatusFromGen5(unsigned status, u32 before)
     }
 }
 
+// A met place's name in Platinum's text, as its Summary names it (StringTemplate_SetMetLocationName): a map, a special
+// place (the Day Care couple, a link trade...) or an event
+static void PlaceToGen5(u32 location, unsigned short *dest)
+{
+    static const u16 banks[] = {
+        TEXT_BANK_LOCATION_NAMES,
+        TEXT_BANK_SPECIAL_MET_LOCATION_NAMES,
+        TEXT_BANK_MYSTERY_GIFT_EVENT_NAMES,
+    };
+    const int type = sub_02017038(location);
+    int id = sub_02017058(location);
+    int bank = banks[type];
+
+    dest[0] = 0xFFFF;
+    MessageLoader *loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG, bank, HEAP_ID_SYSTEM);
+    if (loader == NULL) {
+        return;
+    }
+    if (type == 0 && id == 0) {
+        MessageLoader_Free(loader);
+        bank = banks[1];
+        id = SPECIAL_METLOC_NAME_MYSTERY_ZONE;
+        loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG, bank, HEAP_ID_SYSTEM);
+    } else if (id >= (int)MessageLoader_MessageCount(loader)) {
+        MessageLoader_Free(loader);
+        bank = banks[2];
+        id = pl_msg_00000434_00002;
+        loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG, bank, HEAP_ID_SYSTEM);
+    }
+    if (loader == NULL) {
+        return;
+    }
+    String *name = MessageLoader_GetNewString(loader, id);
+    Gen5_TextToGen5(String_GetData(name), String_Length(name) + 1, dest, GEN5_PLACE_LENGTH);
+    String_Free(name);
+    MessageLoader_Free(loader);
+}
+
 void Gen5_PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest)
 {
     charcode_t name[MON_NAME_LEN + 1];
@@ -261,6 +302,17 @@ void Gen5_PokemonToGen5(Pokemon *mon, Gen5Pokemon *dest)
     Gen5_TextToGen5(name, MON_NAME_LEN + 1, dest->nickname, GEN5_NAME_LENGTH);
     Pokemon_GetValue(mon, MON_DATA_OT_NAME, otName);
     Gen5_TextToGen5(otName, TRAINER_NAME_LEN + 1, dest->otName, 8);
+    dest->metLocation = Pokemon_GetValue(mon, MON_DATA_MET_LOCATION, NULL);
+    dest->metYear = Pokemon_GetValue(mon, MON_DATA_MET_YEAR, NULL);
+    dest->metMonth = Pokemon_GetValue(mon, MON_DATA_MET_MONTH, NULL);
+    dest->metDay = Pokemon_GetValue(mon, MON_DATA_MET_DAY, NULL);
+    dest->eggLocation = Pokemon_GetValue(mon, MON_DATA_EGG_LOCATION, NULL);
+    dest->eggYear = Pokemon_GetValue(mon, MON_DATA_EGG_YEAR, NULL);
+    dest->eggMonth = Pokemon_GetValue(mon, MON_DATA_EGG_MONTH, NULL);
+    dest->eggDay = Pokemon_GetValue(mon, MON_DATA_EGG_DAY, NULL);
+    dest->fateful = Pokemon_GetValue(mon, MON_DATA_FATEFUL_ENCOUNTER, NULL);
+    PlaceToGen5(dest->metLocation, dest->metPlace);
+    PlaceToGen5(dest->eggLocation, dest->eggPlace);
 }
 
 // What the battle changed. TRUE if the Pokémon gained a level (for evolving after the battle)
