@@ -1,0 +1,69 @@
+--- a/libraries/sim/include/sim_g2.h
++++ b/libraries/sim/include/sim_g2.h
+@@ -7,7 +7,7 @@
+ void G2SIM_PlotPixel(u8 * screenBuf, u8 r, u8 g, u8 b, u32 x, u32 y, BOOL isSub);
+ // Widescreen: a main-engine text-mode BG layer drawn width DS pixels wide (centred on the
+ // screen) into its own texture, bound to the layer's texture unit. false: not text mode
+-bool G2SIM_DrawBGWide( u8 bgNum, u8 bgMode, int width, bool mirror );
++bool G2SIM_DrawBGWide( u8 bgNum, u8 bgMode, int width, bool mirror, u8 isSub );
+ void G2SIM_SetWideStampImage( const unsigned char *rgb, int width, int height );
+ void G2SIM_SetWideStamps( unsigned char bgNum, const SIM_WideStamp *stamps, int count );
+ #endif
+\ No newline at end of file
+--- a/libraries/sim/src/sim_g2.cpp
++++ b/libraries/sim/src/sim_g2.cpp
+@@ -303,9 +303,10 @@
+   }
+ }
+ 
+-bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width, bool mirror) {
++bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width, bool mirror, u8 isSub) {
+   const bool text = bgNum <= 1 ? bgMode <= 5 : bgNum == 2 ? (bgMode <= 1 || bgMode == 3) : bgMode == 0;
+-  if (!text || width <= SIM_NDS_SCREEN_WIDTH || width > kWideTexWidth || !s_SIM_DBG_BGenable[bgNum]) {
++  const bool enabled = isSub ? s_SIM_DBG_BGSenable[bgNum] : s_SIM_DBG_BGenable[bgNum];
++  if (!text || width <= SIM_NDS_SCREEN_WIDTH || width > kWideTexWidth || !enabled) {
+     return false;
+   }
+   static u8 sWideBuf[4 * kWideTexWidth * SIM_NDS_SCREEN_HEIGHT];
+@@ -326,7 +327,7 @@
+   sLineWidth = width;
+   sWideOut = sWideBuf;
+   for (int j = 0; j < SIM_NDS_SCREEN_HEIGHT; j++) {
+-    DrawBGLine_Text(j, bgNum, 0, FALSE);
++    DrawBGLine_Text(j, bgNum, 0, isSub);
+   }
+   sLineStart = 0;
+   sLineWidth = SIM_NDS_SCREEN_WIDTH;
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -1331,13 +1331,15 @@
+   u8 *bgBufs[4] = {isSub ? bg0stex : bg0tex, isSub ? bg1stex : bg1tex, isSub ? bg2stex : bg2tex,
+                    isSub ? bg3stex : bg3tex};
+   // Widescreen: the layers the game asked for span the whole top screen
+-  const bool wideEngine = sWideActive && !isSub && (dispSel ? !isSub : isSub);
++  // (the sub engine's too when it is the top screen: BW2's Summary, whose backdrop scrolls)
++  const bool wideEngine = (sWideActive && !isSub && (dispSel ? !isSub : isSub)) || (sWideSubTop && isSub && (dispSel ? !isSub : isSub));
++  const int wideBgWidth = sWideSubTop && isSub ? sFboWidth : sWide3dWidth;
+   int wideBgMask = 0;
+   for (int i = 0; i < 4; i++) {
+     const int bg = bgOrder[i];
+     glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bg]);
+     if (bgEnabled[bg] && !(bg == 0 && bg0as3d)) {
+-      if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, sWide3dWidth, ((sWideMirrorBgs >> bg) & 1) != 0)) {
++      if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, wideBgWidth, ((sWideMirrorBgs >> bg) & 1) != 0, isSub)) {
+         wideBgMask |= 1 << bg;
+         continue;
+       }
+@@ -2531,10 +2533,10 @@
+     sWideActive = wide;
+     sWide3dWidth = wide ? sFboWidth : SIM_NDS_SCREEN_WIDTH;
+     sWideScale3D = wide && sWideScale3DRequested;
+-    sWideBgLayers = wide ? sWideBgRequested : 0;
++    sWideBgLayers = (wide || wideSub) ? sWideBgRequested : 0;
+     sWideObjWrap = (wide || wideSub) ? sWideObjRequested : 0;
+     sWideEdgeBgs = (wide || wideSub) ? sWideEdgeRequested : 0;
+-    sWideMirrorBgs = wide ? sWideMirrorRequested : 0;
++    sWideMirrorBgs = (wide || wideSub) ? sWideMirrorRequested : 0;
+     sWideEdgeMirrorBgs = (wide || wideSub) ? sWideEdgeMirrorRequested : 0;
+     sWideStripeBgs = (wide || wideSub) ? sWideStripeRequested : 0;
+     sWideStripeColumn = sWideStripeColumnRequested;
