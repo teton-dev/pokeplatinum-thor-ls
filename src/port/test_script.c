@@ -40,6 +40,7 @@
 #include "pokemon.h"
 #include "savedata/save_table.h"
 #include "pokedex.h"
+#include "item_use_pokemon.h"
 #include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #ifdef GEN5_BATTLES
@@ -93,6 +94,7 @@ enum TestOp {
     OP_LEAD,
     OP_FAINT,
     OP_DEX,
+    OP_USE,
     OP_LEARN,
     OP_TEACH,
     OP_PARTY,
@@ -325,6 +327,12 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
         return TRUE;
+    } else if (strcmp(words[0], "use") == 0 && count >= 3) {
+        // use ITEM SLOT: a medicine (or Rare Candy) on the party member in SLOT, as the party menu checks and applies it
+        command->op = OP_USE;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        return TRUE;
     } else if (strcmp(words[0], "egg") == 0 && count >= 2) {
         // egg SPECIES: an egg of SPECIES into the party, as the script command that gives one makes it
         command->op = OP_EGG;
@@ -433,6 +441,7 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->map = strcmp(words[0], "static") == 0;
         command->x = atoi(words[1]);
         command->y = atoi(words[2]);
+        command->frames = count >= 4 && strcmp(words[3], "shiny") == 0; // wild SPECIES LEVEL shiny
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
@@ -936,7 +945,7 @@ static u16 Step(void)
                 return 0;
             }
             if (!(command->map ? GUI_CreateMon_StartBattle(command->x, command->y, 0, 0)
-                               : GUI_CreateMon_StartWildEncounter(command->x, command->y))) {
+                               : GUI_CreateMon_StartWildEncounterShiny(command->x, command->y, command->frames))) {
                 Fail(command, "the wild encounter couldn't start");
                 return 0;
             }
@@ -971,6 +980,23 @@ static u16 Step(void)
             printf("[test] item %d x%d\n", command->x, command->y);
             Next();
             continue;
+        case OP_USE: {
+            Party *party = SaveData_GetParty(SaveData_Ptr());
+            if (command->y < 0 || command->y >= Party_GetCurrentCount(party)) {
+                Fail(command, "no Pokemon in that slot");
+                return 0;
+            }
+            Pokemon *mon = Party_GetPokemonBySlotIndex(party, command->y);
+            if (Pokemon_CheckItemEffects(mon, command->x, 0, HEAP_ID_APPLICATION)) {
+                Pokemon_ApplyItemEffects(mon, command->x, 0, 0, HEAP_ID_APPLICATION);
+                printf("[test] item %d used on slot %d: level %u, HP %u\n", command->x, command->y,
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_LEVEL, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_HP, NULL));
+            } else {
+                printf("[test] item %d has no effect on slot %d\n", command->x, command->y);
+            }
+            Next();
+            continue;
+        }
         case OP_GIVE:
             if (!GUI_CreateMon_GenPokemon(command->x, command->y)) {
                 Fail(command, "the party is full");
@@ -1062,6 +1088,11 @@ static u16 Step(void)
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_DEF_IV, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_SPEED_IV, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_SPATK_IV, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_SPDEF_IV, NULL),
                     (unsigned)Pokemon_GetValue(mon, MON_DATA_EXPERIENCE, NULL), NuzlockeMode_IsDead(mon) ? ", dead (Nuzlocke)" : "");
+                printf("[test] party %d: moves %u/%u %u/%u %u/%u %u/%u\n", i,
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE1, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE1_PP, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE2, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE2_PP, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE3, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE3_PP, NULL),
+                    (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE4, NULL), (unsigned)Pokemon_GetValue(mon, MON_DATA_MOVE4_PP, NULL));
             }
             Bag *bag = SaveData_GetBag(save);
             printf("[test] bag: %u Potions, %u Master Balls, %u Poke Balls\n", (unsigned)Bag_GetItemQuantity(bag, 17, HEAP_ID_APPLICATION),
@@ -1135,11 +1166,11 @@ static u16 Step(void)
                 u16 areaSpecies = 0;
                 const u16 location = PortGame_Field_LocationName();
                 const int area = NuzlockeMode_AreaState(location, &areaSpecies);
-                printf("[test] nuzlocke: %s%s%s%s; area %u %s %u\n", NuzlockeMode_LevelName(NuzlockeMode_Level()),
+                printf("[test] nuzlocke: %s%s%s%s; area %u %s %u; cap %d\n", NuzlockeMode_LevelName(NuzlockeMode_Level()),
                     NuzlockeMode_CritGuard() ? ", crit guard" : "", NuzlockeMode_WasDropped() ? ", dropped" : "",
                     NuzlockeMode_BallsReceived() ? ", has had balls" : "", location,
                     area == NUZLOCKE_AREA_CAUGHT ? "caught" : area == NUZLOCKE_AREA_MISSED ? "missed" : "open",
-                    areaSpecies);
+                    areaSpecies, NuzlockeMode_LevelCap());
             }
             Next();
             continue;

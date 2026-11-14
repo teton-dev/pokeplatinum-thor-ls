@@ -1,0 +1,136 @@
+# Nuzlocke mode: the crit guard in Platinum's engine (docs/thor/dev/nuzlocke.md). From nuz-normal (Normal with crit
+# guard on): Turtwig's Razor Leaf (a high critical hit rate, 1 in 8) at a level 100 wild Metapod (it only knows
+# Harden, so nothing faints), 24 turns. The check is the log: "Nuzlocke mode: a critical hit guarded" lines (a
+# critical hit rolled and thrown away; about 3 are expected, and none in 24 turns has odds of about 4%).
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_crit.txt --from nuz-normal
+
+mash A until free
+gen5-battles off
+nuzlocke state
+learn 75
+wild 11 100
+until battle
+until command
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+wait 30
+touch 128 90
+wait 30
+touch 64 50
+until command timeout 6000
+shot last-turn
+exit 0
