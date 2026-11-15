@@ -417,3 +417,13 @@ Without it every translated line lost its last character, and lines ending in th
 Pokémon prices line up with the cursor code (0x0203, x 90), as the US counters' do. Test `slots_jp_prizes.txt` buys
 Substitute, the Silk Scarf and Abra and checks coins, bag and party (`check` command); the test's `menu` event now
 fires for the bottom screen's yes/no and lists, which fixed frame waits couldn't follow.
+
+### The English text on screen (2026-11-14)
+
+Test `slots_jp_text.txt` measures every line of the two translated banks in the field's message font (test command
+`textwidths`): the box holds 216 px, as wide as the US game's widest lines (bank 600). The translation first kept the
+Japanese line breaks, which fit but left words alone on a line after a scroll; `tools/jp-gamecorner/reflow.py`
+re-wrapped every sentence row to the fewest, most even lines of at most 208 px (now the widest is 207). A box's lines
+go first `\n` second, then `\f` (scroll) before each further one, as the US text does. Rows with a name or item
+buffer, a yes/no or a two-line prize button were left as written. Seen on screen: the clerk, the prize counters and
+the slot fan's long talk (Goldenrod (13, 8), from below); the rest are checked by width only.
