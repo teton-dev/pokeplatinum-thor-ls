@@ -251,3 +251,41 @@ bulk of it.
 
 Open decisions: which JP version to support first (HG or SS; the Game Corner is identical in both),
 and whether to include the bonus mode in the first pass.
+
+## Display, setup and main loop (read 2026-11-14)
+
+How the JP slot app puts itself on screen. The port rewrites all of this against libntr's BG, sprite and window
+code, so what matters is the shape, not the DS calls.
+
+- **Main** (0x021E4EA9, `Main`): a four-step outer state (0 fade in, 1 wait, 2 run, 3 fade out). Step 2 calls the
+  *game state machine* (0x021E5C48): work+0xC indexes a table of **28 handlers** at 0x021E9FAC (0x021E5D00 ...
+  0x021E69FC); each returns 0 (stop this frame), 1 (run the next state at once) or 2 (leave the app). Every frame
+  it then runs the reel/sprite updater (0x021E8F1C) and the cell-animation tick (0x0200CD40).
+- **Init** (0x021E4F34): copies the coin count (cap 50000), the type (args+4), the save, the menu-input state
+  (touch or buttons), and the BGM id; then the setup chain 0x021E5160 builds everything in this order: VRAM banks
+  (0x021E5280) and the BG layers (0x021E52A0), graphics (0x021E554C), text (0x021E5838), windows (0x021E58C0),
+  sprite renderer (0x021E592C, 0x021E5A28, 0x021E5AE0). Exit tears it down in reverse (0x021E5190).
+- **BG layers: 7**, all 256x256 text BGs: main 0 to 3 (screen bases 0x1F, 0x1E, 0x1D, 0x1C: the last has a
+  different priority) and sub 4 to 6. The sub screen is used (touch-screen controls and a coin/payout display).
+  Both screens have their window layers off and brightness fades through the standard calls.
+- **Graphics NARC (id 0x7F's handle):** files 8, 0x14, 0x0, 0x4 are tile data for the four main layers (sizes
+  0x180, 0x180, 0x200, 0x100 tiles), palettes are files 0xE/0xF (main/sub), 9/0xA, 0x15/0x16, 0x17 (screens +
+  palettes for the other layers), and files 0x18, 0xC, 0xB, 0xF x3 (counting from 0xF to 0x11) are sprite *cell and
+  animation sets*, 0xD the sprite palette. All of this must be re-read from a/1/2/7 and a/1/5/5 of the player's
+  JP ROM; the file list above is the first draft of the import manifest.
+- **Sprites: 15 reel/symbol sprites** (5 rows x 3, at 0x21E5AE0, x = 0x58 + 0x28 per reel, y = 0x28 + 0x18 per
+  row, all affine off, set to draw on both screens), plus 3 + 5 + 8 UI/animation sprites (arrows, bet lights,
+  credit digits, the bonus Pokémon).
+- **Text:** one `MessageData` (bank 429) and a message printer with 5 windows (0x021E9EB8: 8 bytes per window
+  template); the Pokémon bonus uses the species name table. Windows are drawn by the standard `Window_` calls with
+  a frame from the save's options.
+- **Sound** (ids are the JP game's, so they are *different* in English HGSS and the port needs a table):
+  SEs 0x5DC, 0x5ED, 0x5EE, 0x625, 0x62C, 0x938, 0x939, 0x93B, 0x93C (reel start/stop, win, bonus, bet, coin
+  clink); BGM 0x42D (the Game Corner music, played through the normal BGM calls; the app lowers the field BGM to
+  8 over the fade). Map each to the closest English SE when porting.
+- **Input:** touch via `TouchScreen` rectangles (a table at 0x021E9FA8) and the A/B/D-pad through the menu-input
+  state the launcher passes in; the reels stop one at a time (A or a touch on each stop button), bet 1 or 3 with
+  the arrows. State 5 (reel start), 6 (wait for stops) and the 8-spin counter are the same as in the logic notes.
+
+What is *not* read yet: the 28 states one by one (their numbering vs the logic above), exact sprite animation
+numbers, and the bonus-game screens. These come next, while the C rewrite is built in the same order.
