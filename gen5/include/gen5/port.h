@@ -129,5 +129,10 @@ BOOL Gen5_PortCritGuard(void);
 BOOL Gen5_PortIsDead(u32 personality);
 void Gen5_PortGrayIconPalettes(int iconSlot, int graySlot);
 BOOL Gen5_PortCatchRefused(u32 personality);
+// HGSS's Apricorn Balls' rules are on (Gen5Battle.apricornBalls; btl_server_flow_sub.c's CheckBallCapture)
+BOOL Gen5_PortApricornBalls(void);
+// Whether a port trainer says something during the battle (Gen5Trainer.hintText; btl_client.c's patch; btlv_core.c's
+// patch shows it)
+BOOL Gen5_PortTrainerHasHint(u32 trainerId, u32 msgId);
 
 #endif // GEN5_PORT_H

@@ -73,6 +73,7 @@ static void *sMemory;
 static BOOL sStarted;
 static NNSGfdVramTransferTask sVramTransferTasks[VRAM_TRANSFER_TASKS];
 static BtlSetup *sSetup;
+static BOOL sApricornBalls; // Gen5Battle.apricornBalls
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
@@ -326,6 +327,8 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         return FALSE;
     }
     GFL_HeapCreateChild(HEAPID_USER, HEAPID_PORT_BATTLE, HEAP_PORT_BATTLE_SIZE);
+    // Before the bag: the Apricorn Balls' item data (pml_item.c's patch) decides whether they go in it
+    sApricornBalls = battle->apricornBalls != 0;
     sBattleBlockCount = 0;
     sPlaceCount = 0;
 
@@ -412,6 +415,9 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sSetup->fieldSituation.env.terrain = battle->arenaTerrain;
     sSetup->unkDD_6 = battle->arenaAlt;
     sSetup->badgeCount = battle->player.badges;
+    if (battle->fishing) {
+        BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_FISHING);
+    }
     sSetup->result = BTL_RESULT_VICTORY;
     sSetup->party[0] = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));
     PokeParty_Copy(party, sSetup->party[0]);
@@ -685,6 +691,39 @@ BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId)
     return TRUE;
 }
 
+// BW2's numbers of the hints (btl_client.c's sTrainerHintMsgs): first hit, half HP, last Pokémon, last at half HP
+static const unsigned short *TrainerHintText(const Gen5Trainer *trainer, u32 msgId)
+{
+    static const u32 ids[4] = { 0x11, 0x12, 0x13, 0x14 };
+    for (int i = 0; i < 4; i++) {
+        if (ids[i] == msgId) {
+            const unsigned short *text = trainer->hintText[i];
+            return text[0] != 0 && text[0] != 0xFFFF ? text : NULL;
+        }
+    }
+    return NULL;
+}
+
+// Whether a port trainer (from 0x800) says something during the battle (btl_client.c's patch)
+BOOL Gen5_PortTrainerHasHint(u32 trainerId, u32 msgId)
+{
+    const Gen5Trainer *trainer = TrainerById(trainerId);
+    return trainer != NULL && TrainerHintText(trainer, msgId) != NULL;
+}
+
+// What a port trainer says during the battle (btlv_core.c's patch), into strbuf: FALSE if it has nothing to say
+BOOL Gen5_PortTrainerHintText(StrBuf *strbuf, u32 trainerId, u32 msgId)
+{
+    const Gen5Trainer *trainer = TrainerById(trainerId);
+    const unsigned short *text = trainer != NULL ? TrainerHintText(trainer, msgId) : NULL;
+    if (text == NULL) {
+        return FALSE;
+    }
+    GFL_StrBufLoadString(strbuf, text);
+    printf("Gen 5: trainer %u says its line %u\n", trainer->id, (unsigned)msgId);
+    return TRUE;
+}
+
 // The summary screen (BW2's overlay 207) on the same systems: a proc of its own in place of the battle's
 static PStatusParam sSummaryParam;
 static PokeParty *sSummaryParty;
@@ -760,6 +799,11 @@ enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary)
     default:
         return GEN5_SUMMARY_BACK;
     }
+}
+
+BOOL Gen5_PortApricornBalls(void)
+{
+    return sApricornBalls;
 }
 
 u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp)

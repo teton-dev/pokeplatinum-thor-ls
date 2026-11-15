@@ -1,0 +1,14 @@
+--- a/src/ov286/b_bag_item.c
++++ b/src/ov286/b_bag_item.c
+@@ -61,6 +61,11 @@
+                 continue;
+             }
+             bits = pockets[slot->item];
++            // The port: in HeartGold and SoulSilver, the Apricorn Balls go with the Poke Balls, which archive 228
++            // doesn't put them in (Gen5_PortApricornBalls)
++            if (Gen5_PortApricornBalls() && slot->item >= ITEM_FAST_BALL && slot->item <= ITEM_SPORT_BALL) {
++                bits = pockets[ITEM_POKE_BALL];
++            }
+             for (k = 0; k < 4; k++) {
+                 if (bits & (1 << k)) {
+                     pocket = sBBagPocketsByItemBit[k];

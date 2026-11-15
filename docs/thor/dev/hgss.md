@@ -108,8 +108,8 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (`src/port/gen5_rom.cpp`, copied: keep the two the same) and has the setting and a debug wild battle.
   `lib/port/gen5_battle.c` is `src/port/gen5_battle.c` on HGSS's `BattleSetup`, started from `Battle_LaunchApp`:
   wild battles (party, bag, arena, results, catching into the party or the PC) and trainers (below). `gen5_wild.txt`
-  plays one to the end. Next: evolution after a battle, the caught Pokémon's naming,
-  Apricorn balls, the Safari Zone and Bug-Catching Contest. Later, `gen5/` and the game-neutral parts of the bridge
+  plays one to the end. Next: the Safari Zone and Bug-Catching Contest (the rest is below, "After the battle").
+  Later, `gen5/` and the game-neutral parts of the bridge
   (`gen5_rom.cpp`, the conversions) move to a repository of their own (milestone 3).
 - **White HP boxes** (2026-11-12): HGSS's Gen 5 battles show White 2's light HP boxes. Both versions' palettes are in
   either ROM's archive 11 (0x1ae and 0x1b0 White 2's, 0x1af and 0x1b1 Black 2's), so a Black 2 ROM is enough;
@@ -138,7 +138,7 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   Tests: `gen5_trainer.txt` (a Rocket Grunt), `gen5_rival.txt` (Silver in New Bark Town), and the runner's
   `trainer ID [ID2]`. With more than one Pokémon a
   mashed A loops in BW2's "switch?" prompt and party screen after a knockout: keep test parties to one. Not done:
-  Mom's savings out of the prize, the trainers' mid-battle lines (`TRMSG_LAST_POKE`...), the Frontier.
+  the Frontier (the rest is below, "After the battle").
   The player's back sprite is Ethan or Lyra (2026-11-13, below).
 - Platinum's rain fix doesn't apply: HGSS's decompilation types the drops' work (`WeatherParticle`).
 - **Battle particles** (2026-11-13): HGSS's own battles drew no move particles (Tackle's burst and dust). Its SPL
@@ -211,6 +211,36 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
+
+### Gen 5 battles: after the battle, Apricorn Balls, trainers' lines (2026-11-15)
+
+- **Naming and evolution** (`lib/port/gen5_battle.c`'s `Main`): the Gen 5 overlay replaces HGSS's whole battle
+  overlay, whose end runs the catch's naming screen and the evolutions (`battle_022378C0.c`'s `BSTATE_EVOLUTION_*`), so
+  it now does both after BW2's battle, as this fork's bridge does: a caught Pokémon gets HGSS's naming screen (its own
+  heap, `HEAP_ID_BATTLE`; "sent to the PC" under the name when the party is full), then each Pokémon that gained a level
+  and evolves (`BattleSystem_CheckEvolution`, `EvolutionScene_New`, as HGSS's flags). Tests `gen5_catch.txt`,
+  `gen5_evolution.txt`.
+- **Losing a debug or test wild battle**: HGSS's encounter task leaves a loss to its caller (a script whites out), and
+  the debug window's and test runner's wild battles didn't, so a loss left the game with no overworld. Both now white
+  out (`CallTask_Blackout`), as their trainer battles did. Test `gen5_wild_loss.txt`.
+- **Apricorn Balls**, by HGSS's rules (`battle_command.c`): BW2's `CheckBallCapture` (patched) takes the catch rate from
+  `Gen5_PortApricornCatchRate` (Fast, Level, Lure, Heavy, Love, Moon: HGSS's formulas, the Heavy Ball's catch-rate quirk
+  kept) and the Sport Ball's 1.5x, only with `Gen5Battle.apricornBalls` (HGSS sets it; Platinum doesn't). BW2 has no
+  battle data for them: `pml_item.c` (patched) gives them a Poke Ball's (their number, name, icon stay theirs), and the
+  battle bag's own table (archive 228, `b_bag_item.c`, patched) puts them with the Poke Balls; BW2's throw sprites stop
+  at the Dream Ball's (`btlv_effvm.c`, patched), so they fly as a Poke Ball looks (BW2's particles cover all 25 balls).
+  The flag is set before the battle's bag is filled. A catch comes back as a ball number (Level Ball 18), which HGSS's
+  catch data takes as an item (493): converted; a Friend Ball's catch gets friendship 200. `Gen5Battle.fishing` gives
+  BW2 its fishing flag (the Lure Ball). Test `gen5_apricorn.txt`.
+- **Mom's savings** needed nothing: HGSS moves a quarter of the money won to Mom when it copies the battle's results to
+  the save (`BattleSetup_CopyResultsToSaveData`), whatever engine ran it. Not shown: HGSS's in-battle line about it.
+  Test `gen5_mom_savings.txt`.
+- **Trainers' lines during the battle**: BW2 shows them itself (`btl_client.c`'s hints, at first hit, half HP, last
+  Pokémon, last at half HP: its messages 0x11 to 0x14), read from BW2's trainer tables by number. A port trainer (from
+  0x800) now has them in `Gen5Trainer.hintText`, which HGSS fills from `TRMSG_HIT_POKE_FIRST_TIME` to
+  `TRMSG_LAST_POKE_HALF` (Silver, the Gym Leaders, the Elite Four and Lance have the last two); BW2's check and message
+  (`btl_client.c`, `btlv_core.c`, patched) ask the port. Platinum doesn't fill them yet. Test `gen5_trainer_lines.txt`
+  (Falkner: give the test's Pokémon Swift, his birds' Sand-Attack makes anything else miss).
 
 ### Save editor and debug window (2026-11-15)
 
