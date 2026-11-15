@@ -949,11 +949,16 @@ the demo's command, the server goes straight to `ProcBattleEnd`). Nothing in pok
   `core->mainModule->pokeCons[1]`: the client's copy isn't what goes back to the setup); bait is the move animation of Fling (374) and
   mud that of Mud-Slap (189), started with the trainer's place (view position 8) as the attacker.
 - **The buttons** are the command screen's: FIGHT is the Safari Ball, BAG the bait, POKÉMON the mud, RUN runs
-  (`sCommandResults` give `BTLV_COMMAND_FIGHT`, `BAG`, `POKEMON`, `RUN`). **Their labels still say FIGHT, BAG and POKÉMON** (not
-  done): the labels are tile art over two background layers (BG4's maps 361 to 371 of archive 11 and BG5's 0x174, tiles in file
-  0x166, 4 bits per pixel, the text 4 pixels tall in one and the rest in the other; FIGHT's tiles are 377 to 390, BAG's 322 to 325,
-  POKÉMON's 332 to 338 in map 361), so they need redrawing as new tiles (a copy of file 0x166 as a new member of archive 11, as the
-  Galactic arena and the Fairy icon do) or text drawn over them; the letters L and C don't exist in the art.
+  (`sCommandResults` give `BTLV_COMMAND_FIGHT`, `BAG`, `POKEMON`, `RUN`). **Their labels read BALL, BAIT and ROCK** (done 2026-11-14,
+  `MakeSafariButtons`, `src/port/gen5_data.c`): the labels are tile art, each drawn in two halves (BG4's maps 361 to 371 of archive 11:
+  the upper five rows in row 10 at columns 3 to 6 for BAG and 23 to 30 for POKÉMON, the lower four in row 10 at 35 to 38 and 55 to 62;
+  BG5's map 372: FIGHT!'s upper rows in row 5 at 44 to 51, its lower in row 6 at 12 to 19; tiles in file 358, 4 bits per pixel). The
+  generated copy of archive 11 (`gen5_data/a/0/1/1`, which also holds the Galactic arena's models) gets the tile file and those 12
+  maps again as members 574 to 586, whose label cells point at new tiles (ids 400 on, free) with the port's own letters: a 5 by 5 font
+  stretched to 9 rows (7 pixels wide, 6 for BAIT), the upper five rows in the upper cells and the lower four in the lower ones, on the
+  original colours and background. `BtlvInput_FileId` (btlv_input.c's patch) asks for them in a Safari battle, so every other battle
+  keeps the original art. The Galactic stamp's version is 7 (the files are made again). R, O, C and K are drawn for POKÉMON's place and
+  B, A, L, I and T for the others; the accent of POKÉMON's É is gone with its tile.
 - **The balls left** are a bar on the top screen, left, in the weather bar's place (`BtlvScu_PortShowWeatherWin` with weather 5,
   green, "Safari Balls: 30"), shown at each turn's start and drawn again after each throw. Bait and mud are not counted (they aren't in
   Platinum). The player's own gauge (BW2 makes one for the Pokémon that isn't there) is removed each frame.
@@ -965,6 +970,6 @@ the demo's command, the server goes straight to `ProcBattleEnd`). Nothing in pok
   run, with shots), `gen5_safari_catch.txt` (a Caterpie caught with a Safari Ball into the party, the Pokédex, the ball 5),
   `gen5_safari_end.txt` (a Kangaskhan that runs away; one ball, missed: out of balls), `gen5_safari_marsh.txt` (the Great Marsh's
   arena). `gen5-check` has 0 failed.
-- **Not done / open:** the button labels (above); the Pokémon's reactions (Platinum plays its happy, eating and angry animations; only
+- **Not done / open:** the Pokémon's reactions (Platinum plays its happy, eating and angry animations; only
   the texts and the Fling and Mud-Slap effects are there); the species' cries on a catch and the jingle (BW2's music calls are stubs, as
   elsewhere); widescreen and the Thor not looked at; Nuzlocke mode's catch rule doesn't know the Safari Zone; Pal Park stays Platinum's.

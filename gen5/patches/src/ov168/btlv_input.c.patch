@@ -11,7 +11,30 @@
  };
  static const BtlvInputButtonSet MOVE_BUTTONS = { MOVE_TOUCH_RECTS, MOVE_BUTTON_FLAGS, MOVE_FLASH_ROWS };
  // The scroll of BG 4 for the button rise of each slot
-@@ -3217,15 +3217,15 @@
+@@ -1511,7 +1511,22 @@
+ }
+ 
+ // Archive 11's Pokéstar Studios set of the lower screen's files follows the first
++int Gen5_PortSafari(void); // The port: a Safari Zone battle (safari.c)
++
+ static u32 BtlvInput_FileId(u32 fileId, BtlvInput *work) {
++    // The port: the Safari Zone's labels (BALL, BAIT, ROCK) are the tile file and the command maps made again as members 574 to
++    // 586 of the archive (src/port/gen5_data.c, MakeSafariButtons)
++    if (Gen5_PortSafari()) {
++        if (fileId == 0x166) {
++            return 574;
++        }
++        if (fileId >= 361 && fileId <= 371) {
++            return 575 + fileId - 361;
++        }
++        if (fileId == 0x174) {
++            return 586;
++        }
++    }
+     if (work->studioMode != BTL_STUDIO_MODE_NONE) {
+         fileId += 0x86;
+     }
+@@ -3217,15 +3232,15 @@
      for (i = 0; i < 4; i++) {
          MI_CpuCopy16(
              &pixels[i * 0x1c0],
