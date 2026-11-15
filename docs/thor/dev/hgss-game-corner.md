@@ -361,6 +361,16 @@ art (11), touch = the face (20-22) and the digits (12). All 4bpp. This is what t
   Chikorita/Cyndaquil/Totodile in 3x3 pieces (the bonus strips' values), 34-35 two buttons. Strips at `0x021EA32C`
   (6 x 21 u32: 3 normal, 3 bonus). A reel turn is 504 px; the window shows rows 48-120 (3 symbols), middle line y 84.
 - Fades: brightness. Voltorb Flip's wipe fades (types 20/21) never finished their fade-out in the port.
-- Still to do: the rules wired to the reels (bet, draw, stopping on the drawn result, payouts, coins), the credit and
+- **Rules (read and wired 2026-11-14):** JP state 2 always bets **3 coins** (the 1-coin path is the free play after a
+  Replay); what the notes called the bet index (`+0x39`) is the machine's **mode** 0-2, the odds tables' row, set from
+  the payout decision's outcome (`+0x3A`, JP state 11). The drawn symbol maps onto the reels as `cell = symbol - 1`:
+  1 Replay (a free spin), 2 Pikachu (15), 3 Marill (10), 4 berries (2, on reel 1 alone, top/middle/bottom), 5 Poke
+  Ball (100 + jackpot counter 0), 6 the 7 (100 + counter 1); 0 a miss. Payouts `0x021EA098`, once per spin (not per
+  line or bet). Lines `0x021EA0E8` (5 x (reel, row)): top, middle, bottom, the two diagonals; all five always count.
+  The judge (`0x021E8E48`) takes the first of symbols 1-6 on any line. The stop control (`0x021E95A4` on, per-symbol
+  functions not read) slips a reel up to 4 symbols; the port's `Slot_ChooseStop` follows the same aim (line the
+  drawn symbol up when it can, never let anything else win). On the host, random timing realises a drawn Replay 95%
+  of the time, Marill 90%, Pikachu 52%, the jackpots ~25%, and returns ~71% of the bets (plus the free replays).
+- Still to do: the bonus game (the bonus roll after a win, JP states 13-24), the reach effects (outcome class), the credit and
   payout digits (file 24 / 12), the top screen's animations (the Smeargle host of a/1/2/7 files 0-3 and its emote
   bubbles), the bonus game, sound (JP SE ids to map), the English text bank, widescreen.
