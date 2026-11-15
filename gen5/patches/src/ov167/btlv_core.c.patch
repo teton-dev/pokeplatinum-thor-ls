@@ -31,14 +31,10 @@
      void *data;
      u8 *keys;
      BattleMon *mon;
-@@ -494,6 +503,309 @@
-     case 20:
-         *BtlvScd_GetKeyCursorFlag(core->scd) = wk->savedKeys;
-         return TRUE;
-+    }
-+    return FALSE;
-+}
-+
+@@ -498,6 +507,340 @@
+     return FALSE;
+ }
+ 
 +// ---- The port: the Safari Zone's battle (src/safari.c has its rules and texts) ----
 +// None of the player's Pokémon is on the field: the wild Pokémon appears, the player's trainer slides in and stays in
 +// the throwing pose, and each turn the player throws a Safari Ball, bait or mud, or runs; the Pokémon then watches or
@@ -79,6 +75,7 @@
 +    SAFARI_END_MSG_WAIT,
 +    SAFARI_END,
 +    SAFARI_PROMPT_WAIT,
++    SAFARI_REACT_ANIM,
 +};
 +
 +// The throwing pose: the trainer's throw animation (its sequence 1), stopped after this many frames, where the ball is
@@ -96,6 +93,20 @@
 +static int sPortSafariCaught;
 +static int sPortSafariBaitEats; // the bait's and the mud's reaction line: 1 the usual, 0 the rarer
 +static u8 sPortSafariSavedKeys;
++
++// The wild Pokémon's (view position 1) reaction: a sine shake along an axis (0 x, else y) for frames, the angle going from 0 to end
++static void BtlvCore_PortSafariShake(s32 axis, fx32 end, fx32 amplitude, s32 frames) {
++    BtlvMcssShake shake;
++
++    MI_CpuClear8(&shake, sizeof(shake));
++    shake.pos = 1;
++    shake.axis = axis;
++    shake.angle = 0;
++    shake.amplitude = amplitude;
++    shake.frames = frames;
++    shake.speed = FX_Div(end, frames << FX32_SHIFT);
++    BtlvMcss_Shake(BtlvEffect_GetMcss(), &shake);
++}
 +
 +static void BtlvCore_PortSafariMsg(BtlvCore *core, int id) {
 +    Gen5_PortSafariText(core->strbuf, id);
@@ -273,10 +284,26 @@
 +                    (*seq) = SAFARI_RESULT_MSG_WAIT;
 +                }
 +            } else {
-+                BtlvCore_PortSafariMsg(core, sPortSafariChoice == BTLV_COMMAND_BAG ? (sPortSafariBaitEats ? 4 : 5)
-+                                                                                  : (sPortSafariBaitEats ? 6 : 7));
-+                (*seq) = SAFARI_REACT_MSG_WAIT;
++                // Platinum's happy and eating (two hops) or angry (a shake) animation, then its line
++                if (sPortSafariChoice == BTLV_COMMAND_BAG) {
++                    BtlvCore_PortSafariShake(1, 0x08000000, 0xC00, 12);
++                    sPortSafariWait = 26;
++                } else {
++                    BtlvCore_PortSafariShake(0, sPortSafariBaitEats ? 0x50000000 : 0x90000000, 0x900, sPortSafariBaitEats ? 30 : 48);
++                    sPortSafariWait = sPortSafariBaitEats ? 34 : 52;
++                }
++                (*seq) = SAFARI_REACT_ANIM;
 +            }
++        }
++        break;
++    case SAFARI_REACT_ANIM:
++        if (sPortSafariChoice == BTLV_COMMAND_BAG && sPortSafariWait == 14) {
++            BtlvCore_PortSafariShake(1, 0x08000000, 0xC00, 12); // the second hop
++        }
++        if (--sPortSafariWait <= 0) {
++            BtlvCore_PortSafariMsg(core, sPortSafariChoice == BTLV_COMMAND_BAG ? (sPortSafariBaitEats ? 4 : 5)
++                                                                              : (sPortSafariBaitEats ? 6 : 7));
++            (*seq) = SAFARI_REACT_MSG_WAIT;
 +        }
 +        break;
 +    case SAFARI_RESULT_MSG_WAIT:
@@ -338,10 +365,14 @@
 +            return TRUE;
 +        }
 +        break;
-     }
-     return FALSE;
++    }
++    return FALSE;
++}
++
+ BattleMon *BtlvCore_GetMonAtViewPos(BtlvCore *core, u32 index) {
+     return PokeCon_GetPosMonInner(core->pokeCon, ViewPosToBattlePos(core->mainModule, index));
  }
-@@ -561,6 +873,7 @@
+@@ -561,6 +904,7 @@
      core->result = 0;
      core->laterMon = laterMon;
      BtlvCore_SetMainProc(core, BtlvCore_ProcCommandSelect);
@@ -349,13 +380,12 @@
  }
  
  void BtlvCore_StopCommandSelect(BtlvCore *core) {
-@@ -1393,8 +1706,27 @@
-     BtlString_FormatSetMsg(core->strbuf, message, args);
+@@ -1394,7 +1738,26 @@
      BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
  }
-+
-+BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId); // The port (runtime.c)
  
++BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId); // The port (runtime.c)
++
 +// The port: Nuzlocke mode's "You've already used your catch for this area!" (btl_client.c's patch)
 +void Gen5_PortCatchRefusedText(StrBuf *strbuf); // The port (runtime.c)
 +void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core);
@@ -377,7 +407,7 @@
      if (TrainerMsg_CheckExists(trainerId, msgId, core->heapId)) {
          TrainerMsg_Load(trainerId, msgId, core->strbuf, core->heapId);
          BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
-@@ -1451,6 +1783,26 @@
+@@ -1451,6 +1814,26 @@
      return BtlvScu_WaitAbilityWinChange(core->scu, pos);
  }
  

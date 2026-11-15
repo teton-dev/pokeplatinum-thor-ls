@@ -1,0 +1,47 @@
+# Gen 5 battles, the Safari Zone: the wild Pokemon's reactions, shot every 10 frames after the effect (bait, then mud).
+gen5-import
+gen5-battles on
+mash A until free
+safari 113 22 30
+until battle
+until command
+wait 90
+touch 40 178
+wait 150
+wait 8
+shot bait0
+wait 8
+shot bait1
+wait 8
+shot bait2
+wait 8
+shot bait3
+wait 8
+shot bait4
+wait 8
+shot bait5
+wait 8
+shot bait6
+wait 8
+shot bait7
+mash B until command
+wait 90
+touch 216 178
+wait 150
+wait 8
+shot mud0
+wait 8
+shot mud1
+wait 8
+shot mud2
+wait 8
+shot mud3
+wait 8
+shot mud4
+wait 8
+shot mud5
+wait 8
+shot mud6
+wait 8
+shot mud7
+exit 0
