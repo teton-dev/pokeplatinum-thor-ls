@@ -970,6 +970,9 @@ the demo's command, the server goes straight to `ProcBattleEnd`). Nothing in pok
   run, with shots), `gen5_safari_catch.txt` (a Caterpie caught with a Safari Ball into the party, the Pokédex, the ball 5),
   `gen5_safari_end.txt` (a Kangaskhan that runs away; one ball, missed: out of balls), `gen5_safari_marsh.txt` (the Great Marsh's
   arena). `gen5-check` has 0 failed.
-- **Not done / open:** the Pokémon's reactions (Platinum plays its happy, eating and angry animations; only
-  the texts and the Fling and Mud-Slap effects are there); the species' cries on a catch and the jingle (BW2's music calls are stubs, as
+- **Reactions** (2026-11-14): after the Fling or Mud-Slap effect the wild Pokémon hops twice (bait), shakes (mud) or shakes longer and harder
+  (the 1 in 10 "beside itself"), by `BtlvMcss_Shake` on its sprite, then its line (`SAFARI_REACT_ANIM`; test `gen5_safari_react.txt`).
+  **Widescreen** looked at in `gen5_safari_widescreen.txt`: the scene fills the window, the buttons' screen and the text are as in every Gen 5
+  battle, and the balls bar extends across the left side like the ability bars (by design).
+- **Not done / open:** the species' cries on a catch and the jingle (BW2's music calls are stubs, as
   elsewhere); widescreen and the Thor not looked at; Nuzlocke mode's catch rule doesn't know the Safari Zone; Pal Park stays Platinum's.
