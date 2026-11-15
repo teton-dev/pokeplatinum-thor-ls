@@ -345,3 +345,22 @@ the closing tile file 46.
 
 So the screens are: top = machine frame + payout chart (files 8-10), reels drawn as scrolling BG using the strip
 art (11), touch = the face (20-22) and the digits (12). All 4bpp. This is what the C app loads.
+
+### The port so far (2026-11-14, HGSS repo `lib/port/slots/`)
+
+- `slots_rom_core.cpp` / `slots_rom.cpp`: the import (Settings > Game Corner), into `slots-jp/` (a/1/2/7, a/1/5/5,
+  `ov77.bin` decompressed). `slot_logic.c`: the rules (draw, bonus, payout balance), tables read from `ov77.bin`.
+  `slot_assets.c`: NARC/NCLR/NCGR/NSCR/NCER readers. `slot_app.c`: the app; `ScrCmd_CasinoGame` launches it in place
+  of Voltorb Flip when the setting is on. Test: `tests/scripts/slots_jp.txt` (`slots-import`, `slots on`, `casino`).
+- Screens: main engine on the touch screen (`GX_DISP_SELECT_SUB_MAIN`, as Voltorb Flip): main 0 the face (file 22),
+  sub 0 the top frame (file 10).
+- **Reels:** the JP game draws them as 15 sprites; the port draws each reel as a BG layer of its own (main 1 to 3,
+  behind the face, whose windows are colour 0) from the same cells: a/1/2/7 file 6 cell `c` is a 32x16 object over a
+  32x8 one = 4x3 tiles from `12 * c`, palette bank 0-6 (loaded to the main BG's banks 9-15). Cells 0-5 are the normal
+  symbols (Replay, Pikachu, Marill, berries, Poke Ball, 7 = the strip values), 6 blank, 7-33 the bonus game's big
+  Chikorita/Cyndaquil/Totodile in 3x3 pieces (the bonus strips' values), 34-35 two buttons. Strips at `0x021EA32C`
+  (6 x 21 u32: 3 normal, 3 bonus). A reel turn is 504 px; the window shows rows 48-120 (3 symbols), middle line y 84.
+- Fades: brightness. Voltorb Flip's wipe fades (types 20/21) never finished their fade-out in the port.
+- Still to do: the rules wired to the reels (bet, draw, stopping on the drawn result, payouts, coins), the credit and
+  payout digits (file 24 / 12), the top screen's animations (the Smeargle host of a/1/2/7 files 0-3 and its emote
+  bubbles), the bonus game, sound (JP SE ids to map), the English text bank, widescreen.
