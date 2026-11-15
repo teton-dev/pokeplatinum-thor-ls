@@ -72,6 +72,158 @@ its C source call by call, which gives name <-> USA address for the common helpe
 table. Alternatively port the logic in terms of the decomp's existing API directly (the port already has the C
 versions of all of these), reading each JP function for what it does rather than what it is called.
 
+## Reading the logic (2026-11-14)
+
+Read so far: the state-handler table (`0x021EA000`, 7 handlers `0x021E66F8 ... 0x021E69FC`, each a `switch (work[8])`
+substate machine that returns 1 when the whole screen state is done) and the pure-logic functions `0x021E6A58-0x021E6EE0`.
+The work struct (0x304 bytes, `r0`/`r4`/`r5` everywhere) so far:
+
+| offset | meaning (inferred) |
+|---|---|
+| +0x08 | substate of the current handler; +0x10 next screen state |
+| +0x1c / +0x34 | a handle / a countdown timer (handlers wait for it to reach 0) |
+| +0x38, +0x39 | machine type (0-?), bet/"line" index (1-3) |
+| +0x3b | the drawn reel result symbol 0-6; +0x3c outcome class 0-2 |
+| +0x3e / +0x3f | spin counter / spin limit (8, or 15 when `+0xA0 == 6`) |
+| +0x40, +0x42, +0x4c | round counters; +0x4c is a streak that saturates at 10 |
+| +0x46, +0x48 (u16) | coin totals, clamped to 0x383 (899) |
+| +0x4d (s8), +0x4e/0x4f | reel stop offsets; per-reel speed/stop tiers (8, 12, 24 and 0, 1, 2) |
+| +0x50..52, +0x53..55 | per-reel flags (3 reels): "forced hit" and "forced miss" |
+| +0x6c | flag word: bit0 first-round, bit4 reach, bit6, bit7 bonus |
+| +0xA0 | the machine's Pokemon/symbol id (6 is the special machine) |
+
+Logic confirmed from the code:
+- **Symbol draw** (`0x021E6B3C`): rolls 0-999 (helper `0x021E7114`, from `0x0201F9F0`, the LCRNG) and walks the cumulative
+  u16 thresholds of `0x021EA284 + 0x2A*type + 0x0E*bet` (7 entries) to pick the result symbol; a second roll against
+  `0x021EA204 + 0x12*symbol + 6*bet` (3 thresholds) gives the outcome class (symbols 4 and up use a single threshold).
+- **Reel assist** (`0x021E6CD8`): picks the table row `0x021EA1A8 + 15*min(streak,5) + 5*tier` (tier from the spin
+  counter: 0-3/4-5/6+, or 0-5/6-10/11+ in the 15-spin mode) and rolls 0-99 for: hit chance per reel (`row[4]`), the
+  stop-speed tier (`row[2]`, `row[3]`), and whether to arrange a "reach" (`row[0]`, `row[1]`) on a random reel.
+- **Bonus roll** (`0x021E6E48`): rolls 0-99 against cumulative per-type thresholds `0x021EA154 + 3*type` (values like
+  0x0F 0x1E 0x1E, or 0x64 0 0) to pick a 0-3 multiplier; adds `multiplier * 0x021EA11C[2*type + i]` into the two coin
+  totals (clamped to 899).
+- RNG helpers: `0x021E7128(n)` is a random number below `n`; `0x021E7114` is the 0-999 roll; `0x021E7188(symbol)` tests if a
+  symbol is a "special" one; `0x021E7198(work, symbol)` gives its animation/payout class.
+
+All of this is table-driven, so the C port is the tables (extracted at import time from the player's JP overlay, not
+copied into the repo) plus a few hundred lines of state machine. What is still unread: the other ~150 functions (screen
+setup/teardown, the reel animation and sprites, the payout/coin counting, text boxes, touch and button input, the
+sound calls). The coin/payout rules (`0x021E8B9C`, `0x021E8C24` and the `0x021EA20x` tables) are the next to read.
+
+## Coins and the hidden payout meter (2026-11-14)
+
+Read: `0x021E6A10`, `0x021E6A58`, `0x021E6EE0`, `0x021E8B9C`, `0x021E8C64`. Corrections/additions to the struct above:
+`+0x28` is the **coin count** (capped at 50000 = `MAX_COINS`; also the Coin Case's cap, so it is the shared save value),
+`+0x30` the coins bet this spin (1 or 3), `+0x26` the reason a bet was refused (1 = full case, 2 = fewer than 3 coins,
+3 = no coins), `+0x4D` (signed byte, -99..99) a **hidden payout balance**, `+0x6C` bit 2 = free play (e.g. in a bonus
+round, bets are not charged).
+
+- **CanBet** (`0x021E6A10`, `CanBet(work, oneCoin)`): coins >= 50000 -> refuse (reason 1); free play -> ok; one-coin
+  needs >= 1 coin (reason 3); otherwise needs >= 3 (reason 2).
+- **Round start** (`0x021E6A58`): sets `+0x4D = -(table_118[streak % 3 (or the 2nd entry if streak>5)] + +0x40)`, i.e. the
+  balance starts negative (the machine must "pay back" before it favours the player), bumps the streak (max 10), clears
+  per-reel flags, bonus flag and the 3-reel results. In the 15-spin special (`+0xA0 == 6`) the limit is 15, else 8.
+- **Payout decision** (`0x021E6EE0`, run after each spin): `+0x3A` is the outcome (3 = none, 2 = hit pending, 0-2 = payout
+  tier). If `+0x4D <= 0` the balance only creeps up by `table_114[bet]` and the result is "none". Otherwise roll 0-99
+  against `table_130[(type_flags)*3...]` to pick a tier, add `table_108[bet] * tier` to the balance (cap 99), and if the
+  balance is still positive roll again against `(balance * table_16c[...]) / 15`: on success pick the final payout tier
+  (second 0-99 roll against `table_184`), set the balance to `-(table_124[bet][tier] * balance) / 10`, reset the
+  streak and clear flag bit 6. This is a classic "hot/cold" slot: the player's expected return is shaped by the
+  balance rather than by pure reel odds.
+- **Reel spin parameters** (`0x021E8C64`): each of 3 reels gets a start position `rand % 21` (or a fixed value from
+  `table_110` while the first-round flag is set) and a distance `0x1F8 - 0x18 * pos`.
+- **Win animation** (`0x021E8B9C`): `+0x4D` is turned into a 1-5 step lamp display (`(|balance|-1)/3+1`, capped at 5)
+  using the lamp table `0x021EA020` and `0x021EA054`, with SE `0x939`.
+
+**Payout amounts and adding coins (read 2026-11-14):**
+- `GetPayout(work, symbol)` (`0x021E7198`), symbols 0-6: normal play pays `table_098[symbol] = {0, 0, 15, 10, 2, 100, 100}`
+  coins per bet unit (symbols 5 and 6 are the two jackpot symbols, tested by `0x021E7188`: `symbol - 5 <= 1`), and for
+  those two the running jackpot counter `+0x46`/`+0x48` (u16, grows in the bonus roll, max 899) is added on top. In
+  bonus play (`+0x6C` bit 0) it is `table_084[symbol] = {20, 20, 20, 0, 1, 0, 1}` plus `(+0x40 / 2) * ((+0x4C >> 2) + 1)`.
+- `AddCoins(work, amount, ...)` (`0x021E7B04`): `+0x28 += amount` at once, clamped to 50000 (the extra is dropped
+  from the amount shown), then starts a counting task (`0x021E7B74`, each frame moves one coin from "amount pending"
+  to the displayed total with SE `0x62C`; in bonus play it also adds to the bonus total `+0x4A`, max 999).
+- RNG: `0x021E7114` = `LCRNG() % 1000`; `0x021E7128(n)` = `LCRNG() % n` (for `n == 2` it takes `(LCRNG() % 1000) % 500`,
+  an odd shape that makes the draw 0..499).
+
+**Reels (read 2026-11-14):** each reel is a loop of 21 symbols, 24 px per symbol (a full turn is `21*24 = 504 = 0x1F8`
+pixels). `SymbolAt(reel, offset)` (`0x021E9290`): `idx = (pos[reel] + offset) mod 21` (`pos` = s16 at `+0x66`), then the strip
+value `strip[reel][idx]`. Normal strips (`0x021EA32C`, 21 u32 each) use symbols 0-5:
+- reel 0: `2 5 4 1 0 2 3 4 0 2 3 5 0 2 1 4 2 1 0 5 0`
+- reel 1: `4 5 2 0 1 3 0 3 2 4 0 2 4 1 2 0 5 3 1 0 2`
+- reel 2: `3 5 2 4 3 0 1 2 5 2 0 1 4 3 0 1 2 0 1 2 0`
+Bonus strips (`0x021EA428`, same shape) hold sprite/tile ids instead (3 reels of "7 10 13 / 16 19 22 / 25 28 31 ..." with 6 as
+the blank filler), i.e. the bonus round shows big picture tiles rather than the six symbols. The lamp/coin-digit scale
+`0x021EA034` is `10^0 .. 10^7` (digit extraction for the coin counter, `0x021E8C24`) and `0x021EA020` is `{0,1,3,6,10}`
+(cumulative lamp counts). Symbol 6 is not on any strip: it is a result of the draw only.
+
+**How the game launches it (read 2026-11-14):**
+- JP arm9 `0x0203F798` = `SlotMachine_LaunchApp(FieldSystem *, u32 type)`, the twin of the decomp's `VoltorbFlip_LaunchApp`: it
+  allocates a 0x1C-byte args struct (heap 0xB), zero-fills it, sets `args+0x14 = fieldSystem->saveData` (`+0xC`),
+  `args+0x18 = &fieldSystem->menuInputState` (`+0x10C`), `args+0x08 = <coins pointer from the save>`, `args+0x04 = type`,
+  `args+0x0C = 0`, and calls `FieldSystem_LaunchApplication(fs, &template, args)` with the template at JP `0x020F99E4`
+  `{Init 0x021E4E41, Main 0x021E4EA9, Exit 0x021E4F05, overlay id 0x4D (77)}`.
+- The script command is in overlay 1 at `0x022017F4`: it reads **two u8 script arguments** (machine index, mode), calls
+  `0x0220173C(saveData, index, mode)` for the machine's *type*, then launches the app and a wait-for-app task.
+- **Machine types** (`0x0220173C`): there are 21 machines (mode 0) or 14 (mode != 0; index >= count returns type 3).
+  Which machine has which type is derived from a per-save random seed (the LCRNG is re-seeded from the save, 7 machines
+  become type 1 and 3 type 2 in the 21-machine corner, 5 and 2 in the 14-machine one, the rest type 0, then the
+  generator state is restored). That is the "lucky machine" system: the type selects one of four odds sets
+  (`0x021EA284 + 0x2A*type`).
+- App setup (`0x021E4F34`): `work+0x1C = coins ptr`, `work+0x28 = coins` (read from the save), `work+0x38 = args->type`,
+  and it bumps a game stat (id 5, the slot plays counter). On exit (`0x021E4FA0`) it clamps the coins to 50000 and writes
+  them back. The slot plays the BGM `0x45`.
+
+**Scripts: the USA ROM already has them (2026-11-14).** The decomp keeps the machines' scripts and the `CasinoGame <machine>, <city>`
+command (`ScrCmd_CasinoGame`, `src/field/scrcmd_pokemon_misc.c`) *with the same arguments*, `SlotLuckiness()` included
+("Return value is unused outside of Japanese copies"): USA just launches Voltorb Flip where Japan launches the slot app. The
+scripts are: Goldenrod `scr_seq_0906_T25R1101` (22 `CasinoGame n, 0`: machines 0-20, plus 21 -> type 3), Celadon
+`scr_seq_0803_T07R0401` (14 machines, city 1), and `scr_seq_0910_T25SP0101` / `scr_seq_0806_T07SP0101` (one machine each),
+which already check for the Coin Case and for 3 coins (`msg_0599_T25R1101`) before `CasinoGame`. So **the switch is one
+hook in `ScrCmd_CasinoGame`**: with the option on and the JP data imported, launch the port's slot app with the luck value
+instead of `VoltorbFlip_LaunchApp`. No script or map changes are needed for the machines themselves; the Game Corner's
+other scripts (clerk, prize counter, coin exchange, `ScriptOverlayCmd 3` coin display) are shared. (What the US maps show
+as the machine objects, and any Voltorb Flip text on the counter, has not been checked.)
+
+**Text: one small bank (2026-11-14).** The slot app opens one message bank with `MessageData_New(0, NARC 0x1B msgdata,
+bank 0x1AD = 429, heap)` (`0x021E5838`). It is **JP `a/0/2/7` file 429**, 16 strings (decoder: `tools/jp-gamecorner/decode_msg.py`
+plus the decomp's `charmap.txt`). Machine translation (English text is ours, not Nintendo's):
+
+| id | Japanese | English |
+|---|---|---|
+| 0 | ゲームをしゅうりょうしますが よろしいですか？ | Quit the game? Is that OK? |
+| 1 | コインが50000まいになりました これいじょうコインはふえません | You have reached 50,000 coins. You can't get any more coins. |
+| 2 | コインが３まいありません ゲームをしゅうりょうします | You don't have 3 coins. The game will end. |
+| 3 | コインがありません ゲームをしゅうりょうします | You have no coins. The game will end. |
+| 4, 5, 6 | ベット / スタート / とめる | BET / START / STOP |
+| 7 | タッチでコインを３まいいれます | Touch to insert 3 coins |
+| 8 | タッチでドラムをまわします | Touch to spin the reels |
+| 9 | タッチでドラムをひとつとめます | Touch to stop a reel |
+| 10 | タッチでコインを１まいいれます | Touch to insert 1 coin |
+| 11-15 | (result / play-stress / "n:" table headings with `{fffe}` format codes) | likely debug-only; check where the app prints them |
+
+The overlay has no other strings (the machine's face, reels and lamps are graphics, `a/1/5/5`), so translation is a
+dozen lines, and, as the graphics carry no Japanese words either apart from the machine art, no image editing is needed.
+(Unchecked: whether the 47 files of `a/1/5/5` contain Japanese lettering in the BG tiles.)
+
+**Graphics archives: two, both needed from the JP ROM (2026-11-14).** The slot app opens NARC `0x7F` = **`a/1/2/7`**
+(`0x021E554C`; 25 files: 5 palettes, tile sets (NCGR 12912/14256/24640/8256/8256 bytes), 3-4 screens, cell/animation
+banks) and **`a/1/5/5`** (47 files: one 24640-byte tile set and 2084-byte screen like `a/1/2/7`'s, then ten sprite sets of
+palette + 4656-byte tiles + animation + cell bank, one per symbol/lamp). The USA ROM *has* `a/1/2/7` (same 25 files, same
+sizes) but its **tile data is blanked** (99.8% zero bytes, only palettes, screens and animation banks survive), and `a/1/5/5`
+is a 64-byte stub; so the import must read both from the Japanese ROM. The graphics code uses the usual field-less
+loaders (palette `0x02003138`, tiles+screen `0x02007A5C`/`0x02007A80`, sprite resource `0x02007B60`) with file indices into
+those NARCs (palettes 0, 4, 8, 20; tiles/screens 14+15, 9+10, 21+22 ...), plus a text window set-up for the three
+string boxes (BET, START, STOP, ids 4-6 of the message bank).
+
+For the port, the display can be reimplemented in C over the port's existing BG/sprite loaders (the same ones
+Voltorb Flip uses), reading these archives from the imported ROM. It's the single biggest remaining piece after the
+logic (about 120 of the 180 functions are display, animation and input).
+
+Still to read for payouts: the per-symbol payout values (probably `0x021EA20x`-`0x021EA32x`, the coin amounts shown
+on the machine), what `+0x3A` and the 3 reel results (`+0x50..55`) turn into on the reel strips, and where coins are
+actually added (`+0x28 += +0x30 * payout`, near `0x021E5Cxx`/`0x021E7Bxx` which reference `0xC350` and `999`).
+
 ## Scale
 
 The code is ~22 KB of ARM/Thumb overlay: thousands of instructions to read and re-express in C, plus the
