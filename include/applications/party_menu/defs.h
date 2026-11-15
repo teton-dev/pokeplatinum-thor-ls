@@ -393,6 +393,9 @@ struct PartyMenuApplication {
     HeightWeightData *heightWeight;
     PartyMenuFormChange *formChanger;
     G3DPipelineBuffers *formChange3DPipeline;
+#ifdef SDK_PORT
+    int portGraySlot; // Nuzlocke mode's gray icon palettes: 1 + the first one's slot; 0 not made yet; -1 no room
+#endif
 };
 
 #endif // POKEPLATINUM_PARTY_MENU_DEFS_H

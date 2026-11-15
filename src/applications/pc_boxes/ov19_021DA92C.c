@@ -1,5 +1,9 @@
 #include "applications/pc_boxes/ov19_021DA92C.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_gray.h"
+#endif
+
 #include <nitro.h>
 #include <string.h>
 
@@ -541,6 +545,9 @@ static void ov19_021DB0E4(UnkStruct_ov19_021DA9E0 *param0)
 
     BoxPokemon_BuildSpriteTemplate(&v0, preview->mon, 2, 0);
     param0->unk_24 = PokemonSpriteManager_CreateSprite(param0->unk_20, &v0, 44, 84, 0, 0, NULL, NULL);
+#ifdef SDK_PORT
+    PokemonSprite_PortSetGray(param0->unk_24, NuzlockeGray_BoxIsDead((BoxPokemon *)preview->mon));
+#endif
     ov19_021DB24C(param0, preview->markings);
 }
 

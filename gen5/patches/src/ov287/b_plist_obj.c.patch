@@ -1,0 +1,47 @@
+--- a/src/ov287/b_plist_obj.c
++++ b/src/ov287/b_plist_obj.c
+@@ -17,6 +17,11 @@
+ #include "system/hp_gauge.h"
+ #include "system/palanm.h"
+ 
++#include "gen5/port.h"
++
++// The port: the sub screen's OBJ palette slots for the gray copies of the three icon palettes (free in the list)
++#define PORT_GRAY_ICON_PALETTE 10
++
+ // The battle party list's OBJ resources and cell actors: the Pokémon icons with their status and item icons, the
+ // type and category icons of the summary pages, and overlay 285's cursor. The file name is our guess, after the
+ // ROM's b_plist_main.c and b_plist_anm.c and the b_plist_* files of the earlier games.
+@@ -226,6 +231,14 @@
+         wk->actors[i] = BPlistObj_CreateActor(wk, &sBPlistActorSetups[i]);
+     }
+     GFL_NetSetIconScreen(FALSE, wk->param->heapId);
++    // The port: Nuzlocke mode's dead Pokémon in gray, with gray copies of the icon palettes made before the fades
++    // take their copy of the palettes
++    for (i = 0; i < 6; i++) {
++        if (wk->pokemon[i].species != 0 && Gen5_PortIsDead(PokeParty_GetParam(wk->pokemon[i].pkm, 0 /* PKM_PARAM_PID */, NULL))) {
++            Gen5_PortGrayIconPalettes(0, PORT_GRAY_ICON_PALETTE);
++            break;
++        }
++    }
+     PaletteFade_LoadFromVRAM(wk->paletteFade, PALFADE_VRAM_SUB_OBJ, 0, 0x1e0);
+     BPlistObj_SetPokeIconPalettes(wk);
+ }
+@@ -259,10 +272,13 @@
+ 
+     for (i = 0; i < 6; i++) {
+         if (wk->pokemon[i].species != 0) {
+-            ClActor_SetPalette(wk->pokeIcons[i],
+-                               PokeIcon_GetPalette(wk->pokemon[i].species, wk->pokemon[i].form, wk->pokemon[i].sex,
+-                                                   wk->pokemon[i].isEgg),
+-                               1);
++            u32 palette = PokeIcon_GetPalette(wk->pokemon[i].species, wk->pokemon[i].form, wk->pokemon[i].sex,
++                                              wk->pokemon[i].isEgg);
++            // The port: a dead Pokémon's icon in the gray copies
++            if (Gen5_PortIsDead(PokeParty_GetParam(wk->pokemon[i].pkm, 0 /* PKM_PARAM_PID */, NULL))) {
++                palette += PORT_GRAY_ICON_PALETTE;
++            }
++            ClActor_SetPalette(wk->pokeIcons[i], palette, 1);
+         }
+     }
+ }

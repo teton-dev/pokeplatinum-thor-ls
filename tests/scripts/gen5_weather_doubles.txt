@@ -1,0 +1,60 @@
+# Gen 5 battles: the weather in a double battle. Turtwig learns Rain Dance (its first move) and the level 50 Empoleon
+# beside it attacks; A is mashed through the commands with a shot every 60 frames: the weather's bar (the player's side,
+# from the left) after Rain Dance, and the rain staying on the arena. Rain Dance has 5 PP, so the script ends before
+# they are gone. Change the battle's line for the others (all three were checked, 2026-11-14):
+#   trainer 15            Twins Liv & Liz (one trainer, two Pokémon)
+#   trainers 1 16         Tristan and Jacob (two trainers)
+#   trainers 1 16 608     the same beside Cheryl, whom BW2's AI plays
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_weather_doubles.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+learn 240
+give 395 50
+trainers 1 16 608
+until battle
+until command timeout 6000
+wait 30
+mash A for 60
+shot dbl_00
+mash A for 60
+shot dbl_01
+mash A for 60
+shot dbl_02
+mash A for 60
+shot dbl_03
+mash A for 60
+shot dbl_04
+mash A for 60
+shot dbl_05
+mash A for 60
+shot dbl_06
+mash A for 60
+shot dbl_07
+mash A for 60
+shot dbl_08
+mash A for 60
+shot dbl_09
+mash A for 60
+shot dbl_10
+mash A for 60
+shot dbl_11
+mash A for 60
+shot dbl_12
+mash A for 60
+shot dbl_13
+mash A for 60
+shot dbl_14
+mash A for 60
+shot dbl_15
+mash A for 60
+shot dbl_16
+mash A for 60
+shot dbl_17
+mash A for 60
+shot dbl_18
+mash A for 60
+shot dbl_19
+exit 0

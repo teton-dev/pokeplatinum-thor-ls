@@ -18,6 +18,7 @@
 #include "field/zone.h"
 #include "gfl/g3d.h"
 #include "gfl/heap.h"
+#include "gfl/msg.h"
 #include "gfl/str.h"
 #include "gfl/proc.h"
 #include "gfl/sound.h"
@@ -40,6 +41,10 @@
 #include "system/gfl_use.h"
 #include "system/printsys.h"
 #include "system/wipe.h"
+
+// The Safari Zone's rules (safari.c)
+void Gen5_PortSafariBegin(const Gen5Battle *battle, const unsigned short *speciesName);
+void Gen5_PortSafariEnd(Gen5Battle *battle);
 
 // Platinum's trainer classes as BW2's (trainers.c)
 u32 Gen5_TrainerClass(u32 platinumClass);
@@ -79,6 +84,8 @@ static struct {
     int refusedCount;
     u32 refused[2]; // the personalities of the wild Pokemon a ball can't catch
     unsigned short text[GEN5_PORT_TEXT_LENGTH];
+    int deadCount;
+    u32 dead[GEN5_PARTY_MAX]; // the personalities of the player's dead Pokémon, drawn in gray
 } sNuzlocke;
 
 void Gen5_MemInit(void)
@@ -352,6 +359,17 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     PokeParty *party = NewParty(battle->party, battle->partyCount);
     Gen5_SetBattleGameData(party, info, config, bag, bagCursor, pokedex, records);
 
+    if (battle->safari) {
+        unsigned short speciesName[GEN5_NAME_LENGTH];
+        StrBuf *name = GFL_StrBufCreate(GEN5_NAME_LENGTH, HEAPID_PORT_BATTLE);
+
+        GFL_MsgDataLoadStrbuf(g_PMLSpeciesNamesResident, battle->wild.species, name);
+        GFL_StrBufStoreString(name, speciesName, GEN5_NAME_LENGTH);
+        GFL_StrBufFree(name);
+        Gen5_PortSafariBegin(battle, speciesName);
+    } else {
+        Gen5_PortSafariBegin(battle, NULL);
+    }
     memset(&sNuzlocke, 0, sizeof(sNuzlocke));
     sNuzlocke.levelCap = battle->levelCap;
     sNuzlocke.critGuard = battle->critGuard != 0;
@@ -362,6 +380,11 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         sNuzlocke.refused[sNuzlocke.refusedCount++] = battle->wild2.personality;
     }
     memcpy(sNuzlocke.text, battle->catchRefusedText, sizeof(sNuzlocke.text));
+    for (int i = 0; i < battle->partyCount && i < GEN5_PARTY_MAX; i++) {
+        if (battle->party[i].dead) {
+            sNuzlocke.dead[sNuzlocke.deadCount++] = battle->party[i].personality;
+        }
+    }
     if (sNuzlocke.levelCap != 0 || sNuzlocke.critGuard || sNuzlocke.refusedCount != 0) {
         printf("Gen 5: level cap %d%s, %d wild Pokémon can't be caught\n", sNuzlocke.levelCap,
             sNuzlocke.critGuard ? ", crit guard" : "", sNuzlocke.refusedCount);
@@ -397,6 +420,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     }
     Gen5_SetTrainerArt(0, 0, NULL);
     Gen5_SetTrainerArt(1, 0, NULL);
+    Gen5_SetTrainerArt(2, 0, NULL);
     // Two Pokémon a side: one trainer's two, two trainers' one each (BW2's multi mode 4, the second trainer as client
     // 3), or with a partner (mode 3 against two trainers, 5 in the wild: the partner is client 2)
     sSetup->battleStyle = battle->doubles ? BTL_STYLE_DOUBLE : BTL_STYLE_SINGLE;
@@ -407,7 +431,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
             sSetup->fieldSituation.multiMode = 4;
         }
         if (battle->hasPartner) {
-            SetupTrainer(2, &battle->partner, -1);
+            SetupTrainer(2, &battle->partner, 2);
             sSetup->fieldSituation.multiMode = battle->hasTrainer2 ? 3 : 5;
         }
         // The first trainer's defeat line, for BW2's code that reads it from here (btl_string.c); the port's patch of
@@ -435,7 +459,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         Gen5Pokemon wild[2] = { battle->wild, battle->wild2 };
         sSetup->party[1] = NewParty(wild, battle->hasWild2 ? 2 : 1);
         if (battle->hasPartner) {
-            SetupTrainer(2, &battle->partner, -1);
+            SetupTrainer(2, &battle->partner, 2);
             sSetup->fieldSituation.multiMode = 5;
         }
     }
@@ -619,7 +643,9 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
         battle->caughtWild2 = sSetup->capturedSlot == 1;
         battle->caughtMon = battle->caughtWild2 ? battle->wild2 : battle->wild;
         ReadPkm(PokeParty_GetPkm(sSetup->party[1], sSetup->capturedSlot), &battle->caughtMon);
+        printf("Gen 5: caught in ball %u\n", battle->caughtMon.ball);
     }
+    Gen5_PortSafariEnd(battle);
     printf("Gen 5: the battle ended (BW2's result %lu, money %+d)\n", (unsigned long)result, battle->moneyChange);
     sSetup = NULL;
     while (sBattleBlockCount > 0) {
@@ -748,6 +774,28 @@ u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp)
     return exp < capExp - current ? exp : capExp - current;
 }
 
+BOOL Gen5_PortIsDead(u32 personality)
+{
+    for (int i = 0; i < sNuzlocke.deadCount; i++) {
+        if (sNuzlocke.dead[i] == personality) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void Gen5_PortGrayIconPalettes(int iconSlot, int graySlot)
+{
+    // Platinum's formula (src/port/nuzlocke_gray.c): luminance, a little darker and flatter
+    u16 *pltt = (u16 *)HW_DB_OBJ_PLTT;
+    for (int i = 0; i < 16 * 3; i++) {
+        const u16 color = pltt[iconSlot * 16 + i];
+        const int r = color & 0x1F, g = (color >> 5) & 0x1F, b = (color >> 10) & 0x1F;
+        const int y = 4 + ((r * 77 + g * 151 + b * 28) >> 8) * 3 / 4;
+        pltt[graySlot * 16 + i] = i % 16 == 0 ? color : GX_RGB(y, y, y);
+    }
+}
+
 BOOL Gen5_PortCritGuard(void)
 {
     // Asked for each critical hit rolled
@@ -771,4 +819,27 @@ BOOL Gen5_PortCatchRefused(u32 personality)
 void Gen5_PortCatchRefusedText(StrBuf *strbuf)
 {
     GFL_StrBufLoadString(strbuf, sNuzlocke.text);
+}
+
+// The weather's ability bar: "Rain: 4 turns remaining" (btlv_scu.c's patch); turns 0xff is a weather with no end
+void Gen5_PortWeatherText(StrBuf *strbuf, u8 weather, u8 turns)
+{
+    static const char *const names[] = { "", "Sun", "Rain", "Hail", "Sand" };
+    char text[48];
+    unsigned short chars[48];
+
+    if (weather >= 5) {
+        weather = 0;
+    }
+    if (turns == 0xff) {
+        snprintf(text, sizeof(text), "%s", names[weather]);
+    } else {
+        snprintf(text, sizeof(text), "%s: %d turn%s remaining", names[weather], turns, turns == 1 ? "" : "s");
+    }
+    int length = 0;
+    for (const char *c = text; *c != '\0'; c++) {
+        chars[length++] = (unsigned char)*c;
+    }
+    chars[length] = 0xFFFF;
+    GFL_StrBufLoadString(strbuf, chars);
 }

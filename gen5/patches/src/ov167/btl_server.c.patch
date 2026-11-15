@@ -1,0 +1,20 @@
+--- a/src/ov167/btl_server.c
++++ b/src/ov167/btl_server.c
+@@ -114,6 +114,8 @@
+ void BattleServer_SetSelectActionProc(BtlServer *server) {
+     BattleServer_SetProc(server, BattleServer_ProcSelectAction);
+ }
++
++int Gen5_PortSafari(void); // The port: a Safari Zone battle (safari.c), played by the view alone, as the capture demo
+ 
+ BOOL BattleServer_ProcStart(BtlServer *server, int *seq) {
+     switch (*seq) {
+@@ -123,7 +125,7 @@
+     case 1:
+         if (BattleServer_AllClientsReplied(server)) {
+             BattleServer_FinishCmd(server);
+-            if (BtlSetup_GetBattleType(server->mainModule) != BTL_TYPE_CAPTURE_DEMO) {
++            if (BtlSetup_GetBattleType(server->mainModule) != BTL_TYPE_CAPTURE_DEMO && !Gen5_PortSafari()) {
+                 BattleServer_SendRecStartChunk(server, BtlServerFlow_StartBattle(server->flow));
+                 (*seq)++;
+             } else {

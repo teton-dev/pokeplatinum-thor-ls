@@ -56,6 +56,9 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `nuzlocke_items.txt` | `nuz-normal` | Rare Candy refused at the cap, a dead Pokémon refusing Potion and Revive (`use`), Hard's cap of 12, Roark's Potions taken, and the battle bag's HP/PP pocket empty in both engines (the log and the shots; Gen 5 builds) | ~2 min |
 | `nuzlocke_crit.txt` | `nuz-normal` | 24 Razor Leafs at a level 100 Metapod with the crit guard: the log's "a critical hit guarded" lines (chance: none in 24 turns is about 4%) | ~2 min |
 | `nuzlocke_crit_gen5.txt` | `nuz-normal` | the same in BW2's engine: the log's "Gen 5: a critical hit guarded" lines (Gen 5 builds) | ~2 min |
+| `nuzlocke_gray.txt` | `nuz-normal` | a dead Bidoof in gray, the others in color: the POKéMON list in Platinum's and BW2's battles, the party menu, Bidoof's summary (its picture, the moves page's icon), the PC (party panel, picture, box) (the shots; Gen 5 builds) | ~3 min |
+| `gen5_weather.txt` | `turtwig` | the weather in BW2's engine: Rain Dance's ability bar ("Rain: 4 turns remaining", blue, from the player's side) at each turn's end, and the rain staying on the arena through the command selection and after Tackle; run away frees it (the check is the shots; `learn` 241, 258, 201 for sun, hail, sand; Gen 5 builds) | ~2 min |
+| `gen5_weather_doubles.txt` | `turtwig` | the same in a double battle (Cheryl's, as written; the other two battles in the script's comment): the bar and the rain with Empoleon beside Turtwig (the check is the shots; Gen 5 builds) | ~3 min |
 | `gen5_keep_moves.txt` | `turtwig` | Turtwig's Tackle in BW2's engine, then its moves after the battle: still Tackle and Withdraw, Tackle a PP down (the `party` lines; Gen 5 builds) | ~1 min |
 | `following_ball.txt` | `turtwig` of Following Renegade Platinum | the follower's ball effects run (with `DATA=~/thor-dev/desktop-following`; [notes](../docs/thor/dev/following-renegade.md)) | ~30 s |
 | `fairy_move.txt` | `rn-turtwig` (Renegade Platinum) | a Fairy move (Moonblast) is named and animated in a Gen 5 battle; screenshots every 20 frames (with `DATA=~/thor-dev/desktop-renegade`) | ~40 s |
@@ -126,6 +129,7 @@ One command a line; `#` starts a comment. The game reads the script (`src/port/t
 | `lead SLOT` | the party member in SLOT (0 to 5) to the front |
 | `faint SLOT` | the party member in SLOT to 0 HP, as a battle writes it |
 | `dex` | gives the Pokédex, as Prof. Rowan does |
+| `objpal` | logs which OBJ palette slots hold colors on each screen (`x`) and which are empty (`.`): to find free ones |
 | `use ITEM SLOT` | an item (a medicine, Rare Candy) on the party member in SLOT, as the party menu checks and applies it; logs the result |
 | `learn MOVE` | the lead's first move becomes MOVE (its number: 127 Waterfall, 352 Water Pulse, 53 Flamethrower), with full PP |
 | `party` | logs the party (with IVs, EXP, the Nuzlocke dead flag and the moves with their PP), the Pokémon in the PC, the Master and Poké Balls in the bag and, for the party, the Pokédex |

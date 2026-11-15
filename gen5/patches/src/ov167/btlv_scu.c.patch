@@ -1,0 +1,238 @@
+--- a/src/ov167/btlv_scu.c
++++ b/src/ov167/btlv_scu.c
+@@ -87,7 +87,9 @@
+     u8 count;          // 0x21 the line drawn, then the blend level
+     u8 shown : 1;      // 0x22 bit 0
+     u8 flash : 1;      // 0x22 bit 1, the last argument of BtlvScuAbilityWin_StartShow: go on to the palette flash
+-} BtlvScuAbilityWin;   // size 0x24
++    u8 portWeather;    // The port: the weather the bar shows (BTL_WEATHER_*), 0 for an ability
++    u8 portTurns;      // The port: its turns left, 0xff for no end
++} BtlvScuAbilityWin;   // size 0x24, and the port's two bytes
+ 
+ struct BtlvScu {
+     BmpWin *msgWin;                    // 0x000 BG1
+@@ -250,6 +252,8 @@
+ static BOOL BtlvScu_EncountRecPlayTriple(BtlvScu *scu, s32 *seq);
+ static BOOL BtlvScu_EncountWildSingle(s32 *seq, void *arg);
+ static u16 BtlvScu_GetWildEncountMsg(BtlvScu *scu);
++int Gen5_PortSafari(void); // The port: a Safari Zone battle (safari.c)
++static BOOL BtlvScu_PortEncountSafari(s32 *seq, void *arg);
+ static BOOL BtlvScu_EncountTrainerSingle(s32 *seq, void *arg);
+ static BOOL BtlvScu_EncountCommSingle(s32 *seq, void *arg);
+ static BOOL BtlvScu_EncountWildDouble(s32 *seq, void *arg);
+@@ -529,7 +533,8 @@
+         case BTL_TYPE_WILD:
+         case BTL_TYPE_CAPTURE_DEMO:
+         default:
+-            BtlvScu_SetSubProc(scu, BtlvScu_EncountWildSingle);
++            // The port: the Safari Zone's encounter, the trainer staying on the field
++            BtlvScu_SetSubProc(scu, Gen5_PortSafari() ? BtlvScu_PortEncountSafari : BtlvScu_EncountWildSingle);
+             break;
+         case BTL_TYPE_TRAINER:
+         case BTL_TYPE_FACILITY:
+@@ -722,6 +727,62 @@
+ }
+ 
+ // The message that a wild mon appeared, by the battle's type
++// The port: the Safari Zone's encounter: the wild Pokémon appears with its message and gauge, then the player's
++// trainer slides in (the camera and the trainer of effect 0x232) and stays; none of the player's Pokémon is sent out.
++// BtlvCore_PortCmdSafari (btlv_core.c's patch) then holds the trainer in the throwing pose
++static BOOL BtlvScu_PortEncountSafari(s32 *seq, void *arg) {
++    BtlvScu *scu = arg;
++    BtlvScuSingleWork *work = (BtlvScuSingleWork *)scu->work;
++
++    switch (*seq) {
++    case 0:
++        work->viewPos = 1;
++        work->pos = ViewPosToBattlePos(scu->mainModule, work->viewPos);
++        work->mon = PokeCon_GetPosMonInner(scu->pokeCon, work->pos);
++        work->monId = GetMonID(work->mon);
++        BtlvScuWinFade_StartHide(&scu->msgFade);
++        (*seq)++;
++        break;
++    case 1:
++        if (BtlvScuWinFade_Update(&scu->msgFade)) {
++            BtlvEffect_AddPokemon(BattleMon_GetViewSrcData(work->mon), work->viewPos);
++            (*seq)++;
++        }
++        break;
++    case 2:
++        BtlvEffect_StartPos(work->viewPos, 0x231);
++        BtlvScu_EncountFadeIn(2);
++        (*seq)++;
++        break;
++    case 3:
++        if (!BtlvEffect_IsBusy()) {
++            BtlString_FormatStdMsg(scu->strbuf, BtlvScu_GetWildEncountMsg(scu), 1, work->monId);
++            BtlvScu_StartMsg(scu, scu->strbuf, 80, NULL);
++            (*seq)++;
++        }
++        break;
++    case 4:
++        if (BtlvScu_WaitMsg(scu)) {
++            BtlvScuGauge_Show(&scu->gauges[work->pos]);
++            BtlvScuWinFade_StartHide(&scu->msgFade);
++            (*seq)++;
++        }
++        break;
++    case 5:
++        if (BtlvScuWinFade_Update(&scu->msgFade)) {
++            BtlvEffect_Start(0x232);
++            (*seq)++;
++        }
++        break;
++    case 6:
++        if (!BtlvEffect_IsBusy()) {
++            return TRUE;
++        }
++        break;
++    }
++    return FALSE;
++}
++
+ static u16 BtlvScu_GetWildEncountMsg(BtlvScu *scu) {
+     if (BtlSetup_IsBattleType(scu->mainModule, BTL_SETUP_FLAG_LEGENDARY)) {
+         return 6;
+@@ -2469,10 +2530,106 @@
+         if (!IsFainted(gauge->mon)) {
+             BtlvEffect_AddGauge(gauge->scu->mainModule, gauge->mon, gauge->viewPos);
+             gauge->shown = TRUE;
++        }
++    }
++}
++
++// The port: the weather's bar. The bar of an ability with the weather's name and turns left, in the weather's colors:
++// two the palette's colors from dark to light (Gen5_PortWeatherText: runtime.c)
++void Gen5_PortWeatherText(StrBuf *strbuf, u8 weather, u8 turns);
++void Gen5_PortSafariBarText(StrBuf *strbuf, int balls); // The Safari Zone's bar (weather 5, turns the balls left)
++
++// The colors of each weather's bar, dark then light, as red, green and blue 0 to 31
++static const u8 sPortWeatherColors[6][2][3] = {
++    { { 0, 0, 0 }, { 0, 0, 0 } },        // none
++    { { 24, 8, 0 }, { 31, 26, 6 } },     // sun: orange to yellow
++    { { 2, 6, 20 }, { 14, 24, 31 } },    // rain: dark to light blue
++    { { 21, 23, 27 }, { 31, 31, 31 } },  // hail: light gray to white
++    { { 13, 7, 1 }, { 28, 22, 6 } },     // sandstorm: brown to yellow
++    { { 3, 12, 5 }, { 17, 29, 13 } },    // the Safari Zone's balls: dark to light green
++};
++
++// The bar's own palette (the file's, before a tint), by side
++static u16 sPortBarPalette[2][16];
++static BOOL sPortBarPaletteSaved[2];
++
++// Colors the bar's palette for a weather, or gives it back for 0. The text's colors (1 and 2) stay
++static void BtlvScuAbilityWin_PortTint(BtlvScuAbilityWin *win, u8 weather) {
++    PaletteFade *fade = BtlvEffect_GetPaletteFade();
++    u16 *unfaded = PaletteFade_GetUnfadedBuffer(fade, 0) + 16 * (win->side + 1);
++    u16 *faded = PaletteFade_GetFadedBuffer(fade, 0) + 16 * (win->side + 1);
++    u32 i;
++
++    if (!sPortBarPaletteSaved[win->side]) {
++        for (i = 0; i < 16; i++) {
++            sPortBarPalette[win->side][i] = unfaded[i];
+         }
++        sPortBarPaletteSaved[win->side] = TRUE;
+     }
++    for (i = 0; i < 16; i++) {
++        u16 color = sPortBarPalette[win->side][i];
++
++        if (weather != 0 && weather < 6 && i > 2) {
++            u32 r = color & 31;
++            u32 g = (color >> 5) & 31;
++            u32 b = (color >> 10) & 31;
++            u32 light = (r * 2 + g * 5 + b) / 8; // 0 to 31
++            const u8 (*c)[3] = sPortWeatherColors[weather];
++
++            r = c[0][0] + (c[1][0] - c[0][0]) * light / 31;
++            g = c[0][1] + (c[1][1] - c[0][1]) * light / 31;
++            b = c[0][2] + (c[1][2] - c[0][2]) * light / 31;
++            color = r | (g << 5) | (b << 10);
++        }
++        unfaded[i] = color;
++        faded[i] = color;
++    }
+ }
+ 
++void BtlvScu_PortShowWeatherWin(BtlvScu *scu, BOOL player, u8 weather, u8 turns) {
++    BtlvScuAbilityWin *win = &scu->abilityWins[player ? BTLV_SCU_SIDE_PLAYER : BTLV_SCU_SIDE_ENEMY];
++
++    if (win->shown) {
++        BtlvScuAbilityWin_Hide(win);
++    }
++    if (player) {
++        BtlvEffect_SetTimerVisible(BTLV_TIMER_BATTLE, 0, 0);
++    }
++    BtlvEffect_ClearVoices();
++    BtlvScuAbilityWin_PortTint(win, weather);
++    win->portWeather = weather;
++    win->portTurns = turns;
++    win->ability = 0xFFFF;
++    win->monId = 0x1F;
++    BtlvScuAbilityWin_DrawText(win);
++    win->flash = TRUE;
++    win->seq = 0;
++}
++
++BOOL BtlvScu_PortWaitShowWeatherWin(BtlvScu *scu, BOOL player) {
++    return BtlvScuAbilityWin_RunShow(&scu->abilityWins[player ? BTLV_SCU_SIDE_PLAYER : BTLV_SCU_SIDE_ENEMY]);
++}
++
++// Hides the bar and gives its palette back (a fade of it off the screen puts it in VRAM); TRUE when that is done
++BOOL BtlvScu_PortHideWeatherWin(BtlvScu *scu, BOOL player) {
++    BtlvScuAbilityWin *win = &scu->abilityWins[player ? BTLV_SCU_SIDE_PLAYER : BTLV_SCU_SIDE_ENEMY];
++
++    if (win->portWeather != 0) {
++        win->portWeather = 0;
++        win->ability = 0xFFFF;
++        win->monId = 0x1F;
++        BtlvScuAbilityWin_Hide(win);
++        if (player) {
++            BtlvEffect_SetTimerVisible(BTLV_TIMER_BATTLE, 1, 0);
++        }
++        BtlvScuAbilityWin_PortTint(win, 0);
++        PaletteFade_StartFade(BtlvEffect_GetPaletteFade(), 1, 1 << (win->side + 1), 0, 16, 0, 0x7FFF,
++                              BtlvEffect_GetTCBManager());
++        return FALSE;
++    }
++    return PaletteFade_GetActiveMask(BtlvEffect_GetPaletteFade()) == 0;
++}
++
+ static BtlvScuSide BtlvScu_GetSide(BtlMainModule *mainModule, u8 pos) {
+     if (IsPlayerSide(mainModule, GetPosSide(pos))) {
+         return BTLV_SCU_SIDE_PLAYER;
+@@ -2554,6 +2711,8 @@
+     u16 ability = GetBattleMonStat(mon, BATTLEMON_ABILITY);
+     u8 monId = GetMonID(mon);
+ 
++    win->portWeather = 0;
++
+     if (win->shown) {
+         if (monId == win->monId) {
+             return;
+@@ -2663,7 +2822,15 @@
+     MIi_CpuCopy32((u8 *)win->scu->abilityChars->pRawData + win->side * 0x900, GFL_BitmapGetPixelData(win->bitmap),
+                   size);
+     GFL_TextRndUpdateColorIndexLUT(1, 2, 0);
+-    BtlString_FormatStdMsg(scu->abilityStrbuf, 0x67, 2, win->monId, win->ability);
++    if (win->portWeather != 0) {
++        if (win->portWeather == 5) {
++            Gen5_PortSafariBarText(scu->abilityStrbuf, win->portTurns);
++        } else {
++            Gen5_PortWeatherText(scu->abilityStrbuf, win->portWeather, win->portTurns);
++        }
++    } else {
++        BtlString_FormatStdMsg(scu->abilityStrbuf, 0x67, 2, win->monId, win->ability);
++    }
+     if ((u8)GFL_FontGetLineWidths(scu->abilityStrbuf, scu->smallFont, 0, widths, 2) > 1) {
+         // Two lines, the first from the left and the second to the right, at least 12 pixels apart
+         end = widths[0] + 8;
+@@ -2691,7 +2858,8 @@
+         if (x1 < 0) {
+             x1 = 0;
+         }
+-        GFL_TextRendererDrawToBitmap(win->bitmap, x1, 0x12, scu->abilityStrbuf, scu->smallFont);
++        // The port: the weather's line is in the bar's middle
++        GFL_TextRendererDrawToBitmap(win->bitmap, x1, win->portWeather != 0 ? 13 : 0x12, scu->abilityStrbuf, scu->smallFont);
+     }
+ }
+ 

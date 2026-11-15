@@ -935,7 +935,7 @@ out:
 #define BG_DATA_ARC 151 // ARCID_BATTLE_BG_DATA: a/1/5/1
 #define BG_DATA_PATH DIR "/a/1/5/1"
 #define GALACTIC_STAMP_PATH DIR "/galactic_arena.txt"
-#define GALACTIC_VERSION 6
+#define GALACTIC_VERSION 7
 #define CHAMPION_MODEL 115 // member of archive 11
 #define CHAMPION_STAGE 21
 #define STAGE_MODEL 38 // member of archive 11: both grounds of the Champion room's stage
@@ -1003,6 +1003,194 @@ static u32 Read16Table(const u8 *fields, u32 field)
     return fields[field * FIELD_ROW_SIZE] | (fields[field * FIELD_ROW_SIZE + 1] << 8);
 }
 
+// The Safari Zone's command screen labels: BALL, BAIT and ROCK where FIGHT!, BAG and POKÉMON are. The labels are tiles of
+// archive 11 (the tile file 358, the maps 361 to 371 of BG 4 with BAG's and POKÉMON's, the map 372 of BG 5 with FIGHT!'s). The
+// copy gets that tile file and those maps again as new members (574 to 586) whose label cells point at new tiles (ids 400 on, free
+// in the file) with the port's own 5 by 5 letters; btlv_input.c's patch asks for them in a Safari battle (BtlvInput_FileId).
+#define SAFARI_TILE_FILE 358
+#define SAFARI_MAP_FIRST 361
+#define SAFARI_MAP_COUNT 11
+#define SAFARI_FIGHT_MAP 372
+#define SAFARI_MEMBERS (2 + SAFARI_MAP_COUNT)
+#define SAFARI_TILE_BASE 400
+#define NCGR_TILES_AT 48 // the tile data's place in the file
+#define NSCR_CELLS_AT 36 // the map's
+#define MAP_COLUMNS 64
+
+static const char *const sSafariGlyphs[][5] = {
+    { "ffff.", "f...f", "ffff.", "f...f", "ffff." }, // B
+    { ".fff.", "f...f", "fffff", "f...f", "f...f" }, // A
+    { "f....", "f....", "f....", "f....", "fffff" }, // L
+    { "fffff", "..f..", "..f..", "..f..", "fffff" }, // I
+    { "fffff", "..f..", "..f..", "..f..", "..f.." }, // T
+    { "ffff.", "f...f", "ffff.", "f..f.", "f...f" }, // R
+    { ".fff.", "f...f", "f...f", "f...f", ".fff." }, // O
+    { ".ffff", "f....", "f....", "f....", ".ffff" }, // C
+    { "f...f", "f..f.", "fff..", "f..f.", "f...f" }, // K
+};
+
+static int GlyphOf(char letter)
+{
+    static const char order[] = "BALITROCK";
+    const char *at = strchr(order, letter);
+    return at != NULL ? (int)(at - order) : 0;
+}
+
+// A tile of 8 by 8 4-bit pixels. The letters are 9 rows tall: yBase is the letter's row at the tile's row 0 (-3 in the upper cells,
+// where the letters start at row 3, 5 in the lower), width its width in pixels (the 5 by 5 glyphs, stretched)
+static void SafariTile(u8 *tile, int lineColour, int lineRow, int colour, const char *word, int pitch, int start, int cell,
+    int background, int yBase, int width)
+{
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            int value = background;
+            if (y == lineRow) {
+                value = lineColour;
+            }
+            const int strip = cell * 8 + x - start;
+            const int row = y + yBase;
+            if (word != NULL && row >= 0 && row < 9 && strip >= 0) {
+                const int letter = strip / pitch;
+                const int column = strip % pitch;
+                if (word[letter] != '\0' && column < width
+                    && sSafariGlyphs[GlyphOf(word[letter])][row * 5 / 9][column * 5 / width] == 'f') {
+                    value = colour;
+                }
+            }
+            u8 *byte = tile + y * 4 + x / 2;
+            *byte = (x & 1) ? (u8)((*byte & 0x0F) | (value << 4)) : (u8)((*byte & 0xF0) | value);
+        }
+    }
+}
+
+static u32 SafariRead16(const u8 *p)
+{
+    return p[0] | (p[1] << 8);
+}
+
+static u32 NextTile;
+
+// Makes the members: [0] the tile file, [1 to 11] the maps 361 to 371, [12] the map 372. Each is allocated, or all NULL
+static BOOL MakeSafariButtons(const Archive *a, u8 **out, u32 *outSize)
+{
+    BOOL ok = a->count > SAFARI_FIGHT_MAP;
+    for (int i = 0; i < SAFARI_MEMBERS; i++) {
+        out[i] = NULL;
+        const u32 member = i == 0 ? SAFARI_TILE_FILE : i <= SAFARI_MAP_COUNT ? SAFARI_MAP_FIRST + i - 1 : SAFARI_FIGHT_MAP;
+        if (ok) {
+            outSize[i] = a->end[member] - a->start[member];
+            out[i] = malloc(outSize[i]);
+            ok = out[i] != NULL && outSize[i] >= 8000;
+            if (ok) {
+                memcpy(out[i], a->data + a->start[member], outSize[i]);
+            }
+        }
+    }
+    if (!ok || outSize[0] < NCGR_TILES_AT + 1024 * 32) {
+        for (int i = 0; i < SAFARI_MEMBERS; i++) {
+            free(out[i]);
+            out[i] = NULL;
+        }
+        return FALSE;
+    }
+    u8 *tiles = out[0] + NCGR_TILES_AT;
+    NextTile = SAFARI_TILE_BASE;
+    // The plain button face (a line of colour 15 at the top, 1 below), BAG's and POKÉMON's; FIGHT!'s row of letters (line 9 at the
+    // top) and the reflection below it (line 9 at the bottom, 1 above)
+    NextTile++; // the blank tile
+    NextTile++; // 401, unused
+    memset(tiles + SAFARI_TILE_BASE * 32, 0, 32); // the blank tile (400): the labels' second halves go
+    // BAG's cells (4, ids 322 to 325 in a row), POKÉMON's (8, 332 to 338 with 334 twice) and FIGHT!'s (8, 378 to 385 in a row, the
+    // cells below them a reflection)
+    static const char *const words[3] = { "BAIT", "ROCK", "BALL" };
+    u32 lowerTile[3][8];
+    static const struct {
+        u32 first, count;
+    } groups[3] = { { 322, 4 }, { 332, 8 }, { 378, 8 } };
+    for (int g = 0; g < 3; g++) {
+        const BOOL fight = g == 2;
+        const int pitch = g == 0 ? 8 : 11;
+        const int start = g == 0 ? 1 : 12;
+        const int width = g == 0 ? 6 : 7;
+        u32 cellTile[8];
+        const int letterColour = fight ? 9 : 15;
+        for (u32 c = 0; c < groups[g].count; c++) {
+            cellTile[c] = NextTile++;
+            SafariTile(tiles + cellTile[c] * 32, fight ? 9 : 15, 0, letterColour, words[g], pitch, start, (int)c, 1, -3, width);
+            lowerTile[g][c] = NextTile++;
+            SafariTile(tiles + lowerTile[g][c] * 32, fight ? 9 : 15, 7, letterColour, words[g], pitch, start, (int)c, 1, 5, width);
+        }
+        for (int m = fight ? SAFARI_MEMBERS - 1 : 1; m < (fight ? SAFARI_MEMBERS : SAFARI_MEMBERS - 1); m++) {
+            u8 *cells = out[m] + NSCR_CELLS_AT;
+            const u32 cellCount = (outSize[m] - NSCR_CELLS_AT) / 2;
+            for (u32 i = 0; i + groups[g].count <= cellCount; i++) {
+                BOOL match = TRUE;
+                for (u32 c = 0; c < groups[g].count && match; c++) {
+                    const u32 id = SafariRead16(cells + (i + c) * 2) & 0x3FF;
+                    if (g == 0) {
+                        match = id == 322 + c;
+                    } else if (g == 1) {
+                        static const u16 pokemon[8] = { 332, 333, 334, 335, 336, 337, 334, 338 };
+                        match = id == pokemon[c];
+                    } else {
+                        match = id == 378 + c;
+                    }
+                }
+                if (!match) {
+                    continue;
+                }
+                for (u32 c = 0; c < groups[g].count; c++) {
+                    u8 *cell = cells + (i + c) * 2;
+                    const u16 entry = (u16)(SafariRead16(cell) & 0xF000); // the palette stays
+                    const u16 now = (u16)(entry | cellTile[c]);
+                    cell[0] = now & 0xFF;
+                    cell[1] = now >> 8;
+                    if (fight) {
+                        u8 *below = cell + MAP_COLUMNS * 2;
+                        const u16 under = (u16)((SafariRead16(below) & 0xF000) | SAFARI_TILE_BASE);
+                        below[0] = under & 0xFF;
+                        below[1] = under >> 8;
+                    }
+                }
+                i += groups[g].count - 1;
+            }
+        }
+    }
+    // The labels' second halves: each label is drawn twice (BG 4's, and FIGHT!'s on BG 5), the upper copy by the cells above and the
+    // lower by these, which the screen shows 4 rows below; they get the letters' lower rows
+    static const struct {
+        BOOL fight;
+        u32 count;
+        u16 ids[8];
+    } lower[3] = {
+        { FALSE, 4, { 322, 339, 340, 341 } },
+        { FALSE, 8, { 332, 346, 334, 335, 347, 348, 334, 349 } },
+        { TRUE, 8, { 378, 386, 380, 387, 382, 388, 389, 390 } },
+    };
+    for (int g = 0; g < 3; g++) {
+        for (int m = lower[g].fight ? SAFARI_MEMBERS - 1 : 1; m < (lower[g].fight ? SAFARI_MEMBERS : SAFARI_MEMBERS - 1); m++) {
+            u8 *cells = out[m] + NSCR_CELLS_AT;
+            const u32 cellCount = (outSize[m] - NSCR_CELLS_AT) / 2;
+            for (u32 i = 0; i + lower[g].count <= cellCount; i++) {
+                BOOL match = TRUE;
+                for (u32 c = 0; c < lower[g].count && match; c++) {
+                    match = (SafariRead16(cells + (i + c) * 2) & 0x3FF) == lower[g].ids[c];
+                }
+                for (u32 c = 0; match && c < lower[g].count; c++) {
+                    u8 *cell = cells + (i + c) * 2;
+                    const u16 now = (u16)((SafariRead16(cell) & 0xF000) | lowerTile[g == 0 ? 0 : g == 1 ? 1 : 2][c]);
+                    cell[0] = now & 0xFF;
+                    cell[1] = now >> 8;
+                }
+                if (match) {
+                    i += lower[g].count - 1;
+                }
+            }
+        }
+    }
+    return TRUE;
+}
+
 static BOOL MakeGalacticArena(const char *bw2Dir)
 {
     char path[512];
@@ -1018,6 +1206,7 @@ static BOOL MakeGalacticArena(const char *bw2Dir)
     u8 *stages = NULL;
     u8 *modelsFile = NULL;
     u8 *arenasFile = NULL;
+    u8 *safariButtons[SAFARI_MEMBERS] = { NULL };
     u32 modelSize = 0, bgsSize = 0, fieldsSize = 0, modelsFileSize = 0, arenasFileSize = 0;
     u32 newModel = 0, newField = 0, stagesSize = 0, newStage = 0, stageModelSize = 0;
 
@@ -1069,12 +1258,19 @@ static BOOL MakeGalacticArena(const char *bw2Dir)
         entry[2 + 20 + GALACTIC_TERRAIN] = (u8)newStage;
     }
     if (ok) {
-        const u8 *added[2] = { model, stageModel };
-        const u32 addedSize[2] = { modelSize, stageModelSize };
+        // The Galactic arena's two models, then the Safari Zone's labels (574 to 586)
+        const u8 *added[2 + SAFARI_MEMBERS] = { model, stageModel };
+        u32 addedSize[2 + SAFARI_MEMBERS] = { modelSize, stageModelSize };
+        u32 safariSize[SAFARI_MEMBERS];
+        ok = MakeSafariButtons(&models, safariButtons, safariSize);
+        for (int i = 0; ok && i < SAFARI_MEMBERS; i++) {
+            added[2 + i] = safariButtons[i];
+            addedSize[2 + i] = safariSize[i];
+        }
         const u8 *replaced[3] = { bgs, fields, stages };
         const u32 replacedSize[3] = { bgsSize, fieldsSize + FIELD_ROW_SIZE, (newStage + 1) * STAGE_ROW_SIZE };
         const u32 indices[3] = { 0, 1, 2 };
-        modelsFile = ArchiveWithAdded(&models, 2, added, addedSize, &modelsFileSize);
+        modelsFile = ok ? ArchiveWithAdded(&models, 2 + SAFARI_MEMBERS, added, addedSize, &modelsFileSize) : NULL;
         u32 firstSize = 0;
         u8 *first = ArchiveWithMembers(&arenas, 3, indices, replaced, replacedSize, &firstSize);
         arenasFile = first;
@@ -1096,6 +1292,9 @@ static BOOL MakeGalacticArena(const char *bw2Dir)
     free(stages);
     free(modelsFile);
     free(arenasFile);
+    for (int i = 0; i < SAFARI_MEMBERS; i++) {
+        free(safariButtons[i]);
+    }
     if (models.data != NULL) {
         ArchiveClose(&models);
     }

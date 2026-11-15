@@ -884,3 +884,70 @@ into the proxies' slots (above), the handlers are dropped; the icon and names st
 **Experience crash (fixed 2026-11-11):** `AddExpAndEVs` (`btl_server_flow_sub.c`) divides the experience by the number
 of standing Pokémon that faced the defeated one, which can be 0: the DS gives 0 for a division by zero, x86 traps
 (SIGFPE, seen when `gen5_battle.txt` failed to run and won the next turn). The patch makes it 0.
+
+## Weather that stays, and its ability bar (2026-11-14)
+
+(Doubles: checked with `gen5_weather_doubles.txt`: Twins Liv & Liz and Tristan with Jacob show the bar on the player's side with "4", then "3 turns remaining", and the rain stays; in the Cheryl battle Turtwig fainted early and no bar was caught. The bar's text sits in the middle of the bar, line 13 of its bitmap.)
+
+BW2 plays a weather move's animation once (Rain Dance's rain, Hail's flakes...) and then shows no weather on the arena
+at all; each turn it only damages (sand, hail). Two additions, both patches (no pokebw2 change):
+
+- **The weather's ability bar at each turn's end.** `ServerControl_TurnCheckWeather` (`btl_server_flow.c`) queues a new
+  server command, `SC_WEATHER_TURN` (the setter's Pokémon, the weather, the turns left; `btl_server_cmd.h`'s header patch,
+  `btl_server_cmd.c`), while the weather lasts. The setter is remembered when a move (`ServerControl_FieldEffect`) or an
+  ability (`BattleHandler_ChangeWeather`) sets it; the arena's own weather at a battle's start has none and shows on the
+  foe's side. The client (`btl_client.c`'s `BattleClient_ScWeatherTurn`) shows an ability bar on that Pokémon's side
+  (from the left for the player's, from the right for the foe's) reading "Rain: 4 turns remaining" ("Rain" alone for a
+  weather with no end, as the arena's own), holds it 40 frames and hides it. `btlv_scu.c`'s patch draws it: the bar's
+  palette (the file's palettes 1 and 2 of the battle archive's `0x1E4`) is tinted from dark to light by each color's
+  brightness, keeping the text's two colors: sun orange to yellow, rain dark to light blue, hail light gray to white, sand
+  brown to yellow. The palette is given back (a fade off the screen puts it in VRAM) when the bar goes, so an ability's bar
+  is the file's again. The text is the port's (`Gen5_PortWeatherText`, `runtime.c`), not BW2's messages.
+- **The weather's particles stay.** BW2's effect machine frees a script's particles at its `End`, and one machine runs all
+  the moves, so a weather that stays has a machine of its own: `btlv_effvm.c`'s patch (`BtlvEffvm_PortAmbient*`) makes a
+  second `BtlvEffvm` and runs a script the port writes (the same commands a `.s` file assembles to: `EffvmCommand`'s two
+  bytes, then 4-byte arguments) that loads the weather's particle resource and adds its emitters every few frames, for
+  good: rain 411 (two emitters every 30 frames), sun 412, hail 428, sandstorm 371 (the emitters of the moves' own scripts,
+  at fixed places in place of the attacker). `SC_WEATHER_START` starts it (`BtlvEffect_PortWeatherAmbient`,
+  `btlv_effect.c`'s patch, run each frame from `BtlvEffect_Main`), `SC_WEATHER_END` stops it, the battle's end frees it.
+
+Checked on the desktop (`tests/scripts/gen5_weather.txt`: Rain Dance, three turns, Tackle, run; the same with the moves 241,
+258 and 201 for the other three): the bars are on the right side with the right colors and the particles stay through the
+command selection, the camera's idle moves and other moves; `gen5_battle`, `gen5_trainer` and `gen5_ability_bar_player`
+still pass, and `desktop.sh gen5-check` (Android's arm64 compile too) has 0 failed.
+
+Open: not checked on the Thor; the rain, hail and sand are thin or sparse compared with the moves' own bursts (the
+cadence and emitter positions are guesses, in `BtlvEffvm_PortAmbientStart`); the sandstorm's emitters are at the arena's
+middle, not on the attacker; the bar's brightness mapping gives no gradient across it beyond the file's own shading; the
+text is English only; a second weather change in one turn is untested; the replay and Pokéstar Studios
+(chapter skipping) skip the bar and the particles.
+
+## The Safari Zone (2026-11-14, done on the desktop)
+
+`BATTLE_TYPE_SAFARI` runs in BW2's engine with *Gen 5 battles* on. None of the player's Pokémon is on the field, so the view plays
+the whole battle itself, as BW2's capture demo does (`BattleClient_SetupView` starts that command, the server goes straight to
+`ProcBattleEnd`); pokebw2 is unchanged.
+
+- **Rules:** Platinum's, in `gen5/src/safari.c` (catch math with ball modifier 15 and four checks, the two stages starting at 6 that
+  bait and mud move, the flee check after each turn). The species' catch and flee rates are Platinum's data
+  (`Gen5Battle.safariCatchRate`, `safariFleeRate`). Balls left go back to `dto->countSafariBalls`; 0 balls with no catch is game over.
+- **View loop:** `BtlvCore_PortCmdSafari` (`btlv_core.c` patch) after `BtlvScu_PortEncountSafari` (`btlv_scu.c`): ball bar, prompt,
+  command screen, action message, throw, result, the Pokémon's turn.
+- **Trainer:** brought in by effect 0x232, then un-hidden and placed where the player's Pokémon would stand; his throw animation is
+  paused 3 frames in (ball up) and resumed to throw (`SAFARI_READY_FRAMES`, `SAFARI_THROW_FRAMES`).
+- **Throws:** ball = BW2's ball effect (0x23a) with item 5 (caught in a Safari Ball, set on `core->mainModule->pokeCons[1]`); bait =
+  Fling (374) and mud = Mud-Slap (189) from view position 8. The wild Pokémon then hops twice (bait) or shakes (mud, longer when
+  "beside itself") with `BtlvMcss_Shake`.
+- **Buttons:** FIGHT, BAG, POKÉMON become BALL, BAIT, ROCK (RUN stays). The labels are tile art in two halves each (BG4 maps 361-371,
+  BG5 map 372, tiles in file 358); `MakeSafariButtons` (`src/port/gen5_data.c`) adds the tile file and the 12 maps again to the
+  generated copy of archive 11 as members 574-586, with new tiles (ids 400+) and the port's own 5x5 font stretched to 9 rows.
+  `BtlvInput_FileId` (`btlv_input.c` patch) picks them in a Safari battle only.
+- **Balls left:** a green bar on the top screen (the weather bar with id 5, "Safari Balls: N"), redrawn each turn. Bait and mud
+  aren't counted (not in Platinum). The empty player gauge is removed each frame.
+- **Arena:** by where the battle is, as for any wild battle; the marsh's mud is BW2's muddy bank (terrain 2), grass 5, water 6.
+- **Tests:** test command `safari SPECIES LEVEL [BALLS]`; `POKEPLATINUM_GEN5_SAFARI_SEED=N` fixes the dice. Scripts:
+  `gen5_safari` (ball, bait, mud, run), `_catch`, `_end` (flee, out of balls), `_marsh` (arena), `_react`, `_widescreen`
+  (`TEST_CONFIG` as in `gen5_widescreen.txt`). `gen5-check`: 0 failed.
+- **Widescreen:** the scene fills the window; the balls bar extends over the left side like the ability bars (by design).
+- **Open:** the Thor (needs an APK); the wild Pokémon's cry and the catch jingle (BW2's music calls are stubs); Nuzlocke mode's catch
+  rule doesn't know the Safari Zone; Pal Park stays Platinum's; HGSS's Safari is a to-do in `hgss.md`.

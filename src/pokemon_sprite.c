@@ -1,5 +1,9 @@
 #include "pokemon_sprite.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_gray.h"
+#endif
+
 #include "constants/graphics.h"
 #include "generated/shadow_sizes.h"
 
@@ -1110,6 +1114,16 @@ void PokemonSpriteManager_StartFadeAll(PokemonSpriteManager *monSpriteMan, int i
     }
 }
 
+#ifdef SDK_PORT
+void PokemonSprite_PortSetGray(PokemonSprite *monSprite, BOOL gray)
+{
+    if (monSprite != NULL && monSprite->portGray != (gray != FALSE)) {
+        monSprite->portGray = gray != FALSE;
+        monSprite->needReloadPltt = TRUE;
+    }
+}
+#endif
+
 void PokemonSprite_ClearFade(PokemonSprite *monSprite)
 {
     monSprite->transforms.fadeActive = FALSE;
@@ -1447,6 +1461,12 @@ static void BufferPokemonSpritePlttData(PokemonSpriteManager *monSpriteMan)
                 monSpriteMan->plttRawData[j + PALETTE_SIZE * i] = rawPlttData[j];
                 monSpriteMan->plttRawDataUnfaded[j + PALETTE_SIZE * i] = rawPlttData[j];
             }
+#ifdef SDK_PORT
+            if (monSpriteMan->sprites[i].portGray) {
+                NuzlockeGray_Colors(&monSpriteMan->plttRawData[PALETTE_SIZE * i], PALETTE_SIZE);
+                NuzlockeGray_Colors(&monSpriteMan->plttRawDataUnfaded[PALETTE_SIZE * i], PALETTE_SIZE);
+            }
+#endif
 
             Heap_Free(nclrFile);
 
