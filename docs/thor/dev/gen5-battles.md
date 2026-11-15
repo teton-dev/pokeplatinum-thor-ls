@@ -921,3 +921,50 @@ cadence and emitter positions are guesses, in `BtlvEffvm_PortAmbientStart`); the
 middle, not on the attacker; the bar's brightness mapping gives no gradient across it beyond the file's own shading; the
 text is English only; a second weather change in one turn is untested; the replay and Pokéstar Studios
 (chapter skipping) skip the bar and the particles.
+
+## The Safari Zone (2026-11-14)
+
+The Great Marsh's battles (`BATTLE_TYPE_SAFARI`, `FieldBattleDTO_NewSafari`) run in BW2's engine with *Settings > Gameplay >
+Gen 5 battles* on. BW2 has no Safari Zone and none of the player's Pokémon is on the field, so the server and its flow are not
+used: the view plays the battle by itself, as BW2's capture demo does (`BTL_TYPE_CAPTURE_DEMO`: `BattleClient_SetupView` starts
+the demo's command, the server goes straight to `ProcBattleEnd`). Nothing in pokebw2 changes; the patches are in
+`gen5/patches`.
+
+- **Rules** (`gen5/src/safari.c`) are Platinum's, copied from `battle_controller_player.c` (the Safari commands), `battle_script.c`
+  (`BattleScript_CalcCatchShakes` with `sSafariCatchRate`, ball modifier 15, four checks) and `battle_display.c` (the flee check,
+  `sFleeRateMultipliers`): two stages that start at 6 (Platinum's `safariCatchStage` and `safariEscapeCount`), bait and mud move
+  them, the Pokémon's turn after each of the player's is a flee check (`rand % 255 <= fleeRate * multiplier`) or "is watching
+  carefully!". The species' catch rate and Safari flee rate are Platinum's data (`Gen5Battle.safariCatchRate`, `safariFleeRate`;
+  BW2 has no flee rate). The balls left go back to the DTO (`dto->countSafariBalls`), which the field's `FieldTask_SafariEncounter`
+  reads (game over when 0 and nothing caught).
+- **The view's loop** (`BtlvCore_PortCmdSafari`, `btlv_core.c`'s patch, from `BtlvCore_CmdCaptureDemo`): the encounter
+  (`BtlvScu_PortEncountSafari`, `btlv_scu.c`'s patch: the wild Pokémon appears with its message and gauge, then effect 0x232 brings the
+  player's trainer in, who is put where the player's Pokémon would stand and un-hidden), then each turn: the ball bar, "What will
+  Claude do?", the command screen, the chosen action's message, the throw, the result, the Pokémon's turn.
+- **The trainer stays in the throwing pose:** his throw animation (sequence 1) is started and paused 3 frames in (`SAFARI_READY_FRAMES`:
+  the ball up in the hand), resumed to throw (the effect starts 22 frames later, `SAFARI_THROW_FRAMES`, as the ball leaves the hand)
+  and started and paused again for the next turn. Lucas and Dawn are the owner's art, as in every Gen 5 battle.
+- **The throws:** a Safari Ball is BW2's ball throw effect (0x23a, `BtlvEffect_StartBallThrow`, shakes 0 to 3 and the catch) with the
+  Safari Ball's item (5, whose ball ID is 5: the Pokémon is caught in it, `BattleMon_SetCaughtBall` on the *main module's* copy,
+  `core->mainModule->pokeCons[1]`: the client's copy isn't what goes back to the setup); bait is the move animation of Fling (374) and
+  mud that of Mud-Slap (189), started with the trainer's place (view position 8) as the attacker.
+- **The buttons** are the command screen's: FIGHT is the Safari Ball, BAG the bait, POKÉMON the mud, RUN runs
+  (`sCommandResults` give `BTLV_COMMAND_FIGHT`, `BAG`, `POKEMON`, `RUN`). **Their labels still say FIGHT, BAG and POKÉMON** (not
+  done): the labels are tile art over two background layers (BG4's maps 361 to 371 of archive 11 and BG5's 0x174, tiles in file
+  0x166, 4 bits per pixel, the text 4 pixels tall in one and the rest in the other; FIGHT's tiles are 377 to 390, BAG's 322 to 325,
+  POKÉMON's 332 to 338 in map 361), so they need redrawing as new tiles (a copy of file 0x166 as a new member of archive 11, as the
+  Galactic arena and the Fairy icon do) or text drawn over them; the letters L and C don't exist in the art.
+- **The balls left** are a bar on the top screen, left, in the weather bar's place (`BtlvScu_PortShowWeatherWin` with weather 5,
+  green, "Safari Balls: 30"), shown at each turn's start and drawn again after each throw. Bait and mud are not counted (they aren't in
+  Platinum). The player's own gauge (BW2 makes one for the Pokémon that isn't there) is removed each frame.
+- **Arena:** where the battle happens, as for any wild battle (`ArenaFromDTO`): the Great Marsh's map is a forest background, so tall
+  grass is the grass arena (terrain 5), water the water one (6), and the marsh's mud (`TERRAIN_GREAT_MARSH`) BW2's muddy bank with a
+  grassy rim (terrain 2; it was the mountains' bare dirt, 10). The log's `arena` line says what Platinum had and what BW2 got.
+- **Tests:** the test command `safari SPECIES LEVEL [BALLS]` (the Safari game flag on, the special location here, as the gate has it);
+  `POKEPLATINUM_GEN5_SAFARI_SEED=N` fixes the dice (`desktop.sh` passes it). `gen5_safari.txt` (Chansey, which never flees: ball, bait, mud,
+  run, with shots), `gen5_safari_catch.txt` (a Caterpie caught with a Safari Ball into the party, the Pokédex, the ball 5),
+  `gen5_safari_end.txt` (a Kangaskhan that runs away; one ball, missed: out of balls), `gen5_safari_marsh.txt` (the Great Marsh's
+  arena). `gen5-check` has 0 failed.
+- **Not done / open:** the button labels (above); the Pokémon's reactions (Platinum plays its happy, eating and angry animations; only
+  the texts and the Fling and Mud-Slap effects are there); the species' cries on a catch and the jingle (BW2's music calls are stubs, as
+  elsewhere); widescreen and the Thor not looked at; Nuzlocke mode's catch rule doesn't know the Safari Zone; Pal Park stays Platinum's.

@@ -1,0 +1,26 @@
+# Gen 5 battles, the Safari Zone's endings. From the turtwig fixture: a level 22 Kangaskhan (flee rate 150: it runs away on
+# its first turn with the seed below), then a level 22 Chansey with one ball (the throw misses: "out of balls").
+#
+#   POKEPLATINUM_GEN5_SAFARI_SEED=3 tools/docker/desktop.sh test tests/scripts/gen5_safari_end.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+safari 115 22 30
+until battle
+until command
+wait 90
+# BAIT, over and over, until it runs away
+touch 40 178
+mash B touch 40 178 until free timeout 6000
+shot gen5-safari-fled
+safari 113 22 1
+until battle
+until command
+wait 90
+# BALL, the only one
+touch 128 80
+wait 400
+shot gen5-safari-out
+mash B until free timeout 4000
+exit 0
