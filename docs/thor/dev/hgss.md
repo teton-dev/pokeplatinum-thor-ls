@@ -233,3 +233,22 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   one added to Dawn's armless pose) shows a gap of bare skin colour between her sleeve's cuff and the glove during
   the throw, where Ethan's drawn-in arm has none; `gen5/tools/player_back.py` or her sheet likely needs the glove
   moved in (or the cuff extended) to close it.
+- **Catching up with Platinum's Nuzlocke mode and weather sync** (2026-11-14, scoping): since the last sync
+  (606a8656e), the Platinum fork has gained Nuzlocke mode (per-save state and rules, the catch rule, dead Pokémon
+  drawn gray in both engines, the alpha mark on the save screen and main menu, gift nicknames asked again, scripted
+  tests) and, in `gen5/` (BW2's side of the bridge, shared with HGSS by the `./gen5` symlink): the weather staying
+  on the arena and its ability bar at each turn's end, the weather's bar text centered, partner battles and sprite
+  palettes, keeping the Pokémon's moves and the crit guard in BW2's engine, eggs staying eggs in battle. What's
+  shared for free: everything under `gen5/` (the BW2-side patches and `gen5/src/runtime.c`'s hooks) needs nothing
+  extra once HGSS's `./gen5` symlink is at this commit — HGSS's own `lib/port/gen5_battle.c` already builds against
+  it. What needs a real port: Nuzlocke mode's engine and UI (`src/port/nuzlocke_mode.c` and `.h`,
+  `nuzlocke_mode_game.h`: largely game-agnostic, behind a small per-game interface — a `nuzlocke_heartgold.c` to
+  write, mirroring `src/port/nuzlocke_platinum.c`'s 150 lines; `nuzlocke_gray.c`'s gray icons, which lean on
+  `pltt_transfer.c` and `pokemon_sprite.c`'s palette-slot patches; the mark on the save/main menu
+  (`nuzlocke_mark.c`); and the UI touch points — party menu, PC boxes, the Summary screen, the battle party list —
+  each ported file by file, not copied: **HGSS's decompilation names and organizes these very differently from
+  Platinum's fork** (no `save_table.h` or top-level `savedata.h`; `include/save.h`, `include/save_pokegear.h` and
+  the rest instead), even though the underlying constants match where checked (`MON_DATA_UNUSED_114`,
+  `SAVE_PAGE_MAX`, `SAVE_SECTOR_SIZE`). `lib/port/gen5_battle.c` also needs the small changes Platinum's picked up
+  (the dead flag into `Gen5Pokemon`, the partner's back-sprite art, egg handling). Not started; the per-game
+  adapter (`nuzlocke_heartgold.c`) is the natural first milestone, since everything else layers on it.
