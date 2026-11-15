@@ -1,6 +1,6 @@
 --- a/src/ov167/btlv_core.c
 +++ b/src/ov167/btlv_core.c
-@@ -9,6 +9,7 @@
+@@ -9,12 +9,14 @@
  #include "battle/btl_poke_select.h"
  #include "battle/btl_pokeparam.h"
  #include "battle/btl_pospoke.h"
@@ -8,7 +8,340 @@
  #include "battle/btl_string.h"
  #include "battle/btl_tables.h"
  #include "battle/btlv.h"
-@@ -561,6 +562,7 @@
+ #include "battle/btlv_clact.h"
+ #include "battle/btlv_effect.h"
+ #include "battle/btlv_input.h"
++#include "battle/btlv_mcss.h"
+ #include "battle/btlv_scd.h"
+ #include "battle/tr_ai.h"
+ #include "battle/trainer_data.h"
+@@ -326,8 +328,15 @@
+     return FALSE;
+ }
+ 
++BOOL BtlvCore_PortCmdSafari(BtlvCore *core, s32 *seq, void *work);
++int Gen5_PortSafari(void); // A Safari Zone battle (safari.c)
++
+ BOOL BtlvCore_CmdCaptureDemo(BtlvCore *core, s32 *seq, void *work) {
+     BtlvCaptureDemoWork *wk = work;
++
++    if (Gen5_PortSafari()) {
++        return BtlvCore_PortCmdSafari(core, seq, work); // The port: the Safari Zone's battle
++    }
+     void *data;
+     u8 *keys;
+     BattleMon *mon;
+@@ -494,6 +503,309 @@
+     case 20:
+         *BtlvScd_GetKeyCursorFlag(core->scd) = wk->savedKeys;
+         return TRUE;
++    }
++    return FALSE;
++}
++
++// ---- The port: the Safari Zone's battle (src/safari.c has its rules and texts) ----
++// None of the player's Pokémon is on the field: the wild Pokémon appears, the player's trainer slides in and stays in
++// the throwing pose, and each turn the player throws a Safari Ball, bait or mud, or runs; the Pokémon then watches or
++// flees. The command screen is the usual one: FIGHT, BAG and POKÉMON are the ball, the bait and the mud.
++int Gen5_PortSafariBalls(void);
++void Gen5_PortSafariText(StrBuf *strbuf, int id);
++void Gen5_PortSafariThrowBall(int *shakes, int *caught);
++int Gen5_PortSafariBait(void);
++int Gen5_PortSafariMud(void);
++int Gen5_PortSafariFlees(void);
++void Gen5_PortSafariSetFled(void);
++void BtlvScu_PortShowWeatherWin(BtlvScu *scu, BOOL player, u8 weather, u8 turns);
++BOOL BtlvScu_PortWaitShowWeatherWin(BtlvScu *scu, BOOL player);
++BOOL BtlvScu_PortHideWeatherWin(BtlvScu *scu, BOOL player);
++
++enum {
++    SAFARI_SETUP,
++    SAFARI_ENCOUNTER,
++    SAFARI_ENCOUNTER_WAIT,
++    SAFARI_READY,
++    SAFARI_READY_WAIT,
++    SAFARI_BAR,
++    SAFARI_BAR_WAIT,
++    SAFARI_COMMAND,
++    SAFARI_COMMAND_WAIT,
++    SAFARI_COMMAND_CLOSE,
++    SAFARI_ACTION_MSG,
++    SAFARI_ACTION_MSG_WAIT,
++    SAFARI_THROW,
++    SAFARI_THROW_WAIT,
++    SAFARI_EFFECT_WAIT,
++    SAFARI_RESULT_MSG_WAIT,
++    SAFARI_CAUGHT_MSG_WAIT,
++    SAFARI_CAUGHT_JINGLE,
++    SAFARI_REACT_MSG_WAIT,
++    SAFARI_AFTER_REACT,
++    SAFARI_WATCH_MSG_WAIT,
++    SAFARI_END_MSG_WAIT,
++    SAFARI_END,
++    SAFARI_PROMPT_WAIT,
++};
++
++// The throwing pose: the trainer's throw animation (its sequence 1), stopped after this many frames, where the ball is
++// up in the hand; resumed to throw. The frames the resumed throw takes before the ball leaves the hand
++#define SAFARI_READY_FRAMES 3
++#define SAFARI_THROW_FRAMES 22
++#define SAFARI_TRAINER_POS 8
++#define SAFARI_BALL_ITEM 5
++#define SAFARI_MSG_FRAMES 60
++
++static BattleAction sPortSafariAction;
++static s32 sPortSafariWait;
++static u32 sPortSafariChoice;
++static int sPortSafariShakes;
++static int sPortSafariCaught;
++static int sPortSafariBaitEats; // the bait's and the mud's reaction line: 1 the usual, 0 the rarer
++static u8 sPortSafariSavedKeys;
++
++static void BtlvCore_PortSafariMsg(BtlvCore *core, int id) {
++    Gen5_PortSafariText(core->strbuf, id);
++    BtlvCore_StartMsgStr(core, core->strbuf, SAFARI_MSG_FRAMES, NULL);
++}
++
++static void BtlvCore_PortSafariPose(BOOL start) {
++    BtlvMcss *mcss = BtlvEffect_GetMcss();
++
++    if (start) {
++        BtlvMcss_SetAnimation(mcss, SAFARI_TRAINER_POS, 1);
++        BtlvMcss_SetAnimSpeed(mcss, SAFARI_TRAINER_POS, FX32_ONE);
++    } else {
++        BtlvMcss_SetAnimPause(mcss, SAFARI_TRAINER_POS, BTLV_MCSS_PAUSE_PAUSE);
++    }
++}
++
++BOOL BtlvCore_PortCmdSafari(BtlvCore *core, s32 *seq, void *work) {
++    BattleMon *mon;
++    BtlvStringParam param;
++
++    // No Pokémon of the player's: no gauge for its place, whatever shows it (the throws' effect does)
++    if (*seq > SAFARI_ENCOUNTER_WAIT) {
++        if (BtlvEffect_CheckGaugeExist(0)) {
++            BtlvEffect_DelGauge(0);
++        }
++        BtlvEffect_SetGaugeDrawEnable(FALSE, 0);
++        BtlvEffect_SetGaugeStatus(0, 0);
++    }
++    switch (*seq) {
++    case SAFARI_SETUP: {
++        void *data = BtlvEffect_CreateSetup(core->mainModule, core->scu, core->heapId);
++
++        BtlvEffect_Init(data, core->font2, core->heapId);
++        GFL_HeapFree(data);
++        sPortSafariSavedKeys = *BtlvScd_GetKeyCursorFlag(core->scd);
++        BtlvScu_Setup(core->scu);
++        BtlvScd_CreateInput(core->scd);
++        (*seq) = SAFARI_ENCOUNTER;
++        break;
++    }
++    case SAFARI_ENCOUNTER:
++        BtlvScu_StartEncount(core->scu, 0);
++        (*seq) = SAFARI_ENCOUNTER_WAIT;
++        break;
++    case SAFARI_ENCOUNTER_WAIT:
++        if (BtlvScu_WaitEncount(core->scu)) {
++            // No Pokémon of the player's: no gauge for its place
++            if (BtlvEffect_CheckGaugeExist(0)) {
++                BtlvEffect_DelGauge(0);
++            }
++            // The encounter effect put the trainer off to the side, for the throw that sends a Pokémon out: here he
++            // stays where the player's Pokémon would be
++            BtlvMcss_ResetPosition(BtlvEffect_GetMcss(), SAFARI_TRAINER_POS);
++            BtlvMcss_SetVanish(BtlvEffect_GetMcss(), SAFARI_TRAINER_POS, BTLV_MCSS_VANISH_SHOW);
++            (*seq) = SAFARI_READY;
++        }
++        break;
++    case SAFARI_READY:
++        BtlvCore_PortSafariPose(TRUE);
++        sPortSafariWait = SAFARI_READY_FRAMES;
++        (*seq) = SAFARI_READY_WAIT;
++        break;
++    case SAFARI_READY_WAIT:
++        if (--sPortSafariWait <= 0) {
++            BtlvCore_PortSafariPose(FALSE);
++            (*seq) = SAFARI_BAR;
++        }
++        break;
++    case SAFARI_BAR:
++        BtlvScu_PortShowWeatherWin(core->scu, TRUE, 5, Gen5_PortSafariBalls());
++        (*seq) = SAFARI_BAR_WAIT;
++        break;
++    case SAFARI_BAR_WAIT:
++        if (BtlvScu_PortWaitShowWeatherWin(core->scu, TRUE)) {
++            (*seq) = SAFARI_COMMAND;
++        }
++        break;
++    case SAFARI_COMMAND:
++        core->mon = BtlvCore_GetMonAtViewPos(core, 0);
++        core->monId = GetMonID(core->mon);
++        core->action = &sPortSafariAction;
++        core->result = 0;
++        core->laterMon = 0;
++        Gen5_PortSafariText(core->strbuf, 0);
++        BtlvCore_PrintMsgStr(core, core->strbuf);
++        (*seq) = SAFARI_PROMPT_WAIT;
++        break;
++    case SAFARI_PROMPT_WAIT:
++        // The prompt's window comes up (BtlvCore_WaitMsg), then the buttons
++        if (BtlvCore_WaitMsg(core)) {
++            BtlvScd_StartCommandSelect(core->scd, core->mon, core->laterMon, 0, core->action);
++            Gen5_Event(GEN5_EVENT_COMMAND); // The game's test scripts
++            (*seq) = SAFARI_COMMAND_WAIT;
++        }
++        break;
++    case SAFARI_COMMAND_WAIT:
++        if (BtlvEffect_CheckGaugeExist(0)) {
++            BtlvEffect_DelGauge(0);
++        }
++        sPortSafariChoice = BtlvScd_GetCommandResult(core->scd);
++        if (sPortSafariChoice != BTLV_COMMAND_NONE) {
++            if (sPortSafariChoice != BTLV_COMMAND_RUN) {
++                BtlvScd_ResetScreen(core->scd);
++            }
++            (*seq) = SAFARI_COMMAND_CLOSE;
++        }
++        break;
++    case SAFARI_COMMAND_CLOSE:
++        if (BtlvScd_IsIdle(core->scd)) {
++            switch (sPortSafariChoice) {
++            case BTLV_COMMAND_FIGHT:
++                BtlvCore_PortSafariMsg(core, 1);
++                break;
++            case BTLV_COMMAND_BAG:
++                BtlvCore_PortSafariMsg(core, 2);
++                break;
++            case BTLV_COMMAND_POKEMON:
++                BtlvCore_PortSafariMsg(core, 3);
++                break;
++            default:
++                BtlvCore_PortSafariMsg(core, 10);
++                break;
++            }
++            (*seq) = SAFARI_ACTION_MSG_WAIT;
++        }
++        break;
++    case SAFARI_ACTION_MSG_WAIT:
++        if (BtlvCore_WaitMsg(core)) {
++            if (sPortSafariChoice == BTLV_COMMAND_RUN) {
++                (*seq) = SAFARI_END;
++            } else {
++                // The trainer's throw goes on from the pose, and the effect starts as the ball leaves the hand
++                BtlvMcss_SetAnimPause(BtlvEffect_GetMcss(), SAFARI_TRAINER_POS, BTLV_MCSS_PAUSE_RESUME);
++                sPortSafariWait = SAFARI_THROW_FRAMES;
++                (*seq) = SAFARI_THROW;
++            }
++        }
++        break;
++    case SAFARI_THROW:
++        if (--sPortSafariWait <= 0) {
++            mon = BtlvCore_GetMonAtViewPos(core, 1);
++            switch (sPortSafariChoice) {
++            case BTLV_COMMAND_FIGHT:
++                Gen5_PortSafariThrowBall(&sPortSafariShakes, &sPortSafariCaught);
++                BtlvEffect_StartBallThrow(1, SAFARI_BALL_ITEM, sPortSafariShakes, sPortSafariCaught, 0);
++                break;
++            case BTLV_COMMAND_BAG:
++                sPortSafariBaitEats = Gen5_PortSafariBait();
++                BtlvScu_StartMoveEffect(core->scu, SAFARI_TRAINER_POS, 1, 374, PML_MoveGetParam(374, MOVE_PARAM_TARGET), 0, 0);
++                break;
++            default:
++                sPortSafariBaitEats = Gen5_PortSafariMud();
++                BtlvScu_StartMoveEffect(core->scu, SAFARI_TRAINER_POS, 1, 189, PML_MoveGetParam(189, MOVE_PARAM_TARGET), 0, 0);
++                break;
++            }
++            (*seq) = SAFARI_EFFECT_WAIT;
++        }
++        break;
++    case SAFARI_EFFECT_WAIT:
++        if (sPortSafariChoice == BTLV_COMMAND_FIGHT ? !BtlvEffect_IsBusy() : BtlvScu_WaitMoveEffect(core->scu)) {
++            mon = BtlvCore_GetMonAtViewPos(core, 1);
++            if (sPortSafariChoice == BTLV_COMMAND_FIGHT) {
++                if (sPortSafariCaught) {
++                    Btlv_StringParam_Setup(&param, BTLV_STR_STD, 0x41);
++                    Btlv_StringParam_AddArg(&param, GetMonID(mon));
++                    BtlvEffect_PlayBgmNoPinch(0x518);
++                    BtlvCore_StartMsg(core, &param);
++                    (*seq) = SAFARI_CAUGHT_MSG_WAIT;
++                } else {
++                    static const u16 sBrokeFree[4] = { 0x3d, 0x3e, 0x3f, 0x40 };
++
++                    Btlv_StringParam_Setup(&param, BTLV_STR_STD, sBrokeFree[sPortSafariShakes & 3]);
++                    BtlvCore_StartMsg(core, &param);
++                    (*seq) = SAFARI_RESULT_MSG_WAIT;
++                }
++            } else {
++                BtlvCore_PortSafariMsg(core, sPortSafariChoice == BTLV_COMMAND_BAG ? (sPortSafariBaitEats ? 4 : 5)
++                                                                                  : (sPortSafariBaitEats ? 6 : 7));
++                (*seq) = SAFARI_REACT_MSG_WAIT;
++            }
++        }
++        break;
++    case SAFARI_RESULT_MSG_WAIT:
++        if (BtlvCore_WaitMsg(core)) {
++            if (Gen5_PortSafariBalls() == 0) {
++                BtlvCore_PortSafariMsg(core, 11);
++                (*seq) = SAFARI_END_MSG_WAIT;
++            } else {
++                (*seq) = SAFARI_AFTER_REACT;
++            }
++        }
++        break;
++    case SAFARI_REACT_MSG_WAIT:
++        if (BtlvCore_WaitMsg(core)) {
++            (*seq) = SAFARI_AFTER_REACT;
++        }
++        break;
++    case SAFARI_AFTER_REACT:
++        // The Pokémon's turn: it runs away or keeps watching
++        if (Gen5_PortSafariFlees()) {
++            Gen5_PortSafariSetFled();
++            BtlvCore_PortSafariMsg(core, 9);
++            (*seq) = SAFARI_END_MSG_WAIT;
++        } else {
++            BtlvCore_PortSafariMsg(core, 8);
++            (*seq) = SAFARI_WATCH_MSG_WAIT;
++        }
++        break;
++    case SAFARI_WATCH_MSG_WAIT:
++        if (BtlvCore_WaitMsg(core)) {
++            (*seq) = SAFARI_READY;
++        }
++        break;
++    case SAFARI_CAUGHT_MSG_WAIT:
++        if (BtlvCore_WaitMsg(core)) {
++            mon = BtlvCore_GetMonAtViewPos(core, 1);
++            NotifyMonCaught(core->mainModule, mon);
++            // The main module's own copy of the Pokémon is what goes back to the setup, with the ball it was caught in
++            BattleMon_SetCaughtBall(PokeCon_GetPosMonInner(&core->mainModule->pokeCons[1], ViewPosToBattlePos(core->mainModule, 1)),
++                                    SAFARI_BALL_ITEM);
++            BtlMain_StoreSlotNthResult(core->mainModule, ViewPosToBattlePos(core->mainModule, 1));
++            (*seq) = SAFARI_CAUGHT_JINGLE;
++        }
++        break;
++    case SAFARI_CAUGHT_JINGLE:
++        if (!GFL_SndBGMIsPlaying()) {
++            BtlvEffect_Resume();
++            (*seq) = SAFARI_END;
++        }
++        break;
++    case SAFARI_END_MSG_WAIT:
++        if (BtlvCore_WaitMsg(core)) {
++            (*seq) = SAFARI_END;
++        }
++        break;
++    case SAFARI_END:
++        if (BtlvScu_PortHideWeatherWin(core->scu, TRUE)) {
++            *BtlvScd_GetKeyCursorFlag(core->scd) = sPortSafariSavedKeys;
++            return TRUE;
++        }
++        break;
+     }
+     return FALSE;
+ }
+@@ -561,6 +873,7 @@
      core->result = 0;
      core->laterMon = laterMon;
      BtlvCore_SetMainProc(core, BtlvCore_ProcCommandSelect);
@@ -16,12 +349,13 @@
  }
  
  void BtlvCore_StopCommandSelect(BtlvCore *core) {
-@@ -1394,7 +1396,26 @@
+@@ -1393,8 +1706,27 @@
+     BtlString_FormatSetMsg(core->strbuf, message, args);
      BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
  }
- 
-+BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId); // The port (runtime.c)
 +
++BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId); // The port (runtime.c)
+ 
 +// The port: Nuzlocke mode's "You've already used your catch for this area!" (btl_client.c's patch)
 +void Gen5_PortCatchRefusedText(StrBuf *strbuf); // The port (runtime.c)
 +void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core);
@@ -43,7 +377,7 @@
      if (TrainerMsg_CheckExists(trainerId, msgId, core->heapId)) {
          TrainerMsg_Load(trainerId, msgId, core->strbuf, core->heapId);
          BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
-@@ -1451,6 +1472,26 @@
+@@ -1451,6 +1783,26 @@
      return BtlvScu_WaitAbilityWinChange(core->scu, pos);
  }
  

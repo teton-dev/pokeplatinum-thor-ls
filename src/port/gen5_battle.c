@@ -89,6 +89,11 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     if (!SIM_Config_prj_GetConfig()->gen5Battles || Gen5Rom_GameName() == NULL) {
         return FALSE;
     }
+    // The Safari Zone: a wild battle with none of the player's Pokémon on the field, played by the view alone
+    // (gen5/src/safari.c, the view's own loop)
+    if (dto->battleType == BATTLE_TYPE_SAFARI) {
+        return dto->battleStatusMask == 0;
+    }
     // A wild battle, alone or beside a partner (two wild Pokémon), with nothing special about it but a honey tree
     if (dto->battleType == BATTLE_TYPE_WILD_MON || dto->battleType == BATTLE_TYPE_AI_PARTNER) {
         return (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
@@ -1000,6 +1005,15 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     for (int i = 0; i < sBattle.partyCount; i++) {
         Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(party, i), &sBattle.party[i]);
     }
+    if (dto->battleType == BATTLE_TYPE_SAFARI) {
+        // The Safari Balls left, and the wild species' catch and flee rates (Platinum's data, which BW2 has no flee rate in)
+        const u16 species = Pokemon_GetValue(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), MON_DATA_SPECIES, NULL);
+
+        sBattle.safari = TRUE;
+        sBattle.safariBalls = dto->countSafariBalls;
+        sBattle.safariCatchRate = SpeciesData_GetSpeciesValue(species, SPECIES_DATA_CATCH_RATE);
+        sBattle.safariFleeRate = SpeciesData_GetSpeciesValue(species, SPECIES_DATA_SAFARI_FLEE_RATE);
+    }
     sBattle.isTrainer = (dto->battleType & BATTLE_TYPE_TRAINER) != 0;
     sBattle.doubles = (dto->battleType & BATTLE_TYPE_DOUBLES) != 0;
     if (sBattle.isTrainer) {
@@ -1085,6 +1099,11 @@ static void Finish(FieldBattleDTO *dto)
     SIM_SetTranslucentPolygonIdRule(FALSE);
     Gen5_SetWidescreen(1.0f);
     const enum Gen5BattleResult result = sFailed ? GEN5_BATTLE_FAILED : Gen5_BattleEnd(&sBattle);
+
+    if (sBattle.safari && !sFailed) {
+        // What is left of the Safari Zone's balls (the field's task reads it back from the DTO)
+        dto->countSafariBalls = sBattle.safariBalls;
+    }
 
     if (!sFailed) {
         // The party as the battle left it, which Platinum copies into the save (FieldBattleDTO_UpdateFieldSystem)

@@ -19,6 +19,9 @@ int GUI_CreateMon_StartTrainerBattle(int trainer1, int trainer2, int partner);
 int GUI_CreateMon_StartWildEncounter(int speciesNo, int level);
 // The same, a shiny one when shiny is TRUE (the test command wild SPECIES LEVEL shiny)
 int GUI_CreateMon_StartWildEncounterShiny(int speciesNo, int level, BOOL shiny);
+// The same as the Safari Zone's: with balls Safari Balls and the Safari game flag on (the test command safari SPECIES
+// LEVEL BALLS; the game is left on, as the Great Marsh's gate would have it)
+int GUI_CreateMon_StartSafariEncounter(int speciesNo, int level, int balls);
 
 #ifdef __cplusplus
 }
