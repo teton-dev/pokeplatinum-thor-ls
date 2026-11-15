@@ -111,6 +111,10 @@ typedef struct Gen5Trainer {
     unsigned short className[32];
     // What the trainer says when beaten, in BW2's text: 0xFFFE between lines, a page break as BW2's command
     unsigned short defeatText[GEN5_TEXT_LENGTH];
+    // What the trainer says during the battle, as BW2's trainers do (btl_client.c's hints), each empty (0 or 0xFFFF
+    // first) if it has none: [0] when its Pokémon is first hit, [1] at half HP, [2] with its last Pokémon, [3] with its
+    // last Pokémon at half HP (HGSS's TRMSG_HIT_POKE_FIRST_TIME to TRMSG_LAST_POKE_HALF)
+    unsigned short hintText[4][GEN5_TEXT_LENGTH];
     Gen5Pokemon party[GEN5_PARTY_MAX];
     int partyCount;
     // Art to draw for the trainer in place of BW2's sprite of its class (a Sinnoh trainer BW2 has no sprite for, from
@@ -185,6 +189,11 @@ typedef struct Gen5Battle {
     int safariCatchRate;
     int safariFleeRate;
     int safariFled;
+    // HeartGold and SoulSilver: the wild Pokémon was hooked with a rod (BW2's fishing flag: the Lure Ball, the Dive
+    // Ball), and the Apricorn Balls catch by HGSS's rules (battle_command.c: the Fast, Level, Lure, Heavy, Love, Moon
+    // and Sport Balls; BW2 gives them none)
+    int fishing;
+    int apricornBalls;
 } Gen5Battle;
 
 // How a battle ended, for Platinum
