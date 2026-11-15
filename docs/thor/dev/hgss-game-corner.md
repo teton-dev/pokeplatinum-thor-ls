@@ -374,3 +374,21 @@ art (11), touch = the face (20-22) and the digits (12). All 4bpp. This is what t
 - Still to do: the bonus game (the bonus roll after a win, JP states 13-24), the reach effects (outcome class), the credit and
   payout digits (file 24 / 12), the top screen's animations (the Smeargle host of a/1/2/7 files 0-3 and its emote
   bubbles), the bonus game, sound (JP SE ids to map), the English text bank, widescreen.
+
+### The Coin Case, and the Japanese Game Corner maps in the US ROM (2026-11-14)
+
+- **The US ROM still has the Japanese Game Corners**, unused: `MAP_GOLDENROD_GAME_CORNER_JP` (183, `T25R1101`,
+  `scr_seq_0906`: 22 machine bg events, 11 people, a TM78 item ball, one warp to Goldenrod) and
+  `MAP_CELADON_GAME_CORNER_JP` (381, `T07R0401`, `scr_seq_0803`). Their scripts call `CasinoGame machine, city` with
+  the lucky-machine numbering the JP app expects. Their English text is empty (`msg_0599_T25R1101`: 53 rows, none
+  in English). The US game uses the Voltorb Flip maps (536 `T25SP0101`, 537 `T07SP0101`) instead.
+- **The machines need a Coin Case and 3 coins** in the JP scripts (`HasItem ITEM_COIN_CASE` then
+  `CheckCoinsImmediate ..., 3`, `scr_seq_0906` `_013D`), and the same checks are in `0803` (Celadon) and `0805`.
+- **Who gives it:** in the Japanese game nobody does in the Game Corner. It is an item ball in Goldenrod Tunnel B1F
+  (`std_itemball_d37r0102_coin_case` = 7058, `scr_seq_0141_058`; the JP ROM has no script giving item 444 by
+  hand). The US game removed that ball (no zone event places it) and has Mr. Game in the US Game Corner give it
+  (`scr_seq_0910` `T25SP0101_002`, `0806` in Celadon).
+- So if the port sends the player into the JP maps, a player without the Coin Case could never get one (the US
+  world has no ball, and Mr. Game's map is no longer visited). The plan (the owner's ask): the JP Game Corner's coin
+  clerk (`shopm1` at the counter, `T25R1101` object 0, script `_000`) gives a Coin Case and some coins the first time
+  the player talks to them without one.
