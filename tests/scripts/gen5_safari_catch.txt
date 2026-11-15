@@ -1,0 +1,26 @@
+# Gen 5 battles, the Safari Zone: a catch. From the turtwig fixture: a wild Caterpie (catch rate 255: a Safari Ball always
+# catches it) with 12 balls; the naming screen is left empty and the Pokémon goes to the party. The log's "party" and
+# "Pokedex" lines are the check (the Caterpie caught, 11 balls left in the log's "battle ended" line).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_safari_catch.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+party
+safari 10 5 12
+until battle
+until command
+wait 90
+# BALL
+touch 128 80
+mash B until naming timeout 6000
+wait 90
+shot gen5-safari-naming
+press START
+wait 30
+press A
+mash B until free
+party
+shot gen5-safari-caught
+exit 0

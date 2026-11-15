@@ -38,11 +38,9 @@ gen5_sources = [
     'src/ov167/btl_adapter.c',
     'src/ov167/btl_field.c',
     'src/ov167/btl_handler_work.c',
-    'src/ov167/btl_main.c',
     'src/ov167/btl_net.c',
     'src/ov167/btl_pokeparam.c',
     'src/ov167/btl_rec.c',
-    'src/ov167/btl_server.c',
     'src/ov167/btl_string.c',
     'src/ov167/handler_common.c',
     'src/ov167/item_handlers.c',
@@ -256,7 +254,9 @@ gen5_patched = [
                                        # cap and catch rule (runtime.c)
     'src/ov167/btl_client.c',         # Nuzlocke mode's message for a ball knocked back in a wild battle
     'src/ov167/btl_server_cmd.c',     # The weather's command at a turn's end (btl_server_flow.c)
-    'src/ov167/btlv_scu.c',           # The weather's bar: an ability bar in the weather's colors
+    'src/ov167/btlv_scu.c',           # The weather's bar: an ability bar in the weather's colors; the Safari Zone's
+    'src/ov167/btl_server.c',         # The Safari Zone's battle is the view's alone, as the capture demo's (safari.c)
+    'src/ov167/btl_main.c',           # The Safari Zone's result
     'src/ov168/btlv_effect.c',        # The weather's particles that stay on the arena (btlv_effvm.c)
     'src/ov170/tr_ai.c',              # Jump tables' offsets read in a defined order (the trainer AI)
     'src/ov207/p_sta_info.c',         # The Summary's memo: Platinum's place names (runtime.c)
@@ -273,6 +273,7 @@ gen5_port_sources = files(
     'src/gfl_overlay.c', # src/gfl/gf_overlay.c: no overlays
     'src/net.c',         # src/system/net_err.c: no network errors
     'src/runtime.c',     # BW2's systems run in the port, and a battle on them (api/gen5.h)
+    'src/safari.c',      # The Safari Zone's rules (Platinum's) and texts, for the view's own loop
     'src/sdk.c',         # What pokebw2's own SDK copies have and libntr lacks
     'src/sound.c',       # src/system/snd_sys.c: BW2's sound effects and cries from its own archive, Platinum's music
     'src/trainers.c',    # Platinum's trainer classes as BW2's (milestone 5)

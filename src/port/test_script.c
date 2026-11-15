@@ -451,6 +451,16 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
+    } else if (strcmp(words[0], "safari") == 0 && count >= 3) {
+        // safari SPECIES LEVEL [BALLS]: a Safari Zone encounter (30 balls unless given), once the player is free
+        command->op = OP_WILD;
+        command->map = 2;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        command->frames = count >= 4 ? atoi(words[3]) : 30;
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
     } else if (strcmp(words[0], "gen5-screens") == 0 && count >= 2) {
         // gen5-screens on|off: Settings > Gameplay > Gen 5 screens
         command->op = OP_GEN5_SETTING;
@@ -950,8 +960,9 @@ static u16 Step(void)
                 }
                 return 0;
             }
-            if (!(command->map ? GUI_CreateMon_StartBattle(command->x, command->y, 0, 0)
-                               : GUI_CreateMon_StartWildEncounterShiny(command->x, command->y, command->frames))) {
+            if (!(command->map == 2 ? GUI_CreateMon_StartSafariEncounter(command->x, command->y, command->frames)
+                    : command->map ? GUI_CreateMon_StartBattle(command->x, command->y, 0, 0)
+                                   : GUI_CreateMon_StartWildEncounterShiny(command->x, command->y, command->frames))) {
                 Fail(command, "the wild encounter couldn't start");
                 return 0;
             }

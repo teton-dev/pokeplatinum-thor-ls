@@ -18,6 +18,7 @@
 #include "field/zone.h"
 #include "gfl/g3d.h"
 #include "gfl/heap.h"
+#include "gfl/msg.h"
 #include "gfl/str.h"
 #include "gfl/proc.h"
 #include "gfl/sound.h"
@@ -40,6 +41,10 @@
 #include "system/gfl_use.h"
 #include "system/printsys.h"
 #include "system/wipe.h"
+
+// The Safari Zone's rules (safari.c)
+void Gen5_PortSafariBegin(const Gen5Battle *battle, const unsigned short *speciesName);
+void Gen5_PortSafariEnd(Gen5Battle *battle);
 
 // Platinum's trainer classes as BW2's (trainers.c)
 u32 Gen5_TrainerClass(u32 platinumClass);
@@ -354,6 +359,17 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     PokeParty *party = NewParty(battle->party, battle->partyCount);
     Gen5_SetBattleGameData(party, info, config, bag, bagCursor, pokedex, records);
 
+    if (battle->safari) {
+        unsigned short speciesName[GEN5_NAME_LENGTH];
+        StrBuf *name = GFL_StrBufCreate(GEN5_NAME_LENGTH, HEAPID_PORT_BATTLE);
+
+        GFL_MsgDataLoadStrbuf(g_PMLSpeciesNamesResident, battle->wild.species, name);
+        GFL_StrBufStoreString(name, speciesName, GEN5_NAME_LENGTH);
+        GFL_StrBufFree(name);
+        Gen5_PortSafariBegin(battle, speciesName);
+    } else {
+        Gen5_PortSafariBegin(battle, NULL);
+    }
     memset(&sNuzlocke, 0, sizeof(sNuzlocke));
     sNuzlocke.levelCap = battle->levelCap;
     sNuzlocke.critGuard = battle->critGuard != 0;
@@ -627,7 +643,9 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
         battle->caughtWild2 = sSetup->capturedSlot == 1;
         battle->caughtMon = battle->caughtWild2 ? battle->wild2 : battle->wild;
         ReadPkm(PokeParty_GetPkm(sSetup->party[1], sSetup->capturedSlot), &battle->caughtMon);
+        printf("Gen 5: caught in ball %u\n", battle->caughtMon.ball);
     }
+    Gen5_PortSafariEnd(battle);
     printf("Gen 5: the battle ended (BW2's result %lu, money %+d)\n", (unsigned long)result, battle->moneyChange);
     sSetup = NULL;
     while (sBattleBlockCount > 0) {

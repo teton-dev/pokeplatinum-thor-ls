@@ -1,0 +1,48 @@
+# Gen 5 battles, the Safari Zone: a wild Pokémon met with Safari Balls, in BW2's engine (no Pokémon of the player's on the
+# field, the trainer in the throwing pose, Ball / Bait / Mud / Run). From the turtwig fixture: a level 22 Chansey (it never flees), the
+# dice fixed (POKEPLATINUM_GEN5_SAFARI_SEED), shot at the command screen, a ball, bait, mud, then RUN; passes once back on
+# the overworld.
+#
+#   POKEPLATINUM_GEN5_SAFARI_SEED=3 tools/docker/desktop.sh test tests/scripts/gen5_safari.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+safari 113 22 30
+until battle
+wait 150
+shot gen5-safari-intro
+until command
+wait 60
+shot gen5-safari-command
+# BALL (the middle button): the throw, the result, the Pokémon's turn
+touch 128 80
+wait 100
+shot gen5-safari-ball1
+wait 90
+shot gen5-safari-ball2
+mash B until command
+wait 60
+shot gen5-safari-turn2
+# BAIT (the left button)
+touch 40 178
+wait 120
+shot gen5-safari-bait1
+wait 60
+shot gen5-safari-bait2
+mash B until command
+wait 60
+# MUD (the right button)
+touch 216 178
+wait 120
+shot gen5-safari-mud1
+wait 60
+shot gen5-safari-mud2
+mash B until command
+wait 60
+shot gen5-safari-turn4
+# RUN, at the bottom of the touch screen, with B through the messages
+touch 128 178
+mash B touch 128 178 until free
+shot gen5-safari-back
+exit 0
