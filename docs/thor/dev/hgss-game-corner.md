@@ -289,3 +289,35 @@ code, so what matters is the shape, not the DS calls.
 
 What is *not* read yet: the 28 states one by one (their numbering vs the logic above), exact sprite animation
 numbers, and the bonus-game screens. These come next, while the C rewrite is built in the same order.
+
+### The 28 game states (read 2026-11-14)
+
+Transitions come from each handler's calls to the set-state helper (0x021E5CE8); names are from what each handler
+calls, so the ones marked ? are guesses. `S(n)` is state n, hex.
+
+| S | Does | Goes to |
+|---|---|---|
+| 0 | start of a round: clear the reels' flags, show the coin count | 1 |
+| 1 | check coins and the bet (0x021E8B9C) | 4 (can play) or 2 (ask for a bet) |
+| 2 | bet input: arrows change bet 1/3, coin display, SE | 3 |
+| 3 | wait for the lever (A/touch) | 4 |
+| 4 | draw the symbol (0x021E6B3C), start the reels (0x021E8DB0), SE | 5 |
+| 5, 6, 7 | stop reel 1, 2, 3 (A or touch each stop button); state 6 runs the reach check (0x021E6C20) | next; 7 -> 8 |
+| 8 | judge the line (0x021E8E48, 0x021E85C8) | 0xA or 9 |
+| 9 | the bonus roll (0x021E6E48), payout, jackpot counters | 0x1A (out of coins/cap), 0xD (bonus start) or 0xC |
+| 0xA | the hot/cold payout decision (0x021E6EE0), the win animation | 0x1A, 0xC or 0xB |
+| 0xB | win animation (0x021E80E0) | 0xC |
+| 0xC | AddCoins and the counting animation | 0 |
+| 0xD | enter the bonus: BGM change (0x02005DCC), bonus sprites | 0xF |
+| 0xE | leave the bonus: BGM back | 0xC |
+| 0xF | bonus intro screen | 0x10 |
+| 0x10 to 0x15 | the bonus's own spin loop, a copy of 2 to 8 with its own draw (0x021E6CD8): bet, lever, start, 3 stops, judge | 0x16 or 0x17 |
+| 0x16, 0x17 | bonus win / miss animation (0x021E85C8, 0x021E8EF8) | 0x18 |
+| 0x18 | bonus spin counter (the 8 or 15 spins): | 0xF (more spins), 0xE (done) or 0x1A |
+| 0x19 | "quit?" window (0x021E721C, 0x021E7074) | 0x1B |
+| 0x1A | out of coins or cap reached: message, wait for touch/A | 0x1B |
+| 0x1B | exit: fade out, return 2 | (leave the app) |
+
+So a round is 0 -> 1 -> (2 -> 3) -> 4 -> 5 -> 6 -> 7 -> 8 -> 9/A -> (B) -> C -> 0, and the bonus game is 9 -> D -> F ->
+10..18 repeating until the counter ends -> E -> C. In the C rewrite this is a small enum state machine; the shared
+helpers (0x021E5CE8 set state, 0x021E5CF4 step/wait, 0x021E5C6C touch-or-A) are one function each.
