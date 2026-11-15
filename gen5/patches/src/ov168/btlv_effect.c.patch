@@ -1,0 +1,41 @@
+--- a/src/ov168/btlv_effect.c
++++ b/src/ov168/btlv_effect.c
+@@ -365,6 +365,13 @@
+     sBtlvEffect->vblankTask = GFL_VBlankTCBAdd(BtlvEffect_VBlankTask, NULL, 1);
+     PokeVoice_AllocMulti(2, sBtlvEffect->heapId);
+ }
++
++// The port: the weather that stays on the arena (btlv_effvm.c's patch, btl_client.c's patch)
++void BtlvEffvm_PortAmbientStart(TCBManager *tcbManager, HeapID heapId, u32 weather);
++void BtlvEffvm_PortAmbientStop(void);
++void BtlvEffvm_PortAmbientDelete(void);
++void BtlvEffvm_PortAmbientMain(void);
++void BtlvEffect_PortWeatherAmbient(u32 weather);
+ 
+ void BtlvEffect_Exit(void) {
+     if (sBtlvEffect != NULL) {
+@@ -383,6 +390,7 @@
+         BtlvGauge_Delete(sBtlvEffect->gauge);
+         BtlvTimer_Delete(sBtlvEffect->timer);
+         BtlvBg_Delete(sBtlvEffect->bg);
++        BtlvEffvm_PortAmbientDelete();
+         Particle_Free();
+         BtlvEffvm_Delete(sBtlvEffect->effvm);
+         GFL_TCBRemove(sBtlvEffect->vblankTask);
+@@ -393,9 +401,16 @@
+     }
+ }
+ 
++void BtlvEffect_PortWeatherAmbient(u32 weather) {
++    if (sBtlvEffect != NULL) {
++        BtlvEffvm_PortAmbientStart(sBtlvEffect->tcbManager, sBtlvEffect->heapId, weather);
++    }
++}
++
+ void BtlvEffect_Main(void) {
+     if (sBtlvEffect != NULL) {
+         sBtlvEffect->executing = BtlvEffvm_Main(sBtlvEffect->effvm);
++        BtlvEffvm_PortAmbientMain();
+         BtlvEffect_UpdateIdleEffect();
+         GFL_TCBMgrUpdate(sBtlvEffect->tcbManager);
+         BtlvMcss_Main(sBtlvEffect->mcss);

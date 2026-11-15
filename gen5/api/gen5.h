@@ -75,6 +75,7 @@ typedef struct Gen5Pokemon {
 #define GEN5_PLACE_LENGTH 24
     unsigned short metPlace[GEN5_PLACE_LENGTH];
     unsigned short eggPlace[GEN5_PLACE_LENGTH];
+    unsigned dead; // Nuzlocke mode: a dead Pokémon (the party list draws it in gray)
 } Gen5Pokemon;
 
 // The player, for BW2's messages, its traded-Pokémon check (the OT's ID and name) and the money a loss costs
@@ -175,6 +176,15 @@ typedef struct Gen5Battle {
     int wildCatchRefused;
     int wild2CatchRefused;
     unsigned short catchRefusedText[GEN5_PORT_TEXT_LENGTH];
+    // The Safari Zone (a wild battle, wild only): none of the player's Pokémon is on the field; the player throws Safari
+    // Balls, bait and mud or runs, by Platinum's rules (src/safari.c: the catch and flee rates are Platinum's data for
+    // the wild Pokémon's species, the two stages start at 6 and move with bait and mud). safariBalls is the balls left,
+    // and what is left afterwards; safariFled says the Pokémon ran away
+    int safari;
+    int safariBalls;
+    int safariCatchRate;
+    int safariFleeRate;
+    int safariFled;
 } Gen5Battle;
 
 // How a battle ended, for Platinum

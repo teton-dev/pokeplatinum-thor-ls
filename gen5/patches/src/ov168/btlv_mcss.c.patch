@@ -8,13 +8,16 @@
  
  // The data of the Pokémon a sprite shows, copied whole when a Pokémon transforms
  typedef struct {
-@@ -488,6 +489,13 @@
+@@ -488,6 +489,16 @@
          work->entries[index].shadow = work->shadows;
          BtlvMcss_SetupTrainerLoadInfo(trainerType, &info, pos);
          BtlvMcss_GetDefaultPosImpl(work, &pos3d, pos);
-+        if (pos == BTLV_MCSS_POS_TRAINER) {
-+            // The port: the player's back drawn with the owner's art of Lucas or Dawn (gen5/player_back.h)
++        if (!(pos & 1) && PlayerBack_ForTrainerClass(trainerType) != NULL) {
++            // The port: the player's back (alone at 8, beside a partner at 10) with the owner's art of Lucas or Dawn
 +            MCSSSys_SetNextBackSprite(work->mcssSys, PlayerBack_ForTrainerClass(trainerType));
++        } else if (!(pos & 1) && Gen5_PartnerBackArt() != NULL) {
++            // The port: the partner beside the player (10 or 12), with Platinum's back sprite of it
++            MCSSSys_SetNextBackSprite(work->mcssSys, Gen5_PartnerBackArt());
 +        } else {
 +            // The port: a Sinnoh trainer BW2 has no sprite for, drawn with Platinum's (gen5/player_back.h)
 +            MCSSSys_SetNextBackSprite(work->mcssSys, Gen5_TrainerFrontArt(trainerType));

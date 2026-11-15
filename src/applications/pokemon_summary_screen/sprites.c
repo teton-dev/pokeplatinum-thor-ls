@@ -1,5 +1,9 @@
 #include "applications/pokemon_summary_screen/sprites.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_gray.h"
+#endif
+
 #include <nitro.h>
 #include <string.h>
 
@@ -1427,7 +1431,22 @@ void PokemonSummaryScreen_SetMonIcon(PokemonSummaryScreen *summaryScreen)
     }
 
     SpriteSystem_ReplaceCharResObj(summaryScreen->spriteSys, summaryScreen->spriteMan, NARC_INDEX_POKETOOL__ICONGRA__PL_POKE_ICON, iconIndex, 0, 11);
+#ifdef SDK_PORT
+    // Nuzlocke mode: a dead Pokémon's icon in gray copies of the icon palettes (made at the first one)
+    int iconPalette = PokeIconPaletteIndex(summaryScreen->monData.species, summaryScreen->monData.form, summaryScreen->monData.isEgg) + 7;
+    if (summaryScreen->data->dataType == SUMMARY_DATA_BOX_MON ? NuzlockeGray_BoxIsDead(monData) : NuzlockeGray_IsDead(monData)) {
+        if (summaryScreen->portGraySlot == 0) {
+            const int slot = NuzlockeGray_IconPalettes(FALSE, 7);
+            summaryScreen->portGraySlot = slot >= 0 ? slot + 1 : -1;
+        }
+        if (summaryScreen->portGraySlot > 0) {
+            iconPalette = iconPalette - 7 + summaryScreen->portGraySlot - 1;
+        }
+    }
+    Sprite_SetExplicitPalette2(summaryScreen->sprites[SUMMARY_SPRITE_MON_ICON], iconPalette);
+#else
     Sprite_SetExplicitPalette2(summaryScreen->sprites[SUMMARY_SPRITE_MON_ICON], PokeIconPaletteIndex(summaryScreen->monData.species, summaryScreen->monData.form, summaryScreen->monData.isEgg) + 7);
+#endif
     Sprite_SetFlipMode(summaryScreen->sprites[SUMMARY_SPRITE_MON_ICON], (SpeciesData_GetFormValue(summaryScreen->monData.species, summaryScreen->monData.form, SPECIES_DATA_FLIP_SPRITE) ^ 1));
 }
 

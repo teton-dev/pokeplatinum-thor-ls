@@ -38,14 +38,10 @@ gen5_sources = [
     'src/ov167/btl_adapter.c',
     'src/ov167/btl_field.c',
     'src/ov167/btl_handler_work.c',
-    'src/ov167/btl_main.c',
     'src/ov167/btl_net.c',
     'src/ov167/btl_pokeparam.c',
     'src/ov167/btl_rec.c',
-    'src/ov167/btl_server.c',
-    'src/ov167/btl_server_cmd.c',
     'src/ov167/btl_string.c',
-    'src/ov167/btlv_scu.c',
     'src/ov167/handler_common.c',
     'src/ov167/item_handlers.c',
     'src/ov167/poke_type_pair.c',
@@ -55,7 +51,6 @@ gen5_sources = [
     'src/ov168/btlv_bg.c',
     'src/ov168/btlv_camera.c',
     'src/ov168/btlv_clact.c',
-    'src/ov168/btlv_effect.c',
     'src/ov168/btlv_field.c',
     'src/ov168/btlv_stage.c',
     'src/ov168/btlv_timer.c',
@@ -92,7 +87,6 @@ gen5_sources = [
     'src/ov287/b_plist_bmp.c',
     'src/ov287/b_plist_cursor.c',
     'src/ov287/b_plist_main.c',
-    'src/ov287/b_plist_obj.c',
     # The scenario battles' screen (overlay 288)
     'src/ov288/b_scenario_graphic.c',
     'src/ov288/b_scenario_main.c',
@@ -226,6 +220,7 @@ gen5_sources = [
 
 # pokebw2's files with the port's changes (patches/), each compiled from a patched copy
 gen5_patched = [
+    'src/ov287/b_plist_obj.c',        # Nuzlocke mode: dead Pokémon's icons in gray
     'src/gfl/arc_tool.c',             # An assembly function in C
     'src/ov167/btlv_core.c',          # The command selection's event, for the test scripts (runtime.c)
     'src/gfl/arc_util.c',             # Multi-cell files in the 64-bit layout (src/g2d.c)
@@ -258,6 +253,11 @@ gen5_patched = [
     'src/ov167/btl_server_flow_sub.c', # Experience: a division by zero is 0, as on the DS; Nuzlocke mode's level
                                        # cap and catch rule (runtime.c)
     'src/ov167/btl_client.c',         # Nuzlocke mode's message for a ball knocked back in a wild battle
+    'src/ov167/btl_server_cmd.c',     # The weather's command at a turn's end (btl_server_flow.c)
+    'src/ov167/btlv_scu.c',           # The weather's bar: an ability bar in the weather's colors; the Safari Zone's
+    'src/ov167/btl_server.c',         # The Safari Zone's battle is the view's alone, as the capture demo's (safari.c)
+    'src/ov167/btl_main.c',           # The Safari Zone's result
+    'src/ov168/btlv_effect.c',        # The weather's particles that stay on the arena (btlv_effvm.c)
     'src/ov170/tr_ai.c',              # Jump tables' offsets read in a defined order (the trainer AI)
     'src/ov207/p_sta_info.c',         # The Summary's memo: Platinum's place names (runtime.c)
 ]
@@ -273,6 +273,7 @@ gen5_port_sources = files(
     'src/gfl_overlay.c', # src/gfl/gf_overlay.c: no overlays
     'src/net.c',         # src/system/net_err.c: no network errors
     'src/runtime.c',     # BW2's systems run in the port, and a battle on them (api/gen5.h)
+    'src/safari.c',      # The Safari Zone's rules (Platinum's) and texts, for the view's own loop
     'src/sdk.c',         # What pokebw2's own SDK copies have and libntr lacks
     'src/sound.c',       # src/system/snd_sys.c: BW2's sound effects and cries from its own archive, Platinum's music
     'src/trainers.c',    # Platinum's trainer classes as BW2's (milestone 5)

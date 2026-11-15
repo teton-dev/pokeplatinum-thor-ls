@@ -1,0 +1,25 @@
+# Gen 5 battles, the Safari Zone in widescreen: the intro, the command screen, a ball's throw and the reactions (the check is the
+# shots). From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       POKEPLATINUM_GEN5_SAFARI_SEED=3 tools/docker/desktop.sh test tests/scripts/gen5_safari_widescreen.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+safari 113 22 30
+until battle
+wait 100
+shot ws-intro
+until command
+wait 90
+shot ws-command
+touch 40 178
+wait 120
+shot ws-bait
+mash B until command
+wait 90
+touch 128 80
+wait 90
+shot ws-ball
+exit 0

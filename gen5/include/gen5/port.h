@@ -124,6 +124,10 @@ void Gen5_G3DReproject(void);
 // knocked back (btl_server_flow_sub.c's)
 u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp);
 BOOL Gen5_PortCritGuard(void);
+// Nuzlocke mode's dead Pokémon (the player's, by personality), drawn in gray in the party list (b_plist_obj.c's
+// patch): gray copies of the three icon palettes at iconSlot into graySlot, on the sub screen
+BOOL Gen5_PortIsDead(u32 personality);
+void Gen5_PortGrayIconPalettes(int iconSlot, int graySlot);
 BOOL Gen5_PortCatchRefused(u32 personality);
 
 #endif // GEN5_PORT_H

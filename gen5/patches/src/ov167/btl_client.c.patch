@@ -1,15 +1,119 @@
 --- a/src/ov167/btl_client.c
 +++ b/src/ov167/btl_client.c
-@@ -6219,6 +6219,8 @@
+@@ -677,6 +677,8 @@
+ static BOOL BattleClient_ScStatUpEffect(BtlClient *client, s32 *seq, const u32 *args);
+ static BOOL BattleClient_ScWeatherStart(BtlClient *client, s32 *seq, const u32 *args);
+ static BOOL BattleClient_ScWeatherEnd(BtlClient *client, s32 *seq, const u32 *args);
++static BOOL BattleClient_ScWeatherTurn(BtlClient *client, s32 *seq, const u32 *args);
++void BtlvEffect_PortWeatherAmbient(u32 weather); // The port: the weather's particles (btlv_effect.c's patch)
+ static BOOL BattleClient_ScUpdateHpGauge(BtlClient *client, s32 *seq, const u32 *args);
+ static BOOL BattleClient_ScUseHeldItem(BtlClient *client, s32 *seq, const u32 *args);
+ static BOOL BattleClient_ScFaintHpGauge(BtlClient *client, s32 *seq, const u32 *args);
+@@ -1250,10 +1252,13 @@
+     }
+ }
+ 
++int Gen5_PortSafari(void); // The port: a Safari Zone battle (safari.c)
++
+ static BOOL BattleClient_SetupView(BtlClient *client, s32 *seq) {
+     switch (*seq) {
+     case 0:
+-        if (BtlSetup_GetBattleType(client->mainModule) != BTL_TYPE_CAPTURE_DEMO) {
++        // The port: the Safari Zone's battle is the capture demo's command, which BtlvCore_PortCmdSafari takes over
++        if (BtlSetup_GetBattleType(client->mainModule) != BTL_TYPE_CAPTURE_DEMO && !Gen5_PortSafari()) {
+             BtlvCore_StartCommand(client->viewCore, BTLV_CMD_BATTLE_START);
+         } else {
+             BtlvCore_StartCommand(client->viewCore, BTLV_CMD_CAPTURE_DEMO);
+@@ -4956,6 +4961,7 @@
+     { SC_DAMAGE_EFFECT, BattleClient_ScDamageEffect },
+     { SC_PLAY_BGM, BattleClient_ScPlayBgm },
+     { SC_HIDE_MSG_WINDOW, BattleClient_ScHideMsgWindow },
++    { SC_WEATHER_TURN, BattleClient_ScWeatherTurn },
+ };
+ 
+ // The message and sound effect of each weather's start
+@@ -5554,6 +5560,7 @@
+         if (BattleClient_IsChapterSkipping(client)) {
+             return TRUE;
+         }
++        BtlvEffect_PortWeatherAmbient(weather); // The port: the weather stays on the arena
+         if (weather < NELEMS(sWeatherStartTable)) {
+             BtlvEffect_Start(sWeatherStartTable[weather].se);
+         }
+@@ -5579,6 +5586,8 @@
+     case 0: {
+         u16 msg;
+ 
++        BtlvEffect_PortWeatherAmbient(0); // The port: the weather's particles go
++
+         switch ((u8)args[0]) {
+         case 1:
+             msg = 0x59;
+@@ -5602,9 +5611,54 @@
+     case 1:
+         if (BtlvCore_WaitMsg(client->viewCore)) {
+             BtlField_ClearWeather(client->field);
++            return TRUE;
++        }
++        break;
++    }
++    return FALSE;
++}
++
++// The port: the weather at a turn's end, in an ability bar of the side that set it: its name and the turns left, in the
++// weather's colors (btlv_scu.c's patch). args: the setter's Pokemon (0xff for none), the weather, the turns left (0xff
++// for no end)
++void BtlvCore_PortShowWeatherWin(BtlvCore *core, BOOL player, u8 weather, u8 turns);
++BOOL BtlvCore_PortWaitShowWeatherWin(BtlvCore *core, BOOL player);
++BOOL BtlvCore_PortHideWeatherWin(BtlvCore *core, BOOL player);
++
++static BOOL BattleClient_ScWeatherTurn(BtlClient *client, s32 *seq, const u32 *args) {
++    static u16 sWait;
++    BOOL player = FALSE;
++
++    if (args[0] != 0xff) {
++        player = IsPlayerSide(client->mainModule, GetClientSide(client->mainModule, GetClientIDFromMonID(args[0])));
++    }
++    switch (*seq) {
++    case 0:
++        if (BattleClient_IsChapterSkipping(client)) {
+             return TRUE;
+         }
++        BtlvCore_PortShowWeatherWin(client->viewCore, player, args[1], args[2]);
++        (*seq)++;
+         break;
++    case 1:
++        if (BtlvCore_PortWaitShowWeatherWin(client->viewCore, player)) {
++            sWait = 40;
++            (*seq)++;
++        }
++        break;
++    case 2:
++        if (sWait != 0) {
++            sWait--;
++        } else {
++            (*seq)++;
++        }
++        break;
++    case 3:
++        // The bar goes, and its palette comes back
++        if (BtlvCore_PortHideWeatherWin(client->viewCore, player)) {
++            return TRUE;
++        }
++        break;
      }
      return FALSE;
  }
-+
-+void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core); // The port (btlv_core.c's patch)
+@@ -6220,6 +6274,8 @@
+     return FALSE;
+ }
  
++void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core); // The port (btlv_core.c's patch)
++
  static BOOL BattleClient_ScBallThrowTrainer(BtlClient *client, s32 *seq, const u32 *args) {
      switch (*seq) {
-@@ -6228,8 +6230,14 @@
+     case 0:
+@@ -6228,8 +6284,14 @@
          break;
      case 1:
          if (!BtlvEffect_IsBusy()) {

@@ -228,5 +228,47 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   laid out as Dawn's (armless standing pose, arm pieces added). Ethan's poses have their near arms drawn in, so only
   the far arm is added to the throw, and BW2's "ball up" shows him standing, "ball higher" and "winding up" with his arm
   over his head. His sheet's backing is noisy (compression), snapped to one colour (`backing_tolerance`). Previewed with
-  `player_back.py preview`; not yet built or seen in a battle (needs `desktop.sh build` in the HGSS fork and
-  `gen5_wild.txt` / `gen5_rival.txt`).
+  `player_back.py preview`, and now seen in an actual battle too (2026-11-14, `gen5_player_back.txt` and
+  `gen5_player_back_girl.txt`, `tests/README.md`): Ethan's throw is clean. Lyra's has a to-do — her near arm (the
+  one added to Dawn's armless pose) shows a gap of bare skin colour between her sleeve's cuff and the glove during
+  the throw, where Ethan's drawn-in arm has none; `gen5/tools/player_back.py` or her sheet likely needs the glove
+  moved in (or the cuff extended) to close it.
+- **Catching up with Platinum's Nuzlocke mode and weather sync** (2026-11-14, scoping): since the last sync
+  (606a8656e), the Platinum fork has gained Nuzlocke mode (per-save state and rules, the catch rule, dead Pokémon
+  drawn gray in both engines, the alpha mark on the save screen and main menu, gift nicknames asked again, scripted
+  tests) and, in `gen5/` (BW2's side of the bridge, shared with HGSS by the `./gen5` symlink): the weather staying
+  on the arena and its ability bar at each turn's end, the weather's bar text centered, partner battles and sprite
+  palettes, keeping the Pokémon's moves and the crit guard in BW2's engine, eggs staying eggs in battle. What's
+  shared for free: everything under `gen5/` (the BW2-side patches and `gen5/src/runtime.c`'s hooks) needs nothing
+  extra once HGSS's `./gen5` symlink is at this commit — HGSS's own `lib/port/gen5_battle.c` already builds against
+  it. What needs a real port: Nuzlocke mode's engine and UI (`src/port/nuzlocke_mode.c` and `.h`,
+  `nuzlocke_mode_game.h`: largely game-agnostic, behind a small per-game interface — a `nuzlocke_heartgold.c` to
+  write, mirroring `src/port/nuzlocke_platinum.c`'s 150 lines; `nuzlocke_gray.c`'s gray icons, which lean on
+  `pltt_transfer.c` and `pokemon_sprite.c`'s palette-slot patches; the mark on the save/main menu
+  (`nuzlocke_mark.c`); and the UI touch points — party menu, PC boxes, the Summary screen, the battle party list —
+  each ported file by file, not copied: **HGSS's decompilation names and organizes these very differently from
+  Platinum's fork** (no `save_table.h` or top-level `savedata.h`; `include/save.h`, `include/save_pokegear.h` and
+  the rest instead), even though the underlying constants match where checked (`MON_DATA_UNUSED_114`,
+  `SAVE_PAGE_MAX`, `SAVE_SECTOR_SIZE`). `lib/port/gen5_battle.c` also needs the small changes Platinum's picked up
+  (the dead flag into `Gen5Pokemon`, the partner's back-sprite art, egg handling). Not started; the per-game
+  adapter (`nuzlocke_heartgold.c`) is the natural first milestone, since everything else layers on it.
+- **Nuzlocke mode, wired up** (2026-11-14): the core and HGSS's adapter (above) now actually run.
+  `NuzlockeMode_Update` is in `src/main.c`'s loop; fainting sets the dead flag and keeps a dead Pokémon's HP at 0
+  (`src/pokemon.c`'s `SetMonData`/`AddMonData`); whiting out drops the run for good (`src/blackout.c`'s
+  `Task_Blackout`). The catch rule hooks into both of HGSS's wild-battle tasks (`src/encounter.c`):
+  `Task_WildEncounter` (tall grass, roamers) and `Task_StartEncounter`, which HGSS also reuses for trainer battles
+  and scripted species-at-level encounters (legendaries; the test script's own `wild` command) — the hook there
+  only tracks what the task's own Bill/Dex-call branch already treats as wild, and always clears a pending static
+  mark so it can't leak onto a later random encounter; `SetupAndStartWildBattle`/`SetupAndStartFatefulWildBattle`
+  mark themselves static, as Platinum's `Encounter_NewVsSpeciesAtLevel`/`Encounter_NewFatefulVsSpeciesAtLevel` do.
+  For BW2's engine: `PokemonToGen5` now carries the dead flag, and a new `PortNuzlockeToGen5`
+  (`lib/port/gen5_battle.c`) sets the level cap, crit guard and wild catch-refusal fields `gen5/src/runtime.c`
+  already reads for `Gen5_PortCapExp`/`PortCritGuard`/`PortCatchRefused` — nothing to change there, since it's
+  shared with Platinum through the `./gen5` symlink. Added a `nuzlocke` test command (mirroring Platinum's) to
+  turn the mode on and log its state without a settings UI yet; a smoke test (mode on, a wild battle through
+  `Task_StartEncounter`) ran clean. Not yet wired: HGSS's native (non-Gen5) battle engine's own crit-guard and
+  catch-refusal checks, and item-use refusal on a dead Pokémon — their Platinum equivalents
+  (`battle_script.c`/`battle_lib.c`/`item_use_pokemon.c`) don't exist under those names in HGSS's decompilation
+  (still unk_-named overlay files); left as a to-do since Gen 5 battles are this fork's primary engine. No doubles
+  wild support either, so only the first wild Pokémon is covered. Still no settings UI, gray icons, or the save/
+  main-menu mark — Nuzlocke mode can only be turned on through the test script for now.

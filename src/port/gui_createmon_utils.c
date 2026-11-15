@@ -14,6 +14,8 @@
 #include "constants/heap.h"
 #include "encounter.h"
 #include "field_battle_data_transfer.h"
+#include "field_overworld_state.h"
+#include "system_flags.h"
 #include "field/field_system.h"
 #include "field_task.h"
 #include "heap.h"
@@ -150,6 +152,28 @@ int GUI_CreateMon_StartWildEncounterShiny(int speciesNo, int level, BOOL shiny)
         u32 otID = Pokemon_GetValue(mon, MON_DATA_OT_ID, NULL);
         Pokemon_InitWith(mon, speciesNo, level, INIT_IVS_RANDOM, TRUE, Pokemon_FindShinyPersonality(otID), OTID_SET, otID);
     }
+    Encounter_NewVsWild(fieldSystem, dto);
+    return TRUE;
+}
+
+int GUI_CreateMon_StartSafariEncounter(int speciesNo, int level, int balls)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)
+        || Party_GetCurrentCount(SaveData_GetParty(fieldSystem->saveData)) == 0
+        || speciesNo <= 0 || speciesNo > MAX_SPECIES) {
+        return FALSE;
+    }
+
+    // As the Great Marsh's game: the flag makes Encounter_NewVsWild a Safari encounter, which reads the balls from the
+    // field's state
+    SystemFlag_SetSafariGameActive(SaveData_GetVarsFlags(fieldSystem->saveData));
+    *FieldOverworldState_GetSafariBallCount(SaveData_GetFieldOverworldState(fieldSystem->saveData)) = balls;
+    // Where the gate sends the player back to when the balls run out: here
+    FieldOverworldState_SetSpecialLocation(SaveData_GetFieldOverworldState(fieldSystem->saveData), fieldSystem->location);
+    FieldBattleDTO *dto = FieldBattleDTO_NewSafari(HEAP_ID_FIELD2, balls);
+    FieldBattleDTO_Init(dto, fieldSystem);
+    CreateWildMon_Scripted(fieldSystem, speciesNo, level, dto);
     Encounter_NewVsWild(fieldSystem, dto);
     return TRUE;
 }

@@ -1,0 +1,21 @@
+--- a/src/ov167/btl_main.c
++++ b/src/ov167/btl_main.c
+@@ -3446,6 +3446,8 @@
+         return FALSE;
+     }
+ }
++
++int Gen5_PortSafari(void); // The port: a Safari Zone battle (safari.c)
+ 
+ u32 BtlMain_DetermineResult(BtlMainModule *mainModule) {
+     u32 result;
+@@ -3456,6 +3458,9 @@
+         result = BTL_RESULT_6;
+     } else if (mainModule->setup->capturedSlot != 6) {
+         result = BTL_RESULT_CAPTURE;
++    } else if (Gen5_PortSafari()) {
++        // The port: the player ran, the Pokémon fled or the balls ran out
++        result = BTL_RESULT_FLEE;
+     } else if (BtlClientIDList_GetCount(&mainModule->clientIdList)) {
+         result = BtlClientIDList_GetEscapeResult(&mainModule->clientIdList, mainModule->playerClientId,
+                                                  BtlSetup_GetBattleType(mainModule));

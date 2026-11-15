@@ -1,0 +1,10 @@
+--- a/src/ov167/btl_server_cmd.c
++++ b/src/ov167/btl_server_cmd.c
+@@ -510,6 +510,7 @@
+     [SC_ABILITY_POPUP_IN] = SC_ARGS_U8,
+     [SC_ABILITY_POPUP_OUT] = SC_ARGS_U8,
+     [SC_MOVE_MSG] = SC_ARGS_U8_U16,
++    [SC_WEATHER_TURN] = SC_ARGS_U8_U8_U16,
+     [SC_MSG_STD] = SC_ARGS_NONE,
+     [SC_MSG_SET] = SC_ARGS_NONE,
+     [SC_MSG_STD_SE] = SC_ARGS_MSG_SE,
