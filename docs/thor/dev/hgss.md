@@ -212,6 +212,22 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
 
+### Save editor and debug window (2026-11-15)
+
+- **Settings > Save editor** (`lib/port/save_editor.c`, `save_editor_gui.cpp`): this fork's editor
+  (`src/port/save_editor.c`, `gui_save_editor.cpp`) on HGSS's save APIs. Party and PC Pokémon, giving any Pokémon,
+  .pk4 files, the bag, money, Battle Points, the 16 badges, play time, the National Pokédex. Left out: the trade
+  box (HGSS has no save slots) and the legendary events (Platinum's Mystery Gift key items). PC edits mark their box
+  modified (`PCStorage_SetBoxModified`): HGSS saves only the boxes that changed.
+- **Developer windows > Application** (`lib/port/debug_window.cpp`, `debug_field.c`): warps to the 30 Fly points
+  (named from the map each lands on: the decompilation's `SPAWN_` names don't follow `sSpawnPoints`' order, spawn 5
+  is Cianwood) or any map and tile; the trainers on this map (object types 1-8 with a trainer script, as the sight
+  checks read them), Go to (the tile it faces: it challenges the player as in the game), Battle, beaten on or off;
+  any trainer by number or name; a wild battle. The developer windows draw while the game waits in its frame, so
+  their buttons call the game directly (field tasks, as the test scripts' warp and battles).
+- Tests: `save_editor.txt` and `debug_window.txt` (`editor` and `debug` commands call the same functions and check
+  them). The windows were also clicked through on the desktop build.
+
 ## Decisions needed from the owner
 
 - ~~Base the work on upstream's `thor-android` HGSS port~~: decided, forked 2026-11-12.
