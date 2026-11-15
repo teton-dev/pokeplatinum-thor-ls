@@ -399,5 +399,21 @@ art (11), touch = the face (20-22) and the digits (12). All 4bpp. This is what t
   script ahead of script 0 (the clerk, object 0 in both maps): without a Coin Case, `GiveItemNoCheck` it, `GiveCoins
   50` and a line, else the clerk's own script. The JP prize exchange (TMs, held items, Abra/Ekans/Dratini/Sandshrew)
   comes with the Goldenrod map. Tests `slots_jp_maps.txt` and `slots_jp_celadon.txt` walk in, take the case and play a
-  machine through its own script. Not yet checked: the prize counters' menus, every NPC's line in game (the lines
-  were written to fit 2 lines of a box but not all were seen on screen).
+  machine through its own script. Not yet checked: every NPC's line in game (the lines were written to fit 2 lines
+  of a box but not all were seen on screen).
+
+### The prize counters (2026-11-14)
+
+Goldenrod's JP map has two counters: object 1 at (19, 4), scripts 001 (TMs: Substitute TM90 2,000, Swords Dance
+TM75 4,000, Rest TM44 6,000, Flamethrower TM35, Ice Beam TM13, Thunderbolt TM24 10,000 each; held items: Silk Scarf,
+Wide Lens, Zoom Lens, Metronome 1,000 each) and object 2 at (19, 6), script 002 (Abra 200, Ekans 700 in HG or
+Sandshrew 700 in SS, Dratini 2,100, at level 15). Their logic matches the US Celadon counters' command for command
+(`GoToIfNoItemSpace`, the bottom screen's `GetMenuChoice` yes/no, `MenuExec` lists, `TakeCoins`, `GiveMon`), so they run
+as they are. Celadon's JP map has no counter (its line 07 sends the player to the exchange next door, the US map).
+The player talks to them across the counter from (17, 4) and (17, 6).
+
+One bug was in the port's text: the readers' copy (`CopyU16ArrayToStringN`) takes the length with the end marker.
+Without it every translated line lost its last character, and lines ending in the wait code printed past their end.
+Pokémon prices line up with the cursor code (0x0203, x 90), as the US counters' do. Test `slots_jp_prizes.txt` buys
+Substitute, the Silk Scarf and Abra and checks coins, bag and party (`check` command); the test's `menu` event now
+fires for the bottom screen's yes/no and lists, which fixed frame waits couldn't follow.
