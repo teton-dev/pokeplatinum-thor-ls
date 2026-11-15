@@ -392,3 +392,12 @@ art (11), touch = the face (20-22) and the digits (12). All 4bpp. This is what t
   world has no ball, and Mr. Game's map is no longer visited). The plan (the owner's ask): the JP Game Corner's coin
   clerk (`shopm1` at the counter, `T25R1101` object 0, script `_000`) gives a Coin Case and some coins the first time
   the player talks to them without one.
+- **Done (2026-11-14, HGSS `61d3ec7b8`):** with the setting on, `map_events.c` sends the Game Corner doors to the
+  JP maps (`SlotMaps_RedirectWarps`; their one warp out is at index 0 like the US maps'); `msgdata.c`'s readers take
+  the JP maps' text from `lib/port/slots/slot_maps.c` (an English translation of JP banks 591 and 501, which match
+  US 599 and 508 row for row, plus two rows each for the clerk's gift); `LoadScriptsForCurrentMap` puts a small
+  script ahead of script 0 (the clerk, object 0 in both maps): without a Coin Case, `GiveItemNoCheck` it, `GiveCoins
+  50` and a line, else the clerk's own script. The JP prize exchange (TMs, held items, Abra/Ekans/Dratini/Sandshrew)
+  comes with the Goldenrod map. Tests `slots_jp_maps.txt` and `slots_jp_celadon.txt` walk in, take the case and play a
+  machine through its own script. Not yet checked: the prize counters' menus, every NPC's line in game (the lines
+  were written to fit 2 lines of a box but not all were seen on screen).
