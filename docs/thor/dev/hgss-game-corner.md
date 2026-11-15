@@ -321,3 +321,27 @@ calls, so the ones marked ? are guesses. `S(n)` is state n, hex.
 So a round is 0 -> 1 -> (2 -> 3) -> 4 -> 5 -> 6 -> 7 -> 8 -> 9/A -> (B) -> C -> 0, and the bonus game is 9 -> D -> F ->
 10..18 repeating until the counter ends -> E -> C. In the C rewrite this is a small enum state machine; the shared
 helpers (0x021E5CE8 set state, 0x021E5CF4 step/wait, 0x021E5C6C touch-or-A) are one function each.
+
+### What the graphics files are (rendered 2026-11-14)
+
+Rendered with `tools/jp-gamecorner/render_gfx.py` (decodes the NARC's NCLR/NCGR/NSCR and writes PNGs; the images
+are from the ROM so they stay out of the repo). Standard Gen 4 formats. Lettering is **English** where there is any
+("ROUND", "GET", "CREDIT", "PAYOUT") and the rest is digits and symbols, so the art needs no translation.
+
+**a/1/2/7** (25 files): 0-3 palette/tiles/cell/anim for one sprite set (tiles 12912 B); 4-7 another (14256 B);
+- 8 palette, 9 tiles (24640 B, 768 tiles 4bpp), screens **10** (256x256: the top screen's machine frame, a big
+  window and the two payout-table rows: `777`, cherries, bells, `RRR`...), **11** (96x528: the reel strip artwork:
+  Pikachu, Marill, a bell/cherry, a Poke Ball, red 7, Chikorita, Cyndaquil, Totodile, plus a blur strip for
+  spinning; the grey copy on the right is the faded version) and **12** (256x144: the digit tile set in two sizes
+  and the "ROUND-00/00 GET-000" panel of the bonus game);
+- 13 palette, 14 tiles (8256 B, 256 tiles), screens 15-19: five backdrops (green stripes here);
+- 20 palette, 21 tiles (8256 B), screens 22-24: **22 is the touch screen** (256x256: the machine face: three reel
+  windows, the lamps for the five lines, CREDIT and PAYOUT displays, the arrows and the A button at the bottom),
+  23 the variant, 24 a 128x16 strip (the credit digits).
+
+**a/1/5/5** (47 files): 0 tiles (24640 B), 1 palette, 2 screen = the orange striped backdrop; then 10 sprite sets
+of (tiles 4656 B, palette 552 B, anim 111 B, cell 155 B), the 3+5+8 UI and bonus sprites of the display notes, and
+the closing tile file 46.
+
+So the screens are: top = machine frame + payout chart (files 8-10), reels drawn as scrolling BG using the strip
+art (11), touch = the face (20-22) and the digits (12). All 4bpp. This is what the C app loads.
