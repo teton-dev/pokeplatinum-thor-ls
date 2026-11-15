@@ -169,6 +169,8 @@ int GUI_CreateMon_StartSafariEncounter(int speciesNo, int level, int balls)
     // field's state
     SystemFlag_SetSafariGameActive(SaveData_GetVarsFlags(fieldSystem->saveData));
     *FieldOverworldState_GetSafariBallCount(SaveData_GetFieldOverworldState(fieldSystem->saveData)) = balls;
+    // Where the gate sends the player back to when the balls run out: here
+    FieldOverworldState_SetSpecialLocation(SaveData_GetFieldOverworldState(fieldSystem->saveData), fieldSystem->location);
     FieldBattleDTO *dto = FieldBattleDTO_NewSafari(HEAP_ID_FIELD2, balls);
     FieldBattleDTO_Init(dto, fieldSystem);
     CreateWildMon_Scripted(fieldSystem, speciesNo, level, dto);

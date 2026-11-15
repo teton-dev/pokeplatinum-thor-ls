@@ -1,0 +1,13 @@
+# Gen 5 battles, the Safari Zone's arena: the Great Marsh at a tile, a wild Chansey with the Safari game flag on; the log's
+# "arena" line has what Platinum put the battle on and BW2's arena for it.
+gen5-import
+gen5-battles on
+mash A until free
+jump 504 40 30 
+wait 120
+safari 113 22 30
+until battle
+wait 150
+shot gen5-safari-marsh
+until command
+exit 0
