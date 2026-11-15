@@ -252,3 +252,23 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   `SAVE_PAGE_MAX`, `SAVE_SECTOR_SIZE`). `lib/port/gen5_battle.c` also needs the small changes Platinum's picked up
   (the dead flag into `Gen5Pokemon`, the partner's back-sprite art, egg handling). Not started; the per-game
   adapter (`nuzlocke_heartgold.c`) is the natural first milestone, since everything else layers on it.
+- **Nuzlocke mode, wired up** (2026-11-14): the core and HGSS's adapter (above) now actually run.
+  `NuzlockeMode_Update` is in `src/main.c`'s loop; fainting sets the dead flag and keeps a dead Pokémon's HP at 0
+  (`src/pokemon.c`'s `SetMonData`/`AddMonData`); whiting out drops the run for good (`src/blackout.c`'s
+  `Task_Blackout`). The catch rule hooks into both of HGSS's wild-battle tasks (`src/encounter.c`):
+  `Task_WildEncounter` (tall grass, roamers) and `Task_StartEncounter`, which HGSS also reuses for trainer battles
+  and scripted species-at-level encounters (legendaries; the test script's own `wild` command) — the hook there
+  only tracks what the task's own Bill/Dex-call branch already treats as wild, and always clears a pending static
+  mark so it can't leak onto a later random encounter; `SetupAndStartWildBattle`/`SetupAndStartFatefulWildBattle`
+  mark themselves static, as Platinum's `Encounter_NewVsSpeciesAtLevel`/`Encounter_NewFatefulVsSpeciesAtLevel` do.
+  For BW2's engine: `PokemonToGen5` now carries the dead flag, and a new `PortNuzlockeToGen5`
+  (`lib/port/gen5_battle.c`) sets the level cap, crit guard and wild catch-refusal fields `gen5/src/runtime.c`
+  already reads for `Gen5_PortCapExp`/`PortCritGuard`/`PortCatchRefused` — nothing to change there, since it's
+  shared with Platinum through the `./gen5` symlink. Added a `nuzlocke` test command (mirroring Platinum's) to
+  turn the mode on and log its state without a settings UI yet; a smoke test (mode on, a wild battle through
+  `Task_StartEncounter`) ran clean. Not yet wired: HGSS's native (non-Gen5) battle engine's own crit-guard and
+  catch-refusal checks, and item-use refusal on a dead Pokémon — their Platinum equivalents
+  (`battle_script.c`/`battle_lib.c`/`item_use_pokemon.c`) don't exist under those names in HGSS's decompilation
+  (still unk_-named overlay files); left as a to-do since Gen 5 battles are this fork's primary engine. No doubles
+  wild support either, so only the first wild Pokémon is covered. Still no settings UI, gray icons, or the save/
+  main-menu mark — Nuzlocke mode can only be turned on through the test script for now.
