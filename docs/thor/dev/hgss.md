@@ -108,7 +108,7 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (`src/port/gen5_rom.cpp`, copied: keep the two the same) and has the setting and a debug wild battle.
   `lib/port/gen5_battle.c` is `src/port/gen5_battle.c` on HGSS's `BattleSetup`, started from `Battle_LaunchApp`:
   wild battles (party, bag, arena, results, catching into the party or the PC) and trainers (below). `gen5_wild.txt`
-  plays one to the end. Next: the Safari Zone and Bug-Catching Contest (the rest is below, "After the battle").
+  plays one to the end. Next: the Bug-Catching Contest (the rest is below, "After the battle" and "The Safari Zone").
   Later, `gen5/` and the game-neutral parts of the bridge
   (`gen5_rom.cpp`, the conversions) move to a repository of their own (milestone 3).
 - **White HP boxes** (2026-11-12): HGSS's Gen 5 battles show White 2's light HP boxes. Both versions' palettes are in
@@ -241,6 +241,25 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   `TRMSG_LAST_POKE_HALF` (Silver, the Gym Leaders, the Elite Four and Lance have the last two); BW2's check and message
   (`btl_client.c`, `btlv_core.c`, patched) ask the port. Platinum doesn't fill them yet. Test `gen5_trainer_lines.txt`
   (Falkner: give the test's Pokémon Swift, his birds' Sand-Attack makes anything else miss).
+
+### The Safari Zone in Gen 5 battles (2026-11-15)
+
+- HGSS's Safari rules are Platinum's (`battle_controller_player.c`'s bait and mud, the opponent's flee check with
+  `gSafariFleeRates`, the catch stages), so `gen5/src/safari.c` plays them unchanged. `Gen5Battle_Wants` lets
+  `BATTLE_TYPE_SAFARI` through; the bridge passes `setup->safariBalls`, the species' `BASE_CATCH_RATE` and
+  `BASE_GREAT_MARSH_RATE` (its flee rate), and gives back the balls left (HGSS's `Task_SafariEncounter` writes them to
+  the save's counter and, at 0 with no catch, takes the player to the gate) and `BATTLE_OUTCOME_FOE_FLED` when it ran.
+- The BALL, BAIT and ROCK labels are tile art the port adds to its copy of archive 11 (members 574 to 586, after the
+  arena's two models): HGSS's Team Rocket arena maker (`lib/port/gen5_rocket.c`) predates them, so a Safari battle
+  crashed loading the command screen. It now adds them as Platinum's does (`MakeSafariButtons`, copied unchanged;
+  `ROCKET_VERSION` 5 makes the archive again).
+- HGSS's flee rates aren't Platinum's: Chansey flees (90), Bulbasaur and most others never do (0), Kangaskhan 150. And no
+  Safari Ball is a sure catch at full HP, even at catch rate 255 (about one in two).
+- Tests (`TEST_ENV=POKEPLATINUM_GEN5_SAFARI_SEED=3`): `gen5_safari.txt`, `gen5_safari_catch.txt`,
+  `gen5_safari_end.txt`, with the runner's `safari SPECIES LEVEL [BALLS]` (the Safari flag and ball counter set, the
+  gate where the player stands) and `editor safari N`.
+- Not done: arenas chosen per Safari area (each battle gets what the field gives, as any wild battle), the Nuzlocke
+  catch rule there, and a check in the real Safari Zone (the tests start the battles where the player stands).
 
 ### Save editor and debug window (2026-11-15)
 
