@@ -988,3 +988,31 @@ the whole battle itself, as BW2's capture demo does (`BattleClient_SetupView` st
   roamers, obedience; see `hgss.md`.
 - `gen5_safari_catch.txt` threw one ball and waited for the naming screen; a Safari Ball isn't a sure catch at full HP,
   so it hung about half the time. It throws again after each miss now.
+
+## After the catch, and the catching tutorial (2026-11-15, third pass)
+
+- **The Pokédex entry for a new species** (`src/port/gen5_dex_entry.c`): Platinum's own entry screen (`ov21_021E8D48`,
+  as its battle shows it after a catch) runs after a battle in BW2's engine, before the naming screen. Platinum's
+  battle gives it its display; the port sets that up alone, as the evolution scene does (VRAM banks, BGs, palettes,
+  the 3D Pokémon sprite, OAM with its char and palette transfers, `FONT_SUBSCREEN`), and resets the master
+  brightness BW2's battle leaves faded out (else the screen stayed black). A or a touch closes it. Order differs from
+  Platinum's: the nickname question (in BW2's battle) comes before the entry, not after.
+- **BW2's Pokédex** gets the species the player has caught (`Gen5Battle.dexCaught`, its save block's bit layout):
+  "...'s data was added to the Pokédex" was shown for every catch (its Pokédex was empty), and its critical captures
+  count the species caught.
+- **The PC line** for a catch with no nickname and a full party: the bridge makes the game's own line (battle messages
+  1174 to 1177, the box names; someone's or Bebe's PC) and BW2's battle shows it after the answer
+  (`Gen5Battle.pcText`, found by the caught Pokémon's personality); with a nickname, the naming screen shows it
+  (`battleMsgID`), as Platinum's battle sets it up. Test `gen5_pc_message.txt`.
+- **The catching tutorial** (Route 202: Dawn or Lucas catches a Bidoof) runs as BW2's capture demo
+  (`BTL_TYPE_CAPTURE_DEMO`, Bianca's in BW2), which the battle view plays alone: the counterpart's name and back sprite
+  (the DTO's player), the two Pokémon's first moves instead of BW2's Tackle and Growl (a damaging foe move takes an
+  eighth of the HP: BW2's gauge call takes the HP left), and Platinum's two lines instead of Bianca's
+  (`Gen5Battle.captureDemo`, `demoText`; `btlv_core.c`'s `CmdCaptureDemo`). Test command `tutorial`; test
+  `gen5_tutorial.txt`. HGSS's (Route 29, Lyra or Ethan with Marill) the same way.
+- **The Safari Zone's catch** names again without the nickname question (its view-only catch never asks it).
+- **HGSS's Apricorn Balls** (shared patch): BW2 throws and opens them with its own art (its particles have all 25
+  balls); the ball shaking on the ground was a Poké Ball. HGSS's arena maker adds a palette per Apricorn Ball to a copy of
+  archive 94 (BW2's Poké Ball reds as shades of the ball's main colour, from HGSS's own sheet), which
+  `btlv_effvm.c` uses with BW2's Poké Ball frames (`Gen5_SetApricornBallSprites`). An approximation: one colour each.
+- Still Platinum's: Pal Park, link and Frontier battles, `NO_RUNNING` battles.

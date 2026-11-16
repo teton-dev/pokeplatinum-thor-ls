@@ -290,8 +290,14 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
 - **Test bug found:** the runner's `give` used `OT_ID_PLAYER_ID`, which in HGSS's `CreateMon` means OT ID 0, so its
   Pokémon were another trainer's to BW2 and disobeyed: `gen5_trainer`, `gen5_trainer_lines` and `gen5_mom_savings` had
   been losing their battles while passing (they don't check the result). Fixed (`OT_ID_PRESET`); they win now.
-- Still to do in HGSS: Apricorn Ball throw sprites, the Battle Frontier, Pal Park, the Pokédex entry screen for a new
-  catch in BW2's battles, the PC message when a nickname is declined with a full party.
+- **Later the same day:** the Pokédex entry popup for a new species after the battle (`lib/port/gen5_dex_entry.c`:
+  HGSS's `PokedexEntryPopup_Create` with the display the battle would give it; its own char transfer, so the sprite
+  system's is popped meanwhile; font 4), also in the Bug-Catching Contest; the PC line for a catch with no nickname and a
+  full party (msg_0197 1174 to 1177, shown by BW2's battle); Route 29's catching tutorial as BW2's capture demo (test
+  command `tutorial`); the Apricorn Balls shaking on the ground in their own colour (palettes added to a copy of BW2's
+  archive 94 by `gen5_rocket.c`, `ROCKET_VERSION` 7; BW2's own art throws and opens them). Tests `gen5_pc_message`,
+  `gen5_tutorial`; `gen5_nickname` and `gen5_contest_catch` close the entry with A.
+- Still to do in HGSS: the Battle Frontier, Pal Park, a whole Bug-Catching Contest from the gate on the Thor.
 
 ### Save editor and debug window (2026-11-15)
 
