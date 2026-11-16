@@ -20,7 +20,9 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ContextThemeWrapper;
 import android.view.ViewParent;
+import android.view.WindowInsets;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
@@ -58,7 +60,7 @@ public class NativeSettings extends FrameLayout {
     static native void nativeEvent(String event);
 
     // Colors (the accent is the app's own, R.color.settings_accent)
-    private static final int BACKDROP = 0xF20D1116;
+    private static final int BACKDROP = 0xFF0D1116;
     private static final int RAIL = 0xFF121820;
     private static final int CARD = 0xFF1B222C;
     private static final int CARD_FOCUSED = 0xFF263140;
@@ -109,7 +111,8 @@ public class NativeSettings extends FrameLayout {
     }
 
     public NativeSettings(PlatinumActivity activity) {
-        super(activity);
+        // Material's switches and dialogs (the activity's own theme is the old full-screen one)
+        super(new ContextThemeWrapper(activity, android.R.style.Theme_DeviceDefault));
         this.activity = activity;
         this.density = getResources().getDisplayMetrics().density;
         this.accent = getResources().getColor(R.color.settings_accent, null);
@@ -117,12 +120,19 @@ public class NativeSettings extends FrameLayout {
         setClickable(true); // touches stop here, not on the game below
         setVisibility(GONE);
 
-        LinearLayout root = new LinearLayout(activity);
+        Context themed = getContext();
+        LinearLayout root = new LinearLayout(themed);
         root.setOrientation(LinearLayout.HORIZONTAL);
         addView(root, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        // Clear of the system bars and cutouts
+        setOnApplyWindowInsetsListener((v, insets) -> {
+            root.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets;
+        });
 
         // The rail: the app's name and the pages
-        rail = new LinearLayout(activity);
+        rail = new LinearLayout(themed);
         rail.setOrientation(LinearLayout.VERTICAL);
         rail.setBackgroundColor(RAIL);
         rail.setPadding(dp(16), dp(22), dp(16), dp(12));
@@ -131,9 +141,9 @@ public class NativeSettings extends FrameLayout {
         TextView sub = text("Settings", 14, accent, true);
         sub.setPadding(0, 0, 0, dp(14));
         rail.addView(sub);
-        railScroll = new ScrollView(activity);
+        railScroll = new ScrollView(themed);
         railScroll.setVerticalScrollBarEnabled(false);
-        railList = new LinearLayout(activity);
+        railList = new LinearLayout(themed);
         railList.setOrientation(LinearLayout.VERTICAL);
         railScroll.addView(railList);
         rail.addView(railScroll, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
@@ -143,9 +153,9 @@ public class NativeSettings extends FrameLayout {
         root.addView(rail, new LinearLayout.LayoutParams(dp(280), LayoutParams.MATCH_PARENT));
 
         // The page: its title, then its rows in a column of readable width
-        pane = new LinearLayout(activity);
+        pane = new LinearLayout(themed);
         pane.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout header = new LinearLayout(activity);
+        LinearLayout header = new LinearLayout(themed);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(28), dp(20), dp(16), dp(8));
@@ -153,7 +163,7 @@ public class NativeSettings extends FrameLayout {
         backArrow.setPadding(dp(4), 0, dp(16), dp(4));
         backArrow.setOnClickListener(v -> nativeEvent("back"));
         header.addView(backArrow);
-        LinearLayout titles = new LinearLayout(activity);
+        LinearLayout titles = new LinearLayout(themed);
         titles.setOrientation(LinearLayout.VERTICAL);
         pageTitle = text("", 28, TEXT, true);
         pageSummary = text("", 14, TEXT_DIM, false);
@@ -169,10 +179,10 @@ public class NativeSettings extends FrameLayout {
         header.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
         pane.addView(header);
 
-        pageScroll = new ScrollView(activity);
+        pageScroll = new ScrollView(themed);
         pageScroll.setFillViewport(true);
         pageScroll.setClipToPadding(false);
-        column = new LinearLayout(activity);
+        column = new LinearLayout(themed);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setPadding(dp(28), dp(4), dp(28), dp(40));
         pageScroll.addView(column);
@@ -491,7 +501,7 @@ public class NativeSettings extends FrameLayout {
         sw.setThumbTintList(new ColorStateList(new int[][] {
             new int[] { android.R.attr.state_checked }, new int[] {} }, new int[] { 0xFFFFFFFF, 0xFFC9D0DA }));
         sw.setTrackTintList(new ColorStateList(new int[][] {
-            new int[] { android.R.attr.state_checked }, new int[] {} }, new int[] { accent, 0xFF485264 }));
+            new int[] { android.R.attr.state_checked }, new int[] {} }, new int[] { accent, 0xFF8A96AA }));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT,
             LayoutParams.WRAP_CONTENT);
         lp.leftMargin = dp(16);
