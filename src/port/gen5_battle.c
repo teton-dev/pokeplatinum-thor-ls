@@ -50,6 +50,7 @@
 #include "pokemon.h"
 #include "charcode_convert.h"
 #include "port/gen5_data.h"
+#include "port/gen5_dex_entry.h"
 #include "port/gen5_rom.h"
 #include "port/nuzlocke_gray.h"
 #include "port/nuzlocke_mode.h"
@@ -139,6 +140,8 @@ static Gen5Battle sBattle;
 // The bag's counts before the battle
 static Gen5Item sItemCountsBefore[GEN5_ITEMS_MAX];
 static int sItemsBefore;
+// The wild Pokémon whose species the player hadn't caught before the battle
+static BOOL sWildNewSpecies[2];
 // After a catch: the naming screen
 static NamingScreenArgs *sNamingArgs;
 static ApplicationManager *sNamingApp;
@@ -1052,6 +1055,12 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         sBattle.safariCatchRate = SpeciesData_GetSpeciesValue(species, SPECIES_DATA_CATCH_RATE);
         sBattle.safariFleeRate = SpeciesData_GetSpeciesValue(species, SPECIES_DATA_SAFARI_FLEE_RATE);
     }
+    // The species caught, for BW2's Pokédex
+    for (int species = 1; species <= NATIONAL_DEX_COUNT && (species - 1) / 8 < (int)sizeof(sBattle.dexCaught); species++) {
+        if (Pokedex_HasCaughtSpecies(dto->pokedex, species)) {
+            sBattle.dexCaught[(species - 1) / 8] |= 1 << ((species - 1) % 8);
+        }
+    }
     sBattle.isTrainer = (dto->battleType & BATTLE_TYPE_TRAINER) != 0;
     sBattle.doubles = (dto->battleType & BATTLE_TYPE_DOUBLES) != 0;
     if (sBattle.isTrainer) {
@@ -1066,7 +1075,12 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         sBattle.legendary = (dto->battleStatusMask & BATTLE_STATUS_LEGENDARY) != 0;
         // "Give a nickname to the caught ...?" after a catch, as Platinum's battle asks it (the Safari Zone's view
         // catches without it: its naming screen always opens)
-        sBattle.askNickname = TRUE;
+        sBattle.askNickname = !sBattle.safari;
+        // A species never caught before gets its Pokédex entry after the catch, as in Platinum's battle
+        sWildNewSpecies[0] = !Pokedex_HasCaughtSpecies(dto->pokedex,
+            Pokemon_GetValue(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), MON_DATA_SPECIES, NULL));
+        sWildNewSpecies[1] = Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0 && !Pokedex_HasCaughtSpecies(dto->pokedex,
+            Pokemon_GetValue(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_2], 0), MON_DATA_SPECIES, NULL));
         sBattle.roamer = (dto->battleType & BATTLE_TYPE_ROAMER) != 0;
         // Platinum's battle doesn't let a ball be thrown when the party and every box are full; nor does BW2's then
         sBattle.boxesFull = Party_GetCurrentCount(party) >= MAX_PARTY_SIZE && PCBoxes_FirstEmptyBox(dto->pcBoxes) >= MAX_PC_BOXES;
@@ -1213,6 +1227,8 @@ enum {
     STATE_NAMING,
     STATE_CHECK_EVOLUTION,
     STATE_WAIT_FOR_EVOLUTION,
+    STATE_DEX_ENTRY,
+    STATE_NICKNAME,
 };
 
 // A caught Pokémon, as Platinum's battle takes it (battle_script.c's catch sequence, BattleSystem_DexFlagCaught,
@@ -1340,9 +1356,26 @@ static BOOL Main(ApplicationManager *appMan, int *state)
         *state = sBattle.caught ? STATE_CATCH : STATE_CHECK_EVOLUTION;
         return FALSE;
     // The caught Pokémon: Platinum's catch data, then its naming screen (left empty, it keeps its species' name)
-    case STATE_CATCH: {
+    case STATE_CATCH:
         Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_BATTLE, 0x30000);
         TakeCaught(dto);
+        if (sWildNewSpecies[sBattle.caughtWild2 ? 1 : 0]) {
+            // A new species: its Pokédex entry first, as Platinum's battle shows it
+            Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_EVOLUTION, 0x80000);
+            Gen5DexEntry_Start(CaughtPokemon(dto), dto->pokedex, HEAP_ID_EVOLUTION);
+            *state = STATE_DEX_ENTRY;
+            return FALSE;
+        }
+        *state = STATE_NICKNAME;
+        return FALSE;
+    case STATE_DEX_ENTRY:
+        if (Gen5DexEntry_Run()) {
+            Gen5DexEntry_Free();
+            Heap_Destroy(HEAP_ID_EVOLUTION);
+            *state = STATE_NICKNAME;
+        }
+        return FALSE;
+    case STATE_NICKNAME: {
         if (sBattle.askNickname && !sBattle.nicknameWanted) {
             // No nickname: it keeps its species' name
             StoreCaught(dto);

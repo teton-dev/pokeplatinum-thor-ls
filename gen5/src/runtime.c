@@ -367,6 +367,8 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     PokeDexSave *pokedex =
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, getSizeofPokedexData(), TRUE, __FILE__, __LINE__));
     initPokedex(pokedex);
+    // The species the player has caught (Gen5Battle.dexCaught has the save block's layout)
+    memcpy(pokedex->caught, battle->dexCaught, sizeof(pokedex->caught));
     GameRecords *records =
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, GameRecords_GetSize(), TRUE, __FILE__, __LINE__));
     PokeParty *party = NewParty(battle->party, battle->partyCount);
