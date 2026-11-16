@@ -46,11 +46,14 @@
 #include "string_gf.h"
 #include "tv_segment.h"
 #include "gen5.h"
+#include "message_util.h"
 #include "party.h"
+#include "string_template.h"
 #include "pokemon.h"
 #include "charcode_convert.h"
 #include "port/gen5_data.h"
 #include "port/gen5_dex_entry.h"
+#include "res/text/bank/battle_strings.h"
 #include "port/gen5_rom.h"
 #include "port/nuzlocke_gray.h"
 #include "port/nuzlocke_mode.h"
@@ -962,6 +965,33 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
 
 int Gear_LevelCap(void);
 
+// The line Platinum's battle shows when a catch with no nickname goes to the PC (battle_script.c's catch sequence):
+// "{0} was transferred to someone's PC. It was placed in {1}." (Bebe's once met), or the current box is full and it
+// went to the next; for a full party with room in a box, else empty
+static void PcTextToGen5(FieldBattleDTO *dto, Pokemon *wild, unsigned short *dest)
+{
+    dest[0] = 0xFFFF;
+    const u32 currentBox = PCBoxes_GetCurrentBoxID(dto->pcBoxes);
+    const u32 emptyBox = PCBoxes_FirstEmptyBox(dto->pcBoxes);
+    if (Party_GetCurrentCount(dto->parties[BATTLER_PLAYER_1]) < MAX_PARTY_SIZE || emptyBox >= MAX_PC_BOXES) {
+        return;
+    }
+    StringTemplate *template = StringTemplate_Default(HEAP_ID_APPLICATION);
+    MessageLoader *loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG,
+        TEXT_BANK_BATTLE_STRINGS, HEAP_ID_APPLICATION);
+    StringTemplate_SetSpeciesName(template, 0, Pokemon_GetBoxPokemon(wild));
+    StringTemplate_SetPCBoxName(template, 1, dto->pcBoxes, currentBox);
+    StringTemplate_SetPCBoxName(template, 2, dto->pcBoxes, emptyBox);
+    const u32 id = (currentBox == emptyBox ? BattleStrings_Text_PokemonWasTransferredToBoxInSomeonesPC
+                                           : BattleStrings_Text_BoxInSomeonesPCIsFullPokemonWasTransferredToOtherBoxInstead)
+        + (dto->metBebe ? 1 : 0);
+    String *text = MessageUtil_ExpandedString(template, loader, id, HEAP_ID_APPLICATION);
+    Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest, GEN5_TEXT_LENGTH);
+    String_Free(text);
+    MessageLoader_Free(loader);
+    StringTemplate_Free(template);
+}
+
 // Nuzlocke mode's rules and the Hard level cap setting, for BW2's engine (gen5/src/runtime.c and its patches)
 static void PortNuzlockeToGen5(FieldBattleDTO *dto)
 {
@@ -1076,6 +1106,11 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         // "Give a nickname to the caught ...?" after a catch, as Platinum's battle asks it (the Safari Zone's view
         // catches without it: its naming screen always opens)
         sBattle.askNickname = !sBattle.safari;
+        // With a full party, the line about the PC a catch with no nickname goes to
+        PcTextToGen5(dto, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), sBattle.pcText[0]);
+        if (Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0) {
+            PcTextToGen5(dto, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_2], 0), sBattle.pcText[1]);
+        }
         // A species never caught before gets its Pokédex entry after the catch, as in Platinum's battle
         sWildNewSpecies[0] = !Pokedex_HasCaughtSpecies(dto->pokedex,
             Pokemon_GetValue(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), MON_DATA_SPECIES, NULL));
@@ -1386,7 +1421,9 @@ static BOOL Main(ApplicationManager *appMan, int *state)
         Pokemon *mon = CaughtPokemon(dto);
         sNamingArgs = NamingScreenArgs_Init(HEAP_ID_BATTLE, NAMING_SCREEN_TYPE_POKEMON,
             Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL), MON_NAME_LEN, dto->options);
-        sNamingArgs->battleMsgID = 0;
+        // With a full party, the line about the PC it goes to under the name, as Platinum's battle has it
+        sNamingArgs->battleMsgID = Party_GetCurrentCount(dto->parties[BATTLER_PLAYER_1]) < MAX_PARTY_SIZE ? 0
+            : BattleStrings_Text_PokemonWasTransferredToBoxInSomeonesPC + (dto->metBebe ? 1 : 0);
         sNamingArgs->monForm = Pokemon_GetValue(mon, MON_DATA_FORM, NULL);
         sNamingArgs->pcBoxes = dto->pcBoxes;
         sNamingArgs->monGender = Pokemon_GetValue(mon, MON_DATA_GENDER, NULL);
