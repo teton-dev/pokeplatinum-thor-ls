@@ -194,7 +194,7 @@ textures, fixes, recolours.
 
 * **Save the game's textures** writes each 3D texture as a PNG the first time it's
   drawn, into `textures/dump/CPUE/` in the app's folder (on Android that's
-  `Android/data/org.pokeplatinum.port/files/`, reachable from a computer over USB). The
+  `Android/data/app.eterna/files/`, reachable from a computer over USB). The
   name is the texture's size, hashes of its data and of the colours it uses, and its
   format: `tex_64x32_1a2b3c4d_5e6f7a8b_3.png`.
 * Edit one (keep its name; any size works) and put it in `textures/load/CPUE/`, in any

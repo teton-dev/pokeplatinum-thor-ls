@@ -8,6 +8,10 @@ This file adds what is specific to this fork and to the Gen 5 battles work.
 `teton-dev/pokeplatinum-thor-ls`, a fork of `SilasMayes/pokeplatinum-thor`. The owner plays on an AYN Thor
 (Android).
 
+- The apps are **Eterna** (Platinum, `app.eterna`) and **Goldenrod** (HGSS, `app.goldenrod`, dev flavor
+  `app.goldenrod.dev`), renamed from "Platinum"/"HGSS" (`org.pokeplatinum.port`, `org.pokeheartgold.port`) on
+  2026-11-16 with new icons; the Java package (namespace) stays `org.pokeplatinum.port` in both, since libntr's JNI
+  names use it.
 - `platinum-thor`: the owner's personal build. Its `build_android.yml` sets
   `VERSION_CODE=$((9100000 + RUN_NUMBER))` so its APKs install over the official ones and over the local builds
   installed on the Thor (up to 9000302; keep that line, and keep local builds' codes below 9100000).
