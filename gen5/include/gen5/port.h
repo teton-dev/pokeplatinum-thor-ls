@@ -131,6 +131,8 @@ void Gen5_PortGrayIconPalettes(int iconSlot, int graySlot);
 BOOL Gen5_PortCatchRefused(u32 personality);
 // HGSS's Apricorn Balls' rules are on (Gen5Battle.apricornBalls; btl_server_flow_sub.c's CheckBallCapture)
 BOOL Gen5_PortApricornBalls(void);
+// A thrown Apricorn Ball's palette in archive 94 (btlv_effvm.c's ball sprite), 0 if none
+int Gen5_PortApricornBallPalette(int ball);
 // The Bug-Catching Contest's balls are gone (Gen5Battle.bugContest; btl_server_flow_sub.c's UseBagItem)
 BOOL Gen5_PortContestOutOfBalls(u16 item);
 // After a catch, ask for a nickname (Gen5Battle.askNickname; btl_client.c's ScBallThrow), and its answer

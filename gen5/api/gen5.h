@@ -268,6 +268,9 @@ int Gen5_GameVersion(void);
 // The HP boxes' look: White 2's light ones (1) or Black 2's dark ones (0, the default). Both are in either version's
 // files. Before Gen5_BattleBegin
 void Gen5_SetWhiteGauges(int white);
+// The thrown Apricorn Balls' palettes (HGSS: lib/port/gen5_rocket.c adds them to its copy of archive 94, from this
+// member, in ball order, the Fast Ball's first); 0: none, they fly as a Poké Ball
+void Gen5_SetApricornBallSprites(int firstPalette);
 
 // In the VBlank: BW2's VBlank work (VRAM transfers, its VBlank tasks and callback)
 void Gen5_BattleVBlank(void);
