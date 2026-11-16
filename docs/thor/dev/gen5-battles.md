@@ -951,3 +951,40 @@ the whole battle itself, as BW2's capture demo does (`BattleClient_SetupView` st
 - **Widescreen:** the scene fills the window; the balls bar extends over the left side like the ability bars (by design).
 - **Open:** the Thor (needs an APK); the wild Pokémon's cry and the catch jingle (BW2's music calls are stubs); Nuzlocke mode's catch
   rule doesn't know the Safari Zone; Pal Park stays Platinum's; HGSS's Safari is a to-do in `hgss.md`.
+
+## The rest of the battles, second pass (2026-11-15)
+
+- **Trainers' lines during the battle:** Platinum fills `Gen5Trainer.hintText` from `TRMSG_FIRST_DAMAGE`,
+  `TRMSG_ACTIVE_BATTLER_HALF_HP`, `TRMSG_LAST_BATTLER` and `TRMSG_LAST_BATTLER_HALF_HP`, which BW2 shows at the same
+  moments (the runtime and patches HGSS added). Test `gen5_trainer_lines.txt` (`full100`: Roark's last-Pokémon line).
+- **Trainers' items** needed nothing: `Gen5Trainer.items` reach BW2's AI (`BattleClient_LoadAIItems`), which uses a
+  potion at a quarter HP and X items and status cures by its own rule (`AICheckItemUse`, with BW2's limit by the
+  party's size).
+- **Evolutions and new moves after trainer battles** needed nothing either: the Gen 5 application evolves after every
+  battle it runs, and BW2 teaches new moves in the battle.
+- **Legendaries, roamers, Giratina:** `Gen5Battle_Wants` now takes wild battles with `BATTLE_STATUS_LEGENDARY` (which
+  Platinum's battle never reads: the field picks the intro and music; BW2's legendary flag leaves "wild" out of its
+  message), `BATTLE_TYPE_ROAMER` (BW2's roaming flag: its AI flees; the runtime now reads the wild Pokémon back after
+  every wild battle, and the bridge gives a roamer's HP and status to the DTO for `RoamerAfterBattle_UpdateRoamers`) and
+  Giratina's `BATTLE_STATUS_GIRATINA | DISTORTION` (its Origin Forme, drawn as such; the arena is BW2's purple void
+  whenever the battle has the Distortion flag or `TERRAIN_GIRATINA`, as Platinum's terrain draws it, whatever the map).
+  Still Platinum's: `NO_RUNNING` (never set by the C code), the catching tutorial, Pal Park, link and Frontier battles.
+  Test commands `legendary`, `giratina`, `roamer SPECIES LEVEL`; tests `gen5_legendary.txt` (Uxie), `gen5_giratina.txt`,
+  `gen5_roamer.txt` (Mesprit flees, its HP kept).
+- **Full boxes:** with the party and every box full, no ball can be thrown (BW2's `BTL_SETUP_FLAG_BOXES_FULL`), as
+  Platinum's battle refuses one; before, the catch was lost.
+- **The nickname question:** "Give a nickname to the / caught ...?" with BW2's YES and NO (`BTLV_STR_YES_NO` 0 and 1),
+  asked in the battle after the catch messages (`btl_client.c`'s `ScBallThrow`, patched; `btlv_core.c`'s
+  `BtlvCore_PortStartMsgNickname`; the text from `Gen5_PortNicknameText`): BW2 asks in its field. The naming screen opens
+  only on YES (`Gen5Battle.askNickname`, `nicknameWanted`). The Safari Zone's view-only catch still always names. Tests
+  touch YES at (128, 55); `gen5_nickname.txt` answers NO. Not done: the PC message after a declined nickname with a
+  full party, and the Pokédex entry screen for a new species.
+- **Obedience:** BW2 makes another trainer's Pokémon (ID, gender and name compared) disobey above `(badges + 1) * 10`.
+  `btl_server_flow.c`'s `ServerControl_CheckObedience` (patched) takes the game's own level (`Gen5Battle.obeyLevel`):
+  Platinum's 10, 30 with two badges, 50 with four, 70 with six, every Pokémon from `obeyAllBadges` (8; 0 in Renegade
+  Platinum, where everything obeys). The runtime logs each party Pokémon BW2 doesn't count as the player's own.
+- **HGSS (shared `gen5/`):** the Bug-Catching Contest (`Gen5Battle.bugContest`: `btl_server_flow_sub.c`'s `UseBagItem`
+  ends the battle when the last Sport Ball misses), Mom's line under the prize (`Gen5Battle.momSavings`), legendaries and
+  roamers, obedience; see `hgss.md`.
+- `gen5_safari_catch.txt` threw one ball and waited for the naming screen; a Safari Ball isn't a sure catch at full HP,
+  so it hung about half the time. It throws again after each miss now.
