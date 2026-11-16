@@ -12,6 +12,9 @@ This file adds what is specific to this fork and to the Gen 5 battles work.
   `app.goldenrod.dev`), renamed from "Platinum"/"HGSS" (`org.pokeplatinum.port`, `org.pokeheartgold.port`) on
   2026-11-16 with new icons; the Java package (namespace) stays `org.pokeplatinum.port` in both, since libntr's JNI
   names use it.
+- **Settings on Android** are drawn in native views (`android/.../NativeSettings.java`, the same file in both
+  games) from libntr's pages, which `libntr_native_menus.patch` records as JSON: change a page in C++ and both UIs
+  follow. `SIM_NATIVE_SETTINGS=1` (+ `_EVENTS`) drives the recorder in desktop tests (`native_settings.txt`).
 - `platinum-thor`: the owner's personal build. Its `build_android.yml` sets
   `VERSION_CODE=$((9100000 + RUN_NUMBER))` so its APKs install over the official ones and over the local builds
   installed on the Thor (up to 9000302; keep that line, and keep local builds' codes below 9100000).
@@ -40,7 +43,7 @@ The plan is `docs/thor/dev/gen5-battles.md`: read it before working on this, and
 done, record decisions and findings).
 
 In short: compile the battle engine and battle view of [pokebw2](https://github.com/fuddlesworth/pokebw2) (the
-Black 2/White 2 decompilation, GPLv3) into the app, and with *Settings > Gameplay > Gen 5 battles* on, run each
+Black 2/White 2 decompilation, GPLv3) into the app, and with *Settings > Battles > Gen 5 battles* on, run each
 battle Platinum sets up (`FieldSystem_StartBattleProcess`, `src/unk_0203D1B8.c`) in BW2's engine, converting the
 `FieldBattleDTO` to BW2's `BtlSetup` and the results back.
 
@@ -53,9 +56,9 @@ Decisions made with the owner:
 - Out of scope: following Pokémon, visible wild Pokémon, BW2 Phenomena, name capitalisation.
 
 Status (the plan has the details): milestones 1 to 3 are done (`gen5/` builds 207 of pokebw2's files, renamed
-`bw2_...`, into one object the game links whole, `-Dpokebw2=../pokebw2`; a BW2 ROM is imported in *Settings > Games >
-Gen 5 battles*; libntr now clips polygons), milestone 4 (the bridge: party, player, bag, catching, real wild
-encounters through *Settings > Gameplay > Gen 5 battles*) is done to 4c, milestone 5 (trainers) has single
+`bw2_...`, into one object the game links whole, `-Dpokebw2=../pokebw2`; a BW2 ROM is imported in *Settings >
+Battles*; libntr now clips polygons), milestone 4 (the bridge: party, player, bag, catching, real wild
+encounters through *Settings > Battles > Gen 5 battles*) is done to 4c, milestone 5 (trainers) has single
 trainer battles with Platinum's AI levels, and milestone 6 (widescreen) is done on the desktop. The battles play BW2's
 sound effects and cries (from the imported ROM's sound data) over Platinum's music. The APK builds with the option (the NDK in Docker). pokebw2 is never
 changed: the port's shims, patches and boundary code are in `gen5/`. Keep pokebw2 in its own clone next to this

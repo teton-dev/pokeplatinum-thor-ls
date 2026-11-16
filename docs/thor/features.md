@@ -150,7 +150,7 @@ on the second display (not swapped):
 
 **Rain** falls from the top of the screen to the bottom and splashes, as on the DS (earlier
 builds only showed a few drops near the bottom: each drop stopped on its second frame).
-* **Gen 5 battles** (*Settings > Gameplay > Gen 5 battles*) fill the wide screen: the
+* **Gen 5 battles** (*Settings > Battles > Gen 5 battles*) fill the wide screen: the
   arena is 3D, so its camera sees more of it on the left and right, unstretched. The
   Pokemon, trainers, HP boxes and text stay where they are, in the 4:3 middle.
 * **Platinum's own battles** fill the wide screen too: the backdrop is a 256-pixel picture,
