@@ -791,6 +791,20 @@ static void TrainerToGen5Ex(FieldBattleDTO *dto, int battler, Gen5Trainer *dest,
             }
         }
     }
+    // What the trainer says during the battle (first hit, half HP, last Pokémon, last at half HP), as Platinum's
+    // battle shows TRMSG_FIRST_DAMAGE to TRMSG_LAST_BATTLER_HALF_HP (battle_lib.c); BW2 shows them at the same
+    // moments (btl_client.c's hints)
+    static const int hintTypes[4] = {
+        TRMSG_FIRST_DAMAGE, TRMSG_ACTIVE_BATTLER_HALF_HP, TRMSG_LAST_BATTLER, TRMSG_LAST_BATTLER_HALF_HP
+    };
+    for (int k = 0; k < 4; k++) {
+        dest->hintText[k][0] = 0xFFFF;
+        if (!partner && Trainer_HasMessageType(id, hintTypes[k], HEAP_ID_APPLICATION)) {
+            Trainer_LoadMessage(id, hintTypes[k], text, HEAP_ID_APPLICATION);
+            Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->hintText[k], GEN5_TEXT_LENGTH);
+            printf("Gen 5: trainer %d has line %d\n", id, hintTypes[k]);
+        }
+    }
     String_Free(text);
 
     Party *party = dto->parties[battler];
