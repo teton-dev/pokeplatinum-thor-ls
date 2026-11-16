@@ -26,6 +26,17 @@ found:
 * extras that change the same thing as a choice: *ShinyRate: None / 1 4096 / 1 8192*;
 * *Versions*: Complete and Classic (below).
 
+**Following Renegade Platinum** (Following Platinum integrated into Renegade Platinum):
+`FollowingRenegadePlatinum3541.xdelta` on the first Platinum (USA) ROM. The picker names it
+"Following Renegade Platinum", by its follower code (a member of `data/weather_sys.narc`).
+
+**Warnings.** *Add a game* checks the ROM against the clean Platinum (USA) dumps (No-Intro's,
+by MD5) and the patches against the ones the app knows (Renegade Platinum 1.3.0's base
+patches, Following Renegade's). Anything else is added all the same, with a warning: an
+unknown ROM may be patched, trimmed or a bad dump, and an unknown hack may change the game's
+code, which the app runs from its own source, so parts of it may not work. A game whose
+changes the app doesn't recognise also says so on its card in *Settings > Games*.
+
 *Patch and add* builds the game and extracts it as a new game ("Renegade Platinum").
 Extras that change bytes in place are combined from their changes, so any of them can go
 together. Folders with several ROMs, a ROM of another

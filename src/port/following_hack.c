@@ -1792,6 +1792,29 @@ const FieldEffectRendererFuncs *FollowingHack_RendererFuncs(u32 id)
 
 // --- Startup -----------------------------------------------------------------------------------
 
+// The hack's blob in a game's folder (the game picker's names: any game, not only the running one)
+static BOOL BlobLooksRight(const u8 *blob, u32 size)
+{
+    const u32 at = BLOB_RENDERERS - BLOB_BASE;
+    if (blob == NULL || size != BLOB_SIZE || at + 8 > size) {
+        return FALSE;
+    }
+    const u32 first = blob[at] | (blob[at + 1] << 8) | (blob[at + 2] << 16) | ((u32)blob[at + 3] << 24);
+    const u32 second = blob[at + 4] | (blob[at + 5] << 8) | (blob[at + 6] << 16) | ((u32)blob[at + 7] << 24);
+    return first == 0 && second == 0x021FB0F0;
+}
+
+BOOL FollowingHack_FoundIn(const char *dir)
+{
+    char path[1024];
+    snprintf(path, sizeof(path), "%s/data/weather_sys.narc", dir);
+    u32 size = 0;
+    u8 *blob = ReadNarcMember(path, BLOB_MEMBER, &size);
+    const BOOL found = BlobLooksRight(blob, size);
+    free(blob);
+    return found;
+}
+
 void FollowingHack_Init(void)
 {
     u32 size = 0;

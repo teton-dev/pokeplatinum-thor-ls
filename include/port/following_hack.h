@@ -29,6 +29,8 @@ void FollowingHack_Init(void);
 
 // The game is Following Renegade Platinum
 BOOL FollowingHack_IsActive(void);
+// The game extracted in dir has the hack (its blob in data/weather_sys.narc), for the game picker's names
+BOOL FollowingHack_FoundIn(const char *dir);
 
 // The hack's code and tables as the DS has them (loaded at FOLLOWING_HACK_BASE), or NULL without the hack
 #define FOLLOWING_HACK_BASE 0x023C8000
