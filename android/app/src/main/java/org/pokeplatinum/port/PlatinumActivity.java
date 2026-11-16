@@ -18,6 +18,7 @@ import android.util.Log;
 import android.view.Display;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
@@ -97,11 +98,31 @@ public class PlatinumActivity extends SDLActivity {
         }
     }
 
-    /** The settings' views are gone: the game's view takes the keys again. */
+    /** The settings' views are up: the game stays full screen behind them. */
+    void nativeSettingsShown() {
+        keepImmersive();
+    }
+
+    /** The settings' views are gone: the game's view takes the keys again, without a focus outline. */
     void nativeSettingsHidden() {
+        keepImmersive();
         if (mSurface != null) {
+            mSurface.setDefaultFocusHighlightEnabled(false);
             mSurface.requestFocus();
         }
+    }
+
+    /**
+     * SDL's immersive full screen (as SDLActivity sets it): focus moving between the settings' views and the game's
+     * brought the system bars back, which then took a strip off the bottom of the game.
+     */
+    private void keepImmersive() {
+        //noinspection deprecation
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
     }
 
     @Override
