@@ -19,7 +19,19 @@
          }
      }
      for (i = 0; i < numMons; i++) {
-@@ -879,6 +882,12 @@
+@@ -770,6 +773,11 @@
+         if (ItemGetParam(item, 0xf) == 4) {
+             if (ThrowBall(flow, mon, item)) {
+                 BattleClient_SubItem(flow->mainModule, clientId, item);
++                // The port: HGSS's Bug-Catching Contest ends when its last Sport Ball misses (escaping, silently: the
++                // field goes to the judging)
++                if (flow->result != BTL_FLOW_RESULT_CAPTURE && Gen5_PortContestOutOfBalls(item)) {
++                    return TRUE;
++                }
+             }
+             return FALSE;
+         }
+@@ -879,6 +887,12 @@
          }
      }
      if (BtlSetup_GetBattleType(flow->mainModule) == BTL_TYPE_WILD) {
@@ -32,11 +44,10 @@
          if (targetPos != BTL_POS_NONE) {
              caught = CheckBallCapture(flow, mon, target, item, &shakes, &critical);
              if (caught) {
-@@ -897,6 +906,82 @@
-         BtlServerCmdQueue_Put(flow->queue, SC_BALL_THROW_TRAINER, targetPos, item);
+@@ -898,7 +912,83 @@
      }
      return FALSE;
-+}
+ }
 +
 +// The port: in HeartGold and SoulSilver (Gen5_PortApricornBalls), the catch rate an Apricorn Ball gives the target, as
 +// HGSS's battle_command.c works it out (its quirks kept: the Heavy Ball's penalty for light Pokemon checks the catch
@@ -59,7 +70,7 @@
 +    case ITEM_LEVEL_BALL: {
 +        u32 attacker = GetBattleMonStat(mon, BATTLEMON_LEVEL);
 +        u32 defender = GetBattleMonStat(target, BATTLEMON_LEVEL);
-+
+ 
 +        if (attacker <= defender) {
 +        } else if (attacker / 2 <= defender) {
 +            rate *= 2;
@@ -112,10 +123,12 @@
 +        rate = 1;
 +    }
 +    return (u16)rate;
- }
- 
++}
++
  // Whether a ball catches its target, with how many times it shakes and whether it was a critical capture
-@@ -924,7 +1009,8 @@
+ static BOOL CheckBallCapture(BtlServerFlow *flow, BattleMon *mon, BattleMon *target, u16 item, u8 *shakes,
+                              u8 *critical) {
+@@ -924,7 +1014,8 @@
      }
      species = GetBattleMonSpecies(target);
      form = GetBattleMonStat(target, BATTLEMON_FORM);
@@ -125,7 +138,7 @@
      rate = (u32)FX_MUL(rate, GetBallCaptureMod(flow, mon, target, item)) / maxHP;
      switch (GetBattleMonStatus(target)) {
      case CONDITION_SLEEP:
-@@ -1041,6 +1127,12 @@
+@@ -1041,6 +1132,12 @@
              return FX32_CONST(5);
          }
          break;

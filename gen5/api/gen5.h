@@ -194,6 +194,9 @@ typedef struct Gen5Battle {
     // and Sport Balls; BW2 gives them none)
     int fishing;
     int apricornBalls;
+    // HeartGold and SoulSilver's Bug-Catching Contest (a wild battle): the bag holds the contest's Sport Balls alone, and
+    // the battle ends when the last one misses, as HGSS's does (the field then goes to the judging)
+    int bugContest;
 } Gen5Battle;
 
 // How a battle ended, for Platinum
