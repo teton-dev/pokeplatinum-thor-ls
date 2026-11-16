@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The settings' accent (NativeSettings): Eterna's mint, after its icon -->
+    <color name="settings_accent">#FF8FD9B6</color>
+</resources>

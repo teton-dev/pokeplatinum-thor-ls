@@ -8,10 +8,12 @@
 #include "port/nuzlocke_mode_game.h"
 
 #define RECORD_MAGIC 0x4C5A554E // "NUZL"
-#define RECORD_VERSION 2
+#define RECORD_VERSION 3
 #define RECORD_V1_SIZE 64
+#define RECORD_V2_SIZE 1028
 #define MAX_RECORD_SECTORS 8
 #define MAX_AREAS 160
+#define MAX_DEATHS 64
 
 enum AreaResult {
     AREA_IN_BATTLE = 0, // its first encounter is going on (or the game stopped during it: counts as missed)
@@ -27,9 +29,20 @@ typedef struct NuzlockeArea {
     u8 unused;
 } NuzlockeArea;
 
+// A Pokemon that died (for the Gear's graveyard; the dead flag on the Pokemon is what the rules go by)
+typedef struct NuzlockeDeathEntry {
+    u32 personality;
+    u16 species;
+    u8 level;
+    u8 unused;
+    u16 location; // where it fainted (a location name); 0xFFFF: not known (it died before version 3)
+    u16 unused2;
+    char name[NUZLOCKE_MODE_NAME_LEN];
+} NuzlockeDeathEntry;
+
 // One per save (trainer ID), at the start of its sector, written to both halves of the image. Version 1 was the
-// first 60 bytes and a checksum (64 bytes); version 2 adds the areas. The checksum is always the last 4 bytes of
-// `size`.
+// first 60 bytes and a checksum (64 bytes); version 2 adds the areas (1028 bytes); version 3 the deaths. The
+// checksum is always the last 4 bytes of `size`.
 typedef struct NuzlockeRecord {
     u32 magic;
     u16 version;
@@ -45,11 +58,17 @@ typedef struct NuzlockeRecord {
     u16 areaCount;
     u16 reserved2;
     NuzlockeArea areas[MAX_AREAS];
+    // version 3
+    u16 deathCount;
+    u16 reserved3;
+    NuzlockeDeathEntry deaths[MAX_DEATHS];
     u32 checksum;
 } NuzlockeRecord;
 
 _Static_assert(offsetof(NuzlockeRecord, areaCount) == RECORD_V1_SIZE - 4, "version 1's fields stay where they were");
-_Static_assert(sizeof(NuzlockeRecord) == 1028, "NuzlockeRecord's size is part of the save format");
+_Static_assert(offsetof(NuzlockeRecord, deathCount) == RECORD_V2_SIZE - 4, "version 2's fields stay where they were");
+_Static_assert(sizeof(NuzlockeDeathEntry) == 24, "NuzlockeDeathEntry's size is part of the save format");
+_Static_assert(sizeof(NuzlockeRecord) == 2568, "NuzlockeRecord's size is part of the save format");
 
 static struct {
     BOOL loaded;
@@ -89,7 +108,7 @@ static u32 Checksum(const void *data, u32 size)
     return ~crc;
 }
 
-// A version 1 or 2 record, read as version 2 (a version 1 one has no areas)
+// A version 1, 2 or 3 record, read as version 3 (a version 1 one has no areas, a version 1 or 2 one no deaths)
 static BOOL IsValid(NuzlockeRecord *record)
 {
     if (record->magic != RECORD_MAGIC) {
@@ -104,10 +123,24 @@ static BOOL IsValid(NuzlockeRecord *record)
         record->areaCount = 0;
         record->reserved2 = 0;
         memset(record->areas, 0, sizeof(record->areas));
+        record->deathCount = 0;
+        record->reserved3 = 0;
+        memset(record->deaths, 0, sizeof(record->deaths));
         return TRUE;
     }
-    if (record->version >= 2 && record->size == sizeof(NuzlockeRecord)) {
-        return record->checksum == Checksum(record, sizeof(NuzlockeRecord)) && record->areaCount <= MAX_AREAS;
+    if (record->version == 2 && record->size == RECORD_V2_SIZE) {
+        memcpy(&stored, (const u8 *)record + RECORD_V2_SIZE - 4, 4);
+        if (stored != Checksum(record, RECORD_V2_SIZE) || record->areaCount > MAX_AREAS) {
+            return FALSE;
+        }
+        record->deathCount = 0;
+        record->reserved3 = 0;
+        memset(record->deaths, 0, sizeof(record->deaths));
+        return TRUE;
+    }
+    if (record->version >= 3 && record->size == sizeof(NuzlockeRecord)) {
+        return record->checksum == Checksum(record, sizeof(NuzlockeRecord)) && record->areaCount <= MAX_AREAS
+            && record->deathCount <= MAX_DEATHS;
     }
     return FALSE;
 }
@@ -123,12 +156,13 @@ static BOOL ReadRecord(int index, NuzlockeRecord *out)
     const u32 starts[2] = { primary, backup };
     BOOL valid[2];
     for (int i = 0; i < 2; i++) {
-        // The header first: a port save file may end right after a version 1 record
+        // The header first: a port save file may end right after a version 1 or 2 record
         const u32 address = (starts[i] + index) * sectorSize;
         memset(&copies[i], 0, sizeof(copies[i]));
         valid[i] = NuzlockeModeGame_ReadFlash(address, &copies[i], RECORD_V1_SIZE);
-        if (valid[i] && copies[i].magic == RECORD_MAGIC && copies[i].size == sizeof(NuzlockeRecord)) {
-            valid[i] = NuzlockeModeGame_ReadFlash(address, &copies[i], sizeof(copies[i]));
+        if (valid[i] && copies[i].magic == RECORD_MAGIC
+            && (copies[i].size == RECORD_V2_SIZE || copies[i].size == sizeof(NuzlockeRecord))) {
+            valid[i] = NuzlockeModeGame_ReadFlash(address, &copies[i], copies[i].size);
         }
         valid[i] = valid[i] && IsValid(&copies[i]);
     }
@@ -292,6 +326,9 @@ void NuzlockeMode_Update(void)
     static u32 sFrames;
     if ((++sFrames & 31) == 0) {
         CheckBalls();
+        if (NuzlockeMode_On()) {
+            NuzlockeModeGame_LogDeadParty(); // Pokemon that died before the deaths were kept (version 3)
+        }
     }
     if (sState.dirty && NuzlockeModeGame_CanWrite()) {
         WriteNow();
@@ -401,6 +438,7 @@ static struct {
     BOOL exempt;     // a shiny, or a static encounter in Normal: may be caught, uses nothing
     u16 location;
     BOOL nextStatic; // NuzlockeMode_MarkStatic: the next battle is a scripted one
+    u8 encounter;    // NuzlockeModeEncounter, for the Gear
 } sBattle;
 
 static BOOL CatchRuleOn(void)
@@ -443,9 +481,18 @@ void NuzlockeMode_OnWildBattleStart(u16 location, u16 species, BOOL shiny)
     sBattle.location = location;
     // Shinies never count; static encounters count only with Hard
     sBattle.exempt = shiny || (isStatic && NuzlockeMode_Level() != NUZLOCKE_HARD);
-    if (sBattle.exempt || FindArea(location) != NULL || sState.record.areaCount >= MAX_AREAS) {
+    if (sBattle.exempt) {
+        sBattle.encounter = shiny ? NUZLOCKE_MODE_ENC_SHINY : NUZLOCKE_MODE_ENC_EXEMPT;
         return;
     }
+    if (FindArea(location) != NULL) {
+        sBattle.encounter = NUZLOCKE_MODE_ENC_USED;
+        return;
+    }
+    if (sState.record.areaCount >= MAX_AREAS) {
+        return;
+    }
+    sBattle.encounter = NUZLOCKE_MODE_ENC_FIRST;
     // The area's first encounter: written now, so that stopping the game during it doesn't give it back
     NuzlockeArea *area = &sState.record.areas[sState.record.areaCount++];
     area->location = location;
@@ -501,4 +548,91 @@ int NuzlockeMode_AreaState(u16 location, u16 *species)
         *species = area->species;
     }
     return area->result == AREA_CAUGHT ? NUZLOCKE_AREA_CAUGHT : NUZLOCKE_AREA_MISSED;
+}
+
+// --- the books, for the Gear (src/port/nuzlocke_gear.c) ------------------------------------
+// Read on the GUI thread while the game thread may add to them: the counts only grow during a run and entries are
+// written before the count, so a reader sees whole entries.
+
+BOOL NuzlockeMode_CatchRuleStarted(void)
+{
+    return CatchRuleOn() && NuzlockeMode_BallsReceived();
+}
+
+int NuzlockeMode_AreaCount(void)
+{
+    if (!sState.loaded) {
+        return 0;
+    }
+    const int count = sState.record.areaCount;
+    return count < MAX_AREAS ? count : MAX_AREAS;
+}
+
+BOOL NuzlockeMode_AreaAt(int index, u16 *location, u16 *species, u8 *result)
+{
+    if (index < 0 || index >= NuzlockeMode_AreaCount()) {
+        return FALSE;
+    }
+    const NuzlockeArea *area = &sState.record.areas[index];
+    *location = area->location;
+    *species = area->species;
+    *result = area->result;
+    return TRUE;
+}
+
+int NuzlockeMode_DeathCount(void)
+{
+    if (!sState.loaded) {
+        return 0;
+    }
+    const int count = sState.record.deathCount;
+    return count < MAX_DEATHS ? count : MAX_DEATHS;
+}
+
+BOOL NuzlockeMode_DeathAt(int index, NuzlockeModeDeath *out)
+{
+    if (index < 0 || index >= NuzlockeMode_DeathCount()) {
+        return FALSE;
+    }
+    const NuzlockeDeathEntry *entry = &sState.record.deaths[index];
+    out->personality = entry->personality;
+    out->species = entry->species;
+    out->level = entry->level;
+    out->location = entry->location;
+    memcpy(out->name, entry->name, sizeof(out->name));
+    out->name[sizeof(out->name) - 1] = '\0';
+    return TRUE;
+}
+
+BOOL NuzlockeMode_DeathLogged(u32 personality)
+{
+    for (int i = 0; i < NuzlockeMode_DeathCount(); i++) {
+        if (sState.record.deaths[i].personality == personality) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void NuzlockeMode_RecordDeath(const NuzlockeModeDeath *death)
+{
+    if (!NuzlockeMode_On() || NuzlockeMode_DeathLogged(death->personality)
+        || sState.record.deathCount >= MAX_DEATHS) {
+        return;
+    }
+    NuzlockeDeathEntry *entry = &sState.record.deaths[sState.record.deathCount];
+    memset(entry, 0, sizeof(*entry));
+    entry->personality = death->personality;
+    entry->species = death->species;
+    entry->level = death->level;
+    entry->location = death->location;
+    memcpy(entry->name, death->name, sizeof(entry->name));
+    entry->name[sizeof(entry->name) - 1] = '\0';
+    sState.record.deathCount++;
+    Write();
+}
+
+int NuzlockeMode_CurrentEncounter(void)
+{
+    return NuzlockeMode_On() ? sBattle.encounter : NUZLOCKE_MODE_ENC_NONE;
 }

@@ -1,0 +1,25 @@
+# Nuzlocke mode's books on the Gear (port-common's Nuzlocke API, fed by src/port/nuzlocke_gear.c): the area's
+# encounter and the graveyard on the Trainer tab. From nuz-normal. The check is the "[test] gear" lines:
+# - before: shown, catch rule on, no deaths;
+# - Turtwig set to 0 HP is dead and logged with the area it died in (the books' death log, record version 3);
+# - a Starly run from leaves the area "missed" in the Gear's books too.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_gear.txt --from nuz-normal
+
+mash A until free
+gen5-battles off
+item 4 10
+wait 40
+nuzlocke state
+give 399 5
+faint 0
+lead 1
+nuzlocke state
+wild 396 2
+until battle
+until command
+wait 60
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+nuzlocke state
+exit 0

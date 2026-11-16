@@ -23,6 +23,11 @@ New builds install over old ones and keep your saves. **Don't uninstall the app 
 you've copied your saves out first** (*Settings > Saves > Export*, or turn on save sync):
 uninstalling deletes its files folder.
 
+**Moving from the app called "Platinum"** (`org.pokeplatinum.port`): this fork's app is now **Eterna**
+(`app.eterna`), a separate app beside the old one. Copy your files over once, from
+`Android/data/org.pokeplatinum.port/files/` to `Android/data/app.eterna/files/` (with the
+app closed: a file manager that can open `Android/data`, or `adb`), then start Eterna.
+
 > **Signing key: only install APKs from this repository's Releases page.** Every build is
 > signed with the same key so that it installs over the last one, and that key
 > (`android/app/stable.keystore`, password `android`) is part of the source code. That
@@ -35,7 +40,7 @@ The APK contains no game data. On first launch the game asks for your own dump o
 Pokemon Platinum (USA). Pick the `.nds` file in the file picker; it is copied in,
 extracted, and deleted again.
 
-All files live in `Android/data/org.pokeplatinum.port/files/`: the extracted game
+All files live in `Android/data/app.eterna/files/`: the extracted game
 files, the saves, `sim_config.ini` (libntr settings) and `sim_config_prj.ini` (game
 settings).
 
