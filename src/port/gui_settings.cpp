@@ -270,6 +270,9 @@ void DrawGames()
         if (carts[i].info[0] != '\0') {
             subtitle += std::string(". ") + carts[i].info;
         }
+        if (strstr(carts[i].name, "(modified)") != nullptr) {
+            subtitle += ". Eterna doesn't recognise its changes: parts of it may not work";
+        }
         if (Card(carts[i].name, subtitle.c_str(), playing) && !playing) {
             if (sConfirmSwitch == i) {
                 SIM_Carts_SwitchTo(carts[i].id);
