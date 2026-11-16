@@ -444,20 +444,29 @@ void RomPatches_DescribeRom(const char *dir, char *name, int nameSize)
     BOOL renegade = ReadFileAt(path, 0x1A184, pool, sizeof(pool)) && memcmp(pool, "\x3C\x21\x00\x00\xCC\x2D\x00\x00", 8) == 0
         && (pool[8] | (pool[9] << 8) | (pool[10] << 16) | ((u32)pool[11] << 24)) != 0x0226ECD4;
 
+    // Following Platinum (Mikelan98 and AdAstra's), integrated into Renegade Platinum or on its own: its code and
+    // tables in a member of data/weather_sys.narc (following_hack.c)
+    const BOOL following = FollowingHack_FoundIn(dir);
+
     if (renegade) {
         // Classic keeps the official typings: Charizard stays Fire/Flying (Dragon otherwise).
         // With both versions (versions.ini, chosen per save) it's just Renegade Platinum.
+        const char *game = following ? "Following Renegade Platinum" : "Renegade Platinum";
         u8 types[2];
         snprintf(path, sizeof(path), "%s/versions.ini", dir);
         FILE *versions = fopen(path, "r");
         if (versions != NULL) {
             fclose(versions);
-            snprintf(name, nameSize, "Renegade Platinum");
+            snprintf(name, nameSize, "%s", game);
             return;
         }
         snprintf(path, sizeof(path), "%s/poketool/personal/pl_personal.narc", dir);
         BOOL classic = ReadSpeciesTypes(path, SPECIES_CHARIZARD, types) && types[1] == 2;
-        snprintf(name, nameSize, "%s", classic ? "Renegade Platinum Classic" : "Renegade Platinum");
+        snprintf(name, nameSize, "%s%s", game, classic ? " Classic" : "");
+        return;
+    }
+    if (following) {
+        snprintf(name, nameSize, "Following Platinum");
         return;
     }
 
@@ -466,6 +475,92 @@ void RomPatches_DescribeRom(const char *dir, char *name, int nameSize)
     // (no arm9.bin: game files from a desktop build's output, i.e. vanilla)
     BOOL vanillaShiny = !ReadFileAt(path, 0x75E48, shiny, sizeof(shiny)) || shiny[8] == 0x08;
     snprintf(name, nameSize, "%s", vanillaShiny ? "Pokemon Platinum" : "Pokemon Platinum (modified)");
+}
+
+// libntr hook: the game added has changes Eterna doesn't recognise
+BOOL SIM_Prj_CartWarning(const char *dir, char *text, int textSize)
+{
+    char name[96];
+    RomPatches_DescribeRom(dir, name, sizeof(name));
+    if (strstr(name, "(modified)") == NULL) {
+        return FALSE;
+    }
+    snprintf(text, textSize, "Eterna doesn't recognise this game's changes: it knows Platinum, Renegade Platinum "
+                             "and Following Renegade Platinum. A hack's data changes load, but changes to the game's "
+                             "code don't (Eterna runs its own): parts of it may not work.");
+    return TRUE;
+}
+
+// libntr hooks: the clean dumps and the patches Eterna knows (by MD5), for the "Add a game" screen's warnings
+static BOOL Md5Is(const u8 md5[16], const char *hex)
+{
+    for (int i = 0; i < 16; i++) {
+        unsigned byte;
+        if (sscanf(hex + i * 2, "%2x", &byte) != 1 || md5[i] != byte) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+const char *SIM_Prj_KnownRom(const u8 md5[16])
+{
+    // No-Intro's Pokemon - Platinum Version (USA), (Rev 1) and its other Rev 1 dump
+    static const struct { const char *md5, *name; } kRoms[] = {
+        { "49b5ae12ea219950a9010e21215b109b", "Pokemon Platinum (USA)" },
+        { "ab828b0d13f09469a71460a34d0de51b", "Pokemon Platinum (USA) (Rev 1)" },
+        { "01073f4889bf50f24ca966c4f1e07fd0", "Pokemon Platinum (USA) (Rev 1)" },
+    };
+    for (size_t i = 0; i < sizeof(kRoms) / sizeof(kRoms[0]); i++) {
+        if (Md5Is(md5, kRoms[i].md5)) {
+            return kRoms[i].name;
+        }
+    }
+    return NULL;
+}
+
+const char *SIM_Prj_KnownPatch(const u8 md5[16])
+{
+    // Renegade Platinum 1.3.0's base patches, and Following Renegade Platinum's (Integration Patches 2.0)
+    static const struct { const char *md5, *name; } kPatches[] = {
+        { "55941df1e96023c9eeb2299dbc416751", "RenegadePlatinum3541" },
+        { "2ecdcc993a0258f76259c1e7b4b5f626", "RenegadePlatinum4997" },
+        { "2e2015bc34a3b77d4bf78e5f250ac659", "FollowingRenegadePlatinum3541" },
+        { "b3a784ad7cdcebc2fb8d5f39462d53c0", "AddFollowingPlatinumToRenegade3541" },
+    };
+    for (size_t i = 0; i < sizeof(kPatches) / sizeof(kPatches[0]); i++) {
+        if (Md5Is(md5, kPatches[i].md5)) {
+            return kPatches[i].name;
+        }
+    }
+    return NULL;
+}
+
+// libntr hook: the "Add a game" screens' words about Platinum's hacks
+const char *SIM_Prj_AddGameText(int which)
+{
+    switch (which) {
+    case SIM_ADD_TEXT_INTRO:
+        return "Add another game next to the ones you have, like Drayano's Renegade Platinum or Following Renegade "
+               "Platinum. Each game keeps its own saves.";
+    case SIM_ADD_TEXT_HACK_TITLE:
+        return "Renegade Platinum and Following Renegade";
+    case SIM_ADD_TEXT_HACK_HELP:
+        return "Unzip the download from Drayano's page, put your ROM in the same folder (or choose it after the folder), "
+               "and choose the folder. RenegadePlatinum4997 (3541 for early ROMs) goes on the ROM; the shiny rate and "
+               "speed-up patches show up as extras. Classic comes along as a version: each new game asks Classic or "
+               "Complete. Following Renegade Platinum: FollowingRenegadePlatinum3541.xdelta goes on the first Platinum "
+               "(USA) ROM; Eterna names it on its own.";
+    case SIM_ADD_TEXT_FILES_HELP:
+        return "Renegade Platinum: your Platinum (USA) ROM, then RenegadePlatinum4997.xdelta (3541 for early ROMs). Add "
+               "ClassicVersion.xdelta too and both versions come with the game: each new game asks which one. "
+               "Following Renegade Platinum: the first Platinum (USA) ROM, then FollowingRenegadePlatinum3541.xdelta.";
+    case SIM_ADD_TEXT_WRONG_ROM:
+        return "(Renegade Platinum: 4997 for later carts and dumps, 3541 for early ones. Following Renegade Platinum "
+               "goes on the early ROM.)";
+    default:
+        return "";
+    }
 }
 
 // libntr hook: names the games in the game picker

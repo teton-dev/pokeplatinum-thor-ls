@@ -1,0 +1,10 @@
+# The game picker's names (RomPatches_DescribeRom) for the games extracted in the desktop folders, and the warning
+# for changes Eterna doesn't recognise. The check is the "[test] cartname" lines: Pokemon Platinum, Renegade
+# Platinum, Following Renegade Platinum.
+#
+#   tools/docker/desktop.sh test tests/scripts/cart_names.txt --from turtwig
+
+cartname /Users/trysten/thor-dev/desktop
+cartname /Users/trysten/thor-dev/desktop-renegade
+cartname /Users/trysten/thor-dev/desktop-following
+exit 0
