@@ -207,6 +207,12 @@ typedef struct Gen5Battle {
     // says the answer was Yes (the game then opens its naming screen)
     int askNickname;
     int nicknameWanted;
+    // HeartGold and SoulSilver: Mom keeps some of the prize money (the game moves it; the battle only says so, "Sent
+    // some to Mom!" under the prize line, as HGSS's does)
+    int momSavings;
+    // The level up to which another trainer's Pokémon obeys, by the game's own rule for the player's badges (100: every
+    // Pokémon obeys); 0 keeps BW2's ((badges + 1) * 10, all with 8)
+    int obeyLevel;
 } Gen5Battle;
 
 // How a battle ended, for Platinum

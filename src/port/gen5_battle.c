@@ -30,6 +30,7 @@
 #include "sound_playback.h"
 #include "unk_02017038.h"
 #include "trainer_data.h"
+#include "port/rom_patches.h"
 #include "bag.h"
 #include "game_options.h"
 #include "battle/battle_system.h"
@@ -1028,6 +1029,13 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     sBattle.player.gender = TrainerInfo_Gender(trainerInfo);
     sBattle.player.money = TrainerInfo_Money(trainerInfo);
     sBattle.player.badges = TrainerInfo_BadgeCount(trainerInfo);
+    {
+        // Platinum's obedience (battle_controller_player.c): another trainer's Pokémon obeys up to level 10, 30 with two
+        // badges, 50 with four, 70 with six, and always with every badge (none in Renegade Platinum: obeyAllBadges)
+        const int badges = sBattle.player.badges;
+        sBattle.obeyLevel = badges >= RomPatches_Info()->obeyAllBadges ? 100 : badges >= 6 ? 70 : badges >= 4 ? 50
+            : badges >= 2 ? 30 : 10;
+    }
     sBattle.partyCount = Party_GetCurrentCount(party);
     if (sBattle.partyCount > GEN5_PARTY_MAX) {
         sBattle.partyCount = GEN5_PARTY_MAX;
