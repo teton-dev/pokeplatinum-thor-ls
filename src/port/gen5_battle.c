@@ -99,6 +99,10 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     if (dto->battleType == BATTLE_TYPE_SAFARI) {
         return dto->battleStatusMask == 0;
     }
+    // The catching tutorial (Dawn or Lucas catches a Bidoof on Route 202): BW2's capture demo plays it
+    if (dto->battleType == BATTLE_TYPE_CATCH_TUTORIAL) {
+        return TRUE;
+    }
     // A wild battle, alone or beside a partner (two wild Pokémon), or a roaming Pokémon's (BW2's roaming AI flees):
     // a honey tree's, a legendary's (the field picks its intro and music; BW2 leaves "wild" out of its message), and
     // Giratina's in the Distortion World (its Origin Forme, the Distortion World's arena) too
@@ -965,6 +969,29 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
 
 int Gear_LevelCap(void);
 
+// The catching tutorial's two lines, as Platinum's battle has them (battle_display.c, battle_script.c): "All right! I
+// got its HP down! Time to throw a Poké Ball!" (Dawn's, or Lucas's "OK! Its HP is down!...") and "Dawn used a Poké
+// Ball!", the counterpart being the DTO's player
+static void CaptureDemoTextToGen5(FieldBattleDTO *dto)
+{
+    TrainerInfo *trainerInfo = dto->trainerInfo[BATTLER_PLAYER_1];
+    StringTemplate *template = StringTemplate_Default(HEAP_ID_APPLICATION);
+    MessageLoader *loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG,
+        TEXT_BANK_BATTLE_STRINGS, HEAP_ID_APPLICATION);
+    StringTemplate_SetPlayerName(template, 0, trainerInfo);
+    const u32 ids[2] = {
+        BattleStrings_Text_AllRightIGotItsHPDownTimeToThrowAPokeBall + TrainerInfo_Gender(trainerInfo),
+        BattleStrings_Text_01228,
+    };
+    for (int i = 0; i < 2; i++) {
+        String *text = MessageUtil_ExpandedString(template, loader, ids[i], HEAP_ID_APPLICATION);
+        Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, sBattle.demoText[i], GEN5_TEXT_LENGTH);
+        String_Free(text);
+    }
+    MessageLoader_Free(loader);
+    StringTemplate_Free(template);
+}
+
 // The line Platinum's battle shows when a catch with no nickname goes to the PC (battle_script.c's catch sequence):
 // "{0} was transferred to someone's PC. It was placed in {1}." (Bebe's once met), or the current box is full and it
 // went to the next; for a full party with room in a box, else empty
@@ -1105,7 +1132,11 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         sBattle.legendary = (dto->battleStatusMask & BATTLE_STATUS_LEGENDARY) != 0;
         // "Give a nickname to the caught ...?" after a catch, as Platinum's battle asks it (the Safari Zone's view
         // catches without it: its naming screen always opens)
-        sBattle.askNickname = !sBattle.safari;
+        sBattle.captureDemo = dto->battleType == BATTLE_TYPE_CATCH_TUTORIAL;
+        if (sBattle.captureDemo) {
+            CaptureDemoTextToGen5(dto);
+        }
+        sBattle.askNickname = !sBattle.safari && !sBattle.captureDemo;
         // With a full party, the line about the PC a catch with no nickname goes to
         PcTextToGen5(dto, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), sBattle.pcText[0]);
         if (Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0) {

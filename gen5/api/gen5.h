@@ -219,6 +219,10 @@ typedef struct Gen5Battle {
     // For a catch the player gives no nickname with a full party: the game's own line about the PC it goes to, for
     // wild and wild2 (BW2's text, empty: none), shown after the answer
     unsigned short pcText[2][GEN5_TEXT_LENGTH];
+    // Platinum's catching tutorial (a wild battle): BW2's capture demo plays it, with the party's and the wild Pokémon's
+    // first moves and the game's two lines (BW2's text): [0] before the throw, [1] the throw
+    int captureDemo;
+    unsigned short demoText[2][GEN5_TEXT_LENGTH];
 } Gen5Battle;
 
 // How a battle ended, for Platinum
