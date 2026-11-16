@@ -129,5 +129,21 @@ BOOL Gen5_PortCritGuard(void);
 BOOL Gen5_PortIsDead(u32 personality);
 void Gen5_PortGrayIconPalettes(int iconSlot, int graySlot);
 BOOL Gen5_PortCatchRefused(u32 personality);
+// HGSS's Apricorn Balls' rules are on (Gen5Battle.apricornBalls; btl_server_flow_sub.c's CheckBallCapture)
+BOOL Gen5_PortApricornBalls(void);
+// A thrown Apricorn Ball's palette in archive 94 (btlv_effvm.c's ball sprite), 0 if none
+int Gen5_PortApricornBallPalette(int ball);
+// The Bug-Catching Contest's balls are gone (Gen5Battle.bugContest; btl_server_flow_sub.c's UseBagItem)
+BOOL Gen5_PortContestOutOfBalls(u16 item);
+// After a catch, ask for a nickname (Gen5Battle.askNickname; btl_client.c's ScBallThrow), and its answer
+BOOL Gen5_PortAskNickname(void);
+// Mom keeps some of the prize money (Gen5Battle.momSavings; btlv_core.c's prize line)
+BOOL Gen5_PortMomSavings(void);
+// The game's own obedience level (Gen5Battle.obeyLevel; btl_server_flow.c's ServerControl_CheckObedience)
+int Gen5_PortObeyLevel(void);
+void Gen5_PortNicknameAnswer(BOOL yes);
+// Whether a port trainer says something during the battle (Gen5Trainer.hintText; btl_client.c's patch; btlv_core.c's
+// patch shows it)
+BOOL Gen5_PortTrainerHasHint(u32 trainerId, u32 msgId);
 
 #endif // GEN5_PORT_H

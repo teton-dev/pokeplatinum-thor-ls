@@ -73,6 +73,13 @@ static void *sMemory;
 static BOOL sStarted;
 static NNSGfdVramTransferTask sVramTransferTasks[VRAM_TRANSFER_TASKS];
 static BtlSetup *sSetup;
+static BOOL sApricornBalls; // Gen5Battle.apricornBalls
+static BOOL sBugContest; // Gen5Battle.bugContest
+static BOOL sAskNickname; // Gen5Battle.askNickname
+static BOOL sNicknameWanted; // and its answer
+static BOOL sMomSavings; // Gen5Battle.momSavings
+static int sObeyLevel; // Gen5Battle.obeyLevel
+static const Gen5Battle *sBattleIn; // the battle as handed over, while it runs (its texts)
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
@@ -326,6 +333,14 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         return FALSE;
     }
     GFL_HeapCreateChild(HEAPID_USER, HEAPID_PORT_BATTLE, HEAP_PORT_BATTLE_SIZE);
+    // Before the bag: the Apricorn Balls' item data (pml_item.c's patch) decides whether they go in it
+    sApricornBalls = battle->apricornBalls != 0;
+    sBugContest = battle->bugContest != 0;
+    sAskNickname = battle->askNickname != 0;
+    sNicknameWanted = FALSE;
+    sMomSavings = battle->momSavings != 0;
+    sObeyLevel = battle->obeyLevel;
+    sBattleIn = battle;
     sBattleBlockCount = 0;
     sPlaceCount = 0;
 
@@ -354,9 +369,19 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     PokeDexSave *pokedex =
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, getSizeofPokedexData(), TRUE, __FILE__, __LINE__));
     initPokedex(pokedex);
+    // The species the player has caught (Gen5Battle.dexCaught has the save block's layout)
+    memcpy(pokedex->caught, battle->dexCaught, sizeof(pokedex->caught));
     GameRecords *records =
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, GameRecords_GetSize(), TRUE, __FILE__, __LINE__));
     PokeParty *party = NewParty(battle->party, battle->partyCount);
+    // BW2 makes a Pokémon whose OT (ID, gender and name) isn't the player disobey above the badges' level
+    for (int i = 0; i < battle->partyCount; i++) {
+        PartyPkm *pkm = PokeParty_GetPkm(party, i);
+        if (!IsTrainerOT(pkm, info)) {
+            printf("Gen 5: party %d isn't the player's own to BW2 (OT ID %u gender %u, player %u gender %u)\n", i,
+                battle->party[i].otId, battle->party[i].otGender, battle->player.id, battle->player.gender);
+        }
+    }
     Gen5_SetBattleGameData(party, info, config, bag, bagCursor, pokedex, records);
 
     if (battle->safari) {
@@ -412,6 +437,18 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sSetup->fieldSituation.env.terrain = battle->arenaTerrain;
     sSetup->unkDD_6 = battle->arenaAlt;
     sSetup->badgeCount = battle->player.badges;
+    if (battle->fishing) {
+        BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_FISHING);
+    }
+    if (battle->legendary) {
+        BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_LEGENDARY);
+    }
+    if (battle->roamer) {
+        BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_ROAMING);
+    }
+    if (battle->boxesFull) {
+        BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_BOXES_FULL);
+    }
     sSetup->result = BTL_RESULT_VICTORY;
     sSetup->party[0] = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));
     PokeParty_Copy(party, sSetup->party[0]);
@@ -468,6 +505,11 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         printf("Gen 5: a wild battle, %d Pokémon (species %u, level %u first) against species %u (level %u)\n",
             battle->partyCount, battle->party[0].species, battle->party[0].level, battle->wild.species,
             battle->wild.level);
+    }
+    if (!battle->isTrainer && battle->captureDemo) {
+        // The catching tutorial: BW2's capture demo, played by the view alone (btlv_core.c's CmdCaptureDemo)
+        sSetup->battleType = BTL_TYPE_CAPTURE_DEMO;
+        printf("Gen 5: the catching tutorial, as BW2's capture demo\n");
     }
     NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);
     Gen5_SoundBattleBegin();
@@ -546,6 +588,22 @@ int Gen5_GameVersion(void)
 }
 
 static int sWhiteGauges = 0;
+
+static int sApricornBallPalettes; // Gen5_SetApricornBallSprites
+
+void Gen5_SetApricornBallSprites(int firstPalette)
+{
+    sApricornBallPalettes = firstPalette;
+}
+
+// The member of archive 94 with a thrown Apricorn Ball's palette (17 to 24; btlv_effvm.c's patch), 0 if none
+int Gen5_PortApricornBallPalette(int ball)
+{
+    if (sApricornBallPalettes == 0 || !sApricornBalls || ball < 17 || ball > 24) {
+        return 0;
+    }
+    return sApricornBallPalettes + (ball - 17);
+}
 
 void Gen5_SetWhiteGauges(int white)
 {
@@ -637,6 +695,16 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
             battle->items[i].count = BagSave_GetItemCountByID(sBag, battle->items[i].item, HEAPID_PORT_BATTLE);
         }
     }
+    battle->nicknameWanted = sNicknameWanted;
+    // The wild Pokémon as the battle left them (a roamer keeps its HP and status)
+    if (!battle->isTrainer && sSetup->party[1] != NULL) {
+        if (PokeParty_GetPkmCount(sSetup->party[1]) > 0) {
+            ReadPkm(PokeParty_GetPkm(sSetup->party[1], 0), &battle->wild);
+        }
+        if (battle->hasWild2 && PokeParty_GetPkmCount(sSetup->party[1]) > 1) {
+            ReadPkm(PokeParty_GetPkm(sSetup->party[1], 1), &battle->wild2);
+        }
+    }
     // A caught Pokémon is in the wild party (BtlMain_StorePartiesToSetup), with the ball it was caught in
     battle->caught = result == BTL_RESULT_CAPTURE && sSetup->capturedSlot < PokeParty_GetPkmCount(sSetup->party[1]);
     if (battle->caught) {
@@ -648,6 +716,7 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
     Gen5_PortSafariEnd(battle);
     printf("Gen 5: the battle ended (BW2's result %lu, money %+d)\n", (unsigned long)result, battle->moneyChange);
     sSetup = NULL;
+    sBattleIn = NULL;
     while (sBattleBlockCount > 0) {
         GFL_HeapFree(sBattleBlocks[--sBattleBlockCount]);
     }
@@ -682,6 +751,39 @@ BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId)
     GFL_StrBufLoadString(strbuf, trainer->defeatText);
     printf("Gen 5: trainer %u says its defeat line (%lu characters)\n", trainer->id,
         (unsigned long)GFL_StrBufGetCharCount(strbuf));
+    return TRUE;
+}
+
+// BW2's numbers of the hints (btl_client.c's sTrainerHintMsgs): first hit, half HP, last Pokémon, last at half HP
+static const unsigned short *TrainerHintText(const Gen5Trainer *trainer, u32 msgId)
+{
+    static const u32 ids[4] = { 0x11, 0x12, 0x13, 0x14 };
+    for (int i = 0; i < 4; i++) {
+        if (ids[i] == msgId) {
+            const unsigned short *text = trainer->hintText[i];
+            return text[0] != 0 && text[0] != 0xFFFF ? text : NULL;
+        }
+    }
+    return NULL;
+}
+
+// Whether a port trainer (from 0x800) says something during the battle (btl_client.c's patch)
+BOOL Gen5_PortTrainerHasHint(u32 trainerId, u32 msgId)
+{
+    const Gen5Trainer *trainer = TrainerById(trainerId);
+    return trainer != NULL && TrainerHintText(trainer, msgId) != NULL;
+}
+
+// What a port trainer says during the battle (btlv_core.c's patch), into strbuf: FALSE if it has nothing to say
+BOOL Gen5_PortTrainerHintText(StrBuf *strbuf, u32 trainerId, u32 msgId)
+{
+    const Gen5Trainer *trainer = TrainerById(trainerId);
+    const unsigned short *text = trainer != NULL ? TrainerHintText(trainer, msgId) : NULL;
+    if (text == NULL) {
+        return FALSE;
+    }
+    GFL_StrBufLoadString(strbuf, text);
+    printf("Gen 5: trainer %u says its line %u\n", trainer->id, (unsigned)msgId);
     return TRUE;
 }
 
@@ -760,6 +862,112 @@ enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary)
     default:
         return GEN5_SUMMARY_BACK;
     }
+}
+
+BOOL Gen5_PortApricornBalls(void)
+{
+    return sApricornBalls;
+}
+
+// The level up to which another trainer's Pokémon obeys (btl_server_flow.c's obedience check; 0: BW2's rule)
+int Gen5_PortObeyLevel(void)
+{
+    return sObeyLevel;
+}
+
+// Mom keeps some of the prize money (btlv_core.c's patch says so under the prize line)
+BOOL Gen5_PortMomSavings(void)
+{
+    if (sMomSavings) {
+        printf("Gen 5: the prize line says some went to Mom\n");
+    }
+    return sMomSavings;
+}
+
+// The line about the PC a catch with no nickname goes to (Gen5Battle.pcText; btl_client.c's patch shows it after the
+// answer), for the wild Pokémon with that personality: FALSE if there is none
+BOOL Gen5_PortPcText(StrBuf *strbuf, u32 personality)
+{
+    if (sBattleIn == NULL) {
+        return FALSE;
+    }
+    const unsigned short *text = NULL;
+    if (personality == sBattleIn->wild.personality) {
+        text = sBattleIn->pcText[0];
+    } else if (sBattleIn->hasWild2 && personality == sBattleIn->wild2.personality) {
+        text = sBattleIn->pcText[1];
+    }
+    if (text == NULL || text[0] == 0 || text[0] == 0xFFFF) {
+        return FALSE;
+    }
+    GFL_StrBufLoadString(strbuf, text);
+    printf("Gen 5: the catch goes to the PC (its line shown)\n");
+    return TRUE;
+}
+
+// The catching tutorial's lines (Gen5Battle.demoText; btlv_core.c's CmdCaptureDemo): FALSE for BW2's own
+BOOL Gen5_PortCaptureDemoText(StrBuf *strbuf, int which)
+{
+    if (sBattleIn == NULL || !sBattleIn->captureDemo || which < 0 || which > 1) {
+        return FALSE;
+    }
+    const unsigned short *text = sBattleIn->demoText[which];
+    if (text[0] == 0 || text[0] == 0xFFFF) {
+        return FALSE;
+    }
+    GFL_StrBufLoadString(strbuf, text);
+    return TRUE;
+}
+
+// After a catch: whether to ask for a nickname (btl_client.c's patch), its question, and the answer
+BOOL Gen5_PortAskNickname(void)
+{
+    return sAskNickname;
+}
+
+void Gen5_PortNicknameAnswer(BOOL yes)
+{
+    sNicknameWanted = yes;
+    printf("Gen 5: a nickname for the catch: %s\n", yes ? "yes" : "no");
+}
+
+// "Give a nickname to the / caught SPECIES?", as Platinum's and HGSS's battles ask it
+void Gen5_PortNicknameText(StrBuf *strbuf, u16 species)
+{
+    static const char kBefore[] = "Give a nickname to the";
+    static const char kCaught[] = "caught ";
+    unsigned short chars[96];
+    unsigned short name[GEN5_NAME_LENGTH];
+    int length = 0;
+
+    StrBuf *nameBuf = GFL_StrBufCreate(GEN5_NAME_LENGTH, HEAPID_PORT_BATTLE);
+    GFL_MsgDataLoadStrbuf(g_PMLSpeciesNamesResident, species, nameBuf);
+    GFL_StrBufStoreString(nameBuf, name, GEN5_NAME_LENGTH);
+    GFL_StrBufFree(nameBuf);
+    for (const char *c = kBefore; *c != '\0'; c++) {
+        chars[length++] = (unsigned char)*c;
+    }
+    chars[length++] = 0xFFFE;
+    for (const char *c = kCaught; *c != '\0'; c++) {
+        chars[length++] = (unsigned char)*c;
+    }
+    for (int i = 0; i < GEN5_NAME_LENGTH && name[i] != 0xFFFF && length < 90; i++) {
+        chars[length++] = name[i];
+    }
+    chars[length++] = '?';
+    chars[length] = 0xFFFF;
+    GFL_StrBufLoadString(strbuf, chars);
+}
+
+// The Bug-Catching Contest's last Sport Ball was thrown (and missed): the battle ends (btl_server_flow_sub.c's patch)
+BOOL Gen5_PortContestOutOfBalls(u16 item)
+{
+    if (!sBugContest || sBag == NULL) {
+        return FALSE;
+    }
+    const u16 left = BagSave_GetItemCountByID(sBag, item, HEAPID_PORT_BATTLE);
+    printf("Gen 5: Bug-Catching Contest, %u of item %u left\n", (unsigned)left, (unsigned)item);
+    return left == 0;
 }
 
 u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp)

@@ -1,0 +1,33 @@
+--- a/src/system/pml_item.c
++++ b/src/system/pml_item.c
+@@ -840,11 +840,20 @@
+     return GFL_ArcSysCreateFileHandle(ARCID_ITEMINFO, heapId);
+ }
+ 
++// The port: in HeartGold and SoulSilver (Gen5_PortApricornBalls) an Apricorn Ball reads a Poke Ball's data, which BW2's
++// own lacks (no battle pocket: the battle's bag wouldn't list it). Its number, name, icon and catch rate stay its own
++static u16 Gen5_PortItemDataOf(u16 item) {
++    if (Gen5_PortApricornBalls() && item >= ITEM_FAST_BALL && item <= ITEM_SPORT_BALL) {
++        return ITEM_POKE_BALL;
++    }
++    return item;
++}
++
+ ItemData *PML_ItemArcHandleReadFile(ArcTool *handle, u16 item, HeapID heapId) {
+     if (item > ITEM_LAST) {
+         item = ITEM_NONE;
+     }
+-    return GFL_ArcToolReadHeapNew(handle, item, heapId);
++    return GFL_ArcToolReadHeapNew(handle, Gen5_PortItemDataOf(item), heapId);
+ }
+ 
+ void *PML_ItemReadDataFile(u16 item, u32 type, HeapID heapId) {
+@@ -853,7 +862,7 @@
+     }
+     switch (type) {
+     case ITEM_FILE_DATA:
+-        return GFL_ArcSysReadHeapNew(ARCID_ITEMINFO, item, heapId);
++        return GFL_ArcSysReadHeapNew(ARCID_ITEMINFO, Gen5_PortItemDataOf(item), heapId);
+     case ITEM_FILE_ICON_CHAR:
+         return GFL_ArcSysReadHeapNew(ARCID_ITEMGRA, ITEM_GRAPHICS_CHARS_AND_PALETTES[item][0], heapId);
+     case ITEM_FILE_ICON_PLTT:

@@ -111,6 +111,10 @@ typedef struct Gen5Trainer {
     unsigned short className[32];
     // What the trainer says when beaten, in BW2's text: 0xFFFE between lines, a page break as BW2's command
     unsigned short defeatText[GEN5_TEXT_LENGTH];
+    // What the trainer says during the battle, as BW2's trainers do (btl_client.c's hints), each empty (0 or 0xFFFF
+    // first) if it has none: [0] when its Pokémon is first hit, [1] at half HP, [2] with its last Pokémon, [3] with its
+    // last Pokémon at half HP (HGSS's TRMSG_HIT_POKE_FIRST_TIME to TRMSG_LAST_POKE_HALF)
+    unsigned short hintText[4][GEN5_TEXT_LENGTH];
     Gen5Pokemon party[GEN5_PARTY_MAX];
     int partyCount;
     // Art to draw for the trainer in place of BW2's sprite of its class (a Sinnoh trainer BW2 has no sprite for, from
@@ -185,6 +189,40 @@ typedef struct Gen5Battle {
     int safariCatchRate;
     int safariFleeRate;
     int safariFled;
+    // HeartGold and SoulSilver: the wild Pokémon was hooked with a rod (BW2's fishing flag: the Lure Ball, the Dive
+    // Ball), and the Apricorn Balls catch by HGSS's rules (battle_command.c: the Fast, Level, Lure, Heavy, Love, Moon
+    // and Sport Balls; BW2 gives them none)
+    int fishing;
+    int apricornBalls;
+    // HeartGold and SoulSilver's Bug-Catching Contest (a wild battle): the bag holds the contest's Sport Balls alone, and
+    // the battle ends when the last one misses, as HGSS's does (the field then goes to the judging)
+    int bugContest;
+    // A legendary Pokémon's encounter (BW2's message without "wild"), a roaming Pokémon's (BW2's roaming AI: it flees),
+    // and the party and every box full (no ball can be thrown, as Platinum's battle refuses one then). After a wild
+    // battle, wild and wild2 hold the Pokémon as the battle left them (a roamer's HP and status go back to it)
+    int legendary;
+    int roamer;
+    int boxesFull;
+    // After a catch, ask "Give a nickname to the caught ...?" in the battle (BW2 asks in its field): nicknameWanted
+    // says the answer was Yes (the game then opens its naming screen)
+    int askNickname;
+    int nicknameWanted;
+    // HeartGold and SoulSilver: Mom keeps some of the prize money (the game moves it; the battle only says so, "Sent
+    // some to Mom!" under the prize line, as HGSS's does)
+    int momSavings;
+    // The level up to which another trainer's Pokémon obeys, by the game's own rule for the player's badges (100: every
+    // Pokémon obeys); 0 keeps BW2's ((badges + 1) * 10, all with 8)
+    int obeyLevel;
+    // The species the player has caught, a bit each from species 1 (bit 0 of byte 0), for BW2's Pokédex: its "data was
+    // added to the Pokédex" for a new species only, and its critical captures' chance by the number caught
+    unsigned char dexCaught[0x54];
+    // For a catch the player gives no nickname with a full party: the game's own line about the PC it goes to, for
+    // wild and wild2 (BW2's text, empty: none), shown after the answer
+    unsigned short pcText[2][GEN5_TEXT_LENGTH];
+    // Platinum's catching tutorial (a wild battle): BW2's capture demo plays it, with the party's and the wild Pokémon's
+    // first moves and the game's two lines (BW2's text): [0] before the throw, [1] the throw
+    int captureDemo;
+    unsigned short demoText[2][GEN5_TEXT_LENGTH];
 } Gen5Battle;
 
 // How a battle ended, for Platinum
@@ -230,6 +268,9 @@ int Gen5_GameVersion(void);
 // The HP boxes' look: White 2's light ones (1) or Black 2's dark ones (0, the default). Both are in either version's
 // files. Before Gen5_BattleBegin
 void Gen5_SetWhiteGauges(int white);
+// The thrown Apricorn Balls' palettes (HGSS: lib/port/gen5_rocket.c adds them to its copy of archive 94, from this
+// member, in ball order, the Fast Ball's first); 0: none, they fly as a Poké Ball
+void Gen5_SetApricornBallSprites(int firstPalette);
 
 // In the VBlank: BW2's VBlank work (VRAM transfers, its VBlank tasks and callback)
 void Gen5_BattleVBlank(void);

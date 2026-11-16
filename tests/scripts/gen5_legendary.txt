@@ -1,0 +1,32 @@
+# Gen 5 battles: a legendary's scripted encounter (BATTLE_STATUS_LEGENDARY) in Black 2 and White 2's engine. From the
+# turtwig fixture with a Master Ball: Uxie at level 50 (BW2's message has no "wild", BTL_SETUP_FLAG_LEGENDARY), caught
+# at once (BAG, POKE BALLS, the Master Ball, USE), its naming screen left empty: the log's party has it.
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_legendary.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+item 1 1
+legendary 480 50
+until battle
+wait 200
+shot gen5-legendary-intro
+until command timeout 6000
+wait 60
+touch 40 180
+wait 60
+touch 192 48
+wait 60
+touch 64 33
+wait 60
+touch 108 175
+# YES to "Give a nickname to the caught ...?" (BW2's Yes and No on the touch screen)
+mash A touch 128 55 until naming timeout 6000
+wait 90
+press START
+wait 30
+press A
+mash B until free
+party
+exit 0
