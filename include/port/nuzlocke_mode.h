@@ -70,6 +70,7 @@ BOOL NuzlockeMode_CatchAllowed(u16 species, BOOL shiny); // FALSE: the ball is k
 void NuzlockeMode_OnWildBattleEnd(BOOL captured);
 BOOL NuzlockeMode_BallsReceived(void);
 int NuzlockeMode_AreaState(u16 location, u16 *species); // NuzlockeAreaState
+BOOL NuzlockeMode_CatchRuleStarted(void); // Normal or Hard, and the save has had Poke Balls
 #define NUZLOCKE_CATCH_REFUSED_TEXT "You've already used your catch for this area!"
 
 // The dead flag on a Pokemon (set when it faints with the mode on; keeps its HP at 0 for good).
@@ -79,6 +80,32 @@ struct BoxPokemon;
 BOOL NuzlockeMode_IsDead(struct Pokemon *mon);
 BOOL NuzlockeMode_BoxIsDead(struct BoxPokemon *boxMon);
 void NuzlockeMode_SetDead(struct Pokemon *mon, BOOL dead);
+
+// The books, as the Gear shows them (src/port/nuzlocke_gear.c hands them to port-common's Nuzlocke API). Areas:
+// result 0 in battle, 1 caught, 2 missed. Deaths are logged when the dead flag is set (game thread).
+#define NUZLOCKE_MODE_NAME_LEN 12
+typedef struct NuzlockeModeDeath {
+    u32 personality;
+    u16 species;
+    u8 level;
+    u16 location; // a location name; 0xFFFF: not known
+    char name[NUZLOCKE_MODE_NAME_LEN];
+} NuzlockeModeDeath;
+int NuzlockeMode_AreaCount(void);
+BOOL NuzlockeMode_AreaAt(int index, u16 *location, u16 *species, u8 *result);
+int NuzlockeMode_DeathCount(void);
+BOOL NuzlockeMode_DeathAt(int index, NuzlockeModeDeath *out);
+BOOL NuzlockeMode_DeathLogged(u32 personality);
+void NuzlockeMode_RecordDeath(const NuzlockeModeDeath *death);
+// What the wild battle going on is to the catch rule
+enum NuzlockeModeEncounter {
+    NUZLOCKE_MODE_ENC_NONE = 0, // no wild battle, or the rule doesn't apply (Simple, no Poke Balls yet)
+    NUZLOCKE_MODE_ENC_FIRST,    // the area's first encounter: it counts
+    NUZLOCKE_MODE_ENC_USED,     // the area's encounter was already used
+    NUZLOCKE_MODE_ENC_SHINY,    // shiny: doesn't count, can be caught
+    NUZLOCKE_MODE_ENC_EXEMPT,   // a static encounter with Normal: doesn't count, can be caught
+};
+int NuzlockeMode_CurrentEncounter(void);
 
 // The rules, implemented per game (game thread). All are no-ops with the mode off.
 // The level no Pokemon may pass by EXP or Rare Candy (the next gym leader's strongest Pokemon's level, its
