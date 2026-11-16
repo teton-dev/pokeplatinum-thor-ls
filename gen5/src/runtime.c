@@ -77,6 +77,8 @@ static BOOL sApricornBalls; // Gen5Battle.apricornBalls
 static BOOL sBugContest; // Gen5Battle.bugContest
 static BOOL sAskNickname; // Gen5Battle.askNickname
 static BOOL sNicknameWanted; // and its answer
+static BOOL sMomSavings; // Gen5Battle.momSavings
+static int sObeyLevel; // Gen5Battle.obeyLevel
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
@@ -335,6 +337,8 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sBugContest = battle->bugContest != 0;
     sAskNickname = battle->askNickname != 0;
     sNicknameWanted = FALSE;
+    sMomSavings = battle->momSavings != 0;
+    sObeyLevel = battle->obeyLevel;
     sBattleBlockCount = 0;
     sPlaceCount = 0;
 
@@ -366,6 +370,14 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     GameRecords *records =
         Keep(GFL_HeapAllocate(HEAPID_PORT_BATTLE, GameRecords_GetSize(), TRUE, __FILE__, __LINE__));
     PokeParty *party = NewParty(battle->party, battle->partyCount);
+    // BW2 makes a Pokémon whose OT (ID, gender and name) isn't the player disobey above the badges' level
+    for (int i = 0; i < battle->partyCount; i++) {
+        PartyPkm *pkm = PokeParty_GetPkm(party, i);
+        if (!IsTrainerOT(pkm, info)) {
+            printf("Gen 5: party %d isn't the player's own to BW2 (OT ID %u gender %u, player %u gender %u)\n", i,
+                battle->party[i].otId, battle->party[i].otGender, battle->player.id, battle->player.gender);
+        }
+    }
     Gen5_SetBattleGameData(party, info, config, bag, bagCursor, pokedex, records);
 
     if (battle->safari) {
@@ -829,6 +841,21 @@ enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary)
 BOOL Gen5_PortApricornBalls(void)
 {
     return sApricornBalls;
+}
+
+// The level up to which another trainer's Pokémon obeys (btl_server_flow.c's obedience check; 0: BW2's rule)
+int Gen5_PortObeyLevel(void)
+{
+    return sObeyLevel;
+}
+
+// Mom keeps some of the prize money (btlv_core.c's patch says so under the prize line)
+BOOL Gen5_PortMomSavings(void)
+{
+    if (sMomSavings) {
+        printf("Gen 5: the prize line says some went to Mom\n");
+    }
+    return sMomSavings;
 }
 
 // After a catch: whether to ask for a nickname (btl_client.c's patch), its question, and the answer

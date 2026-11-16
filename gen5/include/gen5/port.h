@@ -135,6 +135,10 @@ BOOL Gen5_PortApricornBalls(void);
 BOOL Gen5_PortContestOutOfBalls(u16 item);
 // After a catch, ask for a nickname (Gen5Battle.askNickname; btl_client.c's ScBallThrow), and its answer
 BOOL Gen5_PortAskNickname(void);
+// Mom keeps some of the prize money (Gen5Battle.momSavings; btlv_core.c's prize line)
+BOOL Gen5_PortMomSavings(void);
+// The game's own obedience level (Gen5Battle.obeyLevel; btl_server_flow.c's ServerControl_CheckObedience)
+int Gen5_PortObeyLevel(void);
 void Gen5_PortNicknameAnswer(BOOL yes);
 // Whether a port trainer says something during the battle (Gen5Trainer.hintText; btl_client.c's patch; btlv_core.c's
 // patch shows it)
