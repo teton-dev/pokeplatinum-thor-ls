@@ -9,6 +9,14 @@ game waits meanwhile). Everything is big enough to tap, scrolls with a finger, a
 with the controller too: D-pad to move, A to choose, B to go back, L/R for the previous /
 next page.
 
+On Android the settings are drawn in **Android's own views** (smooth scrolling, the system's
+fonts and switches); the left stick moves the cursor too and R3 closes them. *Advanced >
+Android menus* switches back to the menus the game draws itself (as on a computer).
+
+The pages, in order: **Games**, **Saves** (your game); **Gameplay**, **Battles**,
+**Challenges** (playing it); **Display**, **Sound**, **Controls**, **Gear** (the device);
+**Link play**, **GBA slot** (connections); **Save editor**, **Cheats**, **Advanced** (tools).
+
 * **Games**: reset to the title screen, switch games, add one (Renegade Platinum, or a
   randomized game), choose at launch, save a randomized game's log (see
   [Features](features.md)).

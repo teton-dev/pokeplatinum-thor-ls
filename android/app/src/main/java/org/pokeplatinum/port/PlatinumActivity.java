@@ -16,6 +16,9 @@ import android.provider.Settings;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Display;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 
@@ -48,6 +51,9 @@ public class PlatinumActivity extends SDLActivity {
 
     private SecondaryScreen secondaryScreen;
 
+    /** The settings in Android's own views (libntr's pages, see NativeSettings). */
+    private NativeSettings nativeSettings;
+
     @Override
     protected String[] getLibraries() {
         return new String[] { "SDL2", "main" };
@@ -60,6 +66,58 @@ public class PlatinumActivity extends SDLActivity {
         preferSixtyHertz();
         installBundledFiles();
         secondaryScreen = new SecondaryScreen(this);
+        nativeSettings = new NativeSettings(this);
+        addContentView(nativeSettings, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    // --- the settings in Android's own views (libntr's sim_settings.cpp calls these) ----------------
+
+    /** Called from native code: whether the settings open in Android's views (Settings > Advanced > Android menus). */
+    public boolean nativeSettingsEnabled() {
+        return getPreferences(MODE_PRIVATE).getBoolean("nativeSettings", true);
+    }
+
+    /** Called from native code (Settings > Advanced > Android menus). */
+    public void setNativeSettingsEnabled(boolean on) {
+        getPreferences(MODE_PRIVATE).edit().putBoolean("nativeSettings", on).apply();
+    }
+
+    /** Called from native code (render thread): what the settings show now, as JSON. */
+    public void nativeSettingsState(String json) {
+        if (nativeSettings != null) {
+            nativeSettings.postState(json);
+        }
+    }
+
+    /** Called from native code (render thread): the settings closed. */
+    public void nativeSettingsClosed() {
+        if (nativeSettings != null) {
+            nativeSettings.close();
+        }
+    }
+
+    /** The settings' views are gone: the game's view takes the keys again. */
+    void nativeSettingsHidden() {
+        if (mSurface != null) {
+            mSurface.requestFocus();
+        }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (nativeSettings != null && nativeSettings.isOpen() && nativeSettings.handleKey(event)) {
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (nativeSettings != null && nativeSettings.isOpen() && nativeSettings.handleMotion(event)) {
+            return true;
+        }
+        return super.dispatchGenericMotionEvent(event);
     }
 
     /**

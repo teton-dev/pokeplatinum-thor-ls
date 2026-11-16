@@ -43,6 +43,9 @@
 #include "hardware_palette.h"
 #include "item_use_pokemon.h"
 #include "port/nuzlocke.h"
+
+// libntr's settings screen (simulator/sim_settings.hpp, C++)
+void SIM_Settings_Open(const char *page);
 #include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #ifdef GEN5_BATTLES
@@ -105,6 +108,7 @@ enum TestOp {
     OP_FOLLOWER_BALL,
     OP_SHOT,
     OP_LOG,
+    OP_SETTINGS,
     OP_EXIT,
 };
 
@@ -550,6 +554,13 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_SHOT;
         command->frames = words[0][0] == 's' && words[0][1] == 't' ? 1 : 0;
         snprintf(command->text, sizeof(command->text), "%s", rest);
+        return TRUE;
+    } else if (strcmp(words[0], "settings") == 0) {
+        // settings [PAGE]: opens the settings (on PAGE), as the back button does. The game waits while they are
+        // open, and so does this script: with SIM_NATIVE_SETTINGS=1 their own scripted events
+        // (SIM_NATIVE_SETTINGS_EVENTS, ending with "close") drive the native menus
+        command->op = OP_SETTINGS;
+        snprintf(command->text, sizeof(command->text), "%s", rest != NULL ? rest : "");
         return TRUE;
     } else if (strcmp(words[0], "log") == 0 && rest != NULL) {
         command->op = OP_LOG;
@@ -1270,6 +1281,11 @@ static u16 Step(void)
             sTest.pauseUntil = SDL_GetTicks64() + SHOT_PAUSE_MS;
             Next();
             return 0;
+        case OP_SETTINGS:
+            printf("[test] settings %s\n", command->text);
+            SIM_Settings_Open(command->text[0] != '\0' ? command->text : NULL);
+            Next();
+            continue;
         case OP_LOG:
             printf("[test] %s\n", command->text);
             Next();

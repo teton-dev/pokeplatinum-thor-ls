@@ -218,7 +218,7 @@ void DrawGen5Rom()
     Gen5Rom_Update();
     const enum Gen5RomState state = Gen5Rom_State();
     const char *game = Gen5Rom_GameName();
-    Section("Gen 5 battles");
+    Section("Black 2 or White 2");
     if (game != nullptr) {
         std::string title = std::string("Pokemon ") + game + " (USA)";
         Card(title.c_str(), "Its battle files are in the app's folder (about 270 MB).", true);
@@ -240,7 +240,6 @@ void DrawGen5Rom()
     if (game != nullptr && Button("Remove it", "Deletes the extracted files.", false, !busy)) {
         Gen5Rom_Remove();
     }
-    Note("Black 2 and White 2's battles, run on this game's battles, are being built: this only imports the ROM.");
 }
 #endif
 
@@ -302,9 +301,6 @@ void DrawGames()
     }
     Note("Each game has its own files and saves; the settings are shared. Switching saves your game first when it "
          "can be.");
-#ifdef GEN5_BATTLES
-    DrawGen5Rom();
-#endif
 }
 
 // --- Saves -----------------------------------------------------------------------------------
@@ -646,22 +642,6 @@ void DrawGameplay()
         &config->instantText);
     ConfigToggle("Instant HP and EXP bars", "Battle bars jump to their new value instead of sliding there.",
         &config->instantBars);
-    Section("Following Pokemon");
-    ConfigToggle("Following Pokemon", "As in HeartGold and SoulSilver: your first Pokemon that can battle walks "
-        "behind you. It goes back in its ball on a bike, surfing and with a partner. Talk to it to hear its cry. "
-        "Species without an overworld sprite in Platinum walk as their party icon. Off in Following Renegade "
-        "Platinum, which has followers of its own.", &config->followerPokemon);
-#ifdef GEN5_BATTLES
-    Section("Gen 5 battles");
-    ConfigToggle("Gen 5 battles", "Battles in Black 2 and White 2's engine: their 3D arenas, moving camera, "
-        "animated Pokemon and Gen 5 rules, with your party, your bag and the results kept, and catching. Experimental: "
-        "wild Pokemon in tall grass, caves and water, and single battles against the trainers on routes (with "
-        "Platinum's AI); double battles, Gym Leaders and the rival stay in Platinum's battles for now. Needs the ROM in "
-        "Settings > Games > Gen 5 battles.", &config->gen5Battles, Gen5Rom_GameName() != nullptr);
-    ConfigToggle("Gen 5 screens", "The Pokemon Summary screen in Black 2 and White 2's own design, kept to the "
-        "middle of a widescreen display. Experimental: the PC and the party screen are still Platinum's. Needs the "
-        "ROM in Settings > Games > Gen 5 battles.", &config->gen5Screens, Gen5Rom_GameName() != nullptr);
-#endif
     Section("Field moves");
     ConfigToggle("Field moves without HMs", "With the HM in your bag (and its badge), Cut, Fly, Surf, Strength, "
         "Rock Smash, Waterfall, Rock Climb and Defog work without teaching the move: a Pokemon that could learn "
@@ -674,12 +654,56 @@ void DrawGameplay()
         "one (as in Black and White): the same kind as last time, or the weakest you have.", &config->repelPrompt);
     ConfigToggle("Exp. Share for the whole party", "As in X and Y: the Pokemon that battled each get all the EXP, "
         "and the rest of the party (not fainted) half as much.", &config->expShareAll);
+    Section("Following Pokemon");
+    ConfigToggle("Following Pokemon", "As in HeartGold and SoulSilver: your first Pokemon that can battle walks "
+        "behind you. It goes back in its ball on a bike, surfing and with a partner. Talk to it to hear its cry. "
+        "Species without an overworld sprite in Platinum walk as their party icon. Off in Following Renegade "
+        "Platinum, which has followers of its own.", &config->followerPokemon);
+    DrawClock();
+}
+
+// --- Battles: Gen 5 battles and their ROM ------------------------------------------------------
+
+#ifdef GEN5_BATTLES
+void DrawBattles()
+{
+    SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+    Section("Gen 5 battles");
+    ConfigToggle("Gen 5 battles", "Battles in Black 2 and White 2's engine: their 3D arenas, moving camera, "
+        "animated Pokemon and Gen 5 rules, with your party, your bag and the results kept, and catching. Experimental: "
+        "wild Pokemon in tall grass, caves and water, and single battles against the trainers on routes (with "
+        "Platinum's AI); double battles, Gym Leaders and the rival stay in Platinum's battles for now. Needs Black 2 "
+        "or White 2, below.", &config->gen5Battles, Gen5Rom_GameName() != nullptr);
+    ConfigToggle("Gen 5 screens", "The Pokemon Summary screen in Black 2 and White 2's own design, kept to the "
+        "middle of a widescreen display. Experimental: the PC and the party screen are still Platinum's. Needs Black 2 "
+        "or White 2, below.", &config->gen5Screens, Gen5Rom_GameName() != nullptr);
+    DrawGen5Rom();
+    Section("Try it");
+    if (Button("Wild battle in the Gen 5 engine", "A level 5 Bidoof against your first Pokemon, in Black 2 and White "
+               "2's engine (it needs the ROM above). Close the settings to see it.",
+            false, Gen5Rom_GameName() != nullptr)) {
+        Gen5Battle_StartDebug(SPECIES_BIDOOF, 5);
+    }
+}
+#endif
+
+// --- Challenges: Nuzlocke mode and the level cap -----------------------------------------------
+
+void DrawChallenges()
+{
+    SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+    DrawNuzlockeMode();
     Section("Level cap");
     ConfigToggle("Hard level cap", "Pokemon get no EXP from battles past the level cap: the level of the next gym "
         "leader's strongest Pokemon (the Champion's after 8 badges), read from the game's own trainer data. The Gear's "
-        "Trainer tab shows the cap and the bosses' teams.", &config->hardLevelCap);
-    DrawClock();
-    DrawNuzlockeMode();
+        "Trainer tab shows the cap and the bosses' teams. Nuzlocke mode has a cap of its own.", &config->hardLevelCap);
+}
+
+// --- Display: the frame rate (after libntr's own settings there) --------------------------------
+
+void DrawFrameRate()
+{
+    SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
     Section("Frame rate");
     ConfigToggle("60 FPS", "Smooth walking and scrolling: the overworld runs at 60 frames a second. Music keeps its "
                            "speed.", &config->enable60fps);
@@ -903,14 +927,6 @@ void DrawDebug()
     ConfigToggle("Check the game's assertions", "Report failed GF_ASSERTs as a communication error.",
         &config->enableAsserts);
     ConfigToggle("Stop in the debugger on a failed check", nullptr, &config->breakDebuggerOnGfAssert);
-#ifdef GEN5_BATTLES
-    Section("Gen 5 battles");
-    if (Button("Wild battle in the Gen 5 engine", "A level 5 Bidoof against your first Pokemon, in Black 2 and White "
-               "2's engine (Settings > Games > Gen 5 battles needs the ROM first). Close the settings to see it.",
-            false, Gen5Rom_GameName() != nullptr)) {
-        Gen5Battle_StartDebug(SPECIES_BIDOOF, 5);
-    }
-#endif
     char text[96];
     snprintf(text, sizeof(text), "pokeplatinum %s", SIM_GetProjectGitHash());
     Note(text);
@@ -928,13 +944,21 @@ extern "C" const char *SIM_Prj_LinkPlayHint(void)
 
 void SIM_Prj_SettingsPages()
 {
+    // In groups: your game (10-20), playing it (30-34), the device (40-65; libntr's Display 40, Sound 50, Controls
+    // 60), connections (68-70; libntr's Link play 68), tools (80-90; libntr's Advanced 90)
     SIM::Settings::AddPage("Games", "Reset to the title, switch games, add Renegade Platinum", DrawGames, 10);
-    SIM::Settings::AddPage("Saves", "Slots, autosave, import and export", DrawSaves, 20);
-    SIM::Settings::AddPage("Save editor", "Pokemon, items, money, badges, legendary events", SaveEditor_Draw, 25);
-    SIM::Settings::AddPage("Gameplay", "Instant text, HM-free moves, Repel prompt, Exp. Share, level cap, clock, Nuzlocke, 60 FPS", DrawGameplay, 30);
-    SIM::Settings::AddPage("GBA slot", "Pal Park and dual-slot Pokemon from a GBA save", DrawGBASlot, 40);
-    SIM::Settings::AddPage("Gear", "The lower-screen companion", DrawGear, 70);
-    SIM::Settings::AddPage("Cheats", "Shiny odds, EXP, catching, PP, walls, encounters", DrawCheats, 80);
+    SIM::Settings::AddPage("Saves", "Slots, autosave, import and export, sync", DrawSaves, 20);
+    SIM::Settings::AddPage("Gameplay", "Instant text, field moves, Repel prompt, Exp. Share, following Pokemon, clock",
+        DrawGameplay, 30);
+#ifdef GEN5_BATTLES
+    SIM::Settings::AddPage("Battles", "Gen 5 battles and their ROM", DrawBattles, 32);
+#endif
+    SIM::Settings::AddPage("Challenges", "Nuzlocke mode, the level cap", DrawChallenges, 34);
+    SIM::Settings::AddPage("Display", nullptr, DrawFrameRate, 40); // appended to libntr's page
+    SIM::Settings::AddPage("Gear", "The lower-screen companion", DrawGear, 65);
+    SIM::Settings::AddPage("GBA slot", "Pal Park and dual-slot Pokemon from a GBA save", DrawGBASlot, 70);
+    SIM::Settings::AddPage("Save editor", "Pokemon, items, money, badges, legendary events", SaveEditor_Draw, 80);
+    SIM::Settings::AddPage("Cheats", "Shiny odds, EXP, catching, PP, walls, encounters", DrawCheats, 82);
     SIM::Settings::AddPage("Advanced", nullptr, DrawDebug, 90);
 }
 
