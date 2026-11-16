@@ -131,6 +131,8 @@ void Gen5_PortGrayIconPalettes(int iconSlot, int graySlot);
 BOOL Gen5_PortCatchRefused(u32 personality);
 // HGSS's Apricorn Balls' rules are on (Gen5Battle.apricornBalls; btl_server_flow_sub.c's CheckBallCapture)
 BOOL Gen5_PortApricornBalls(void);
+// The Bug-Catching Contest's balls are gone (Gen5Battle.bugContest; btl_server_flow_sub.c's UseBagItem)
+BOOL Gen5_PortContestOutOfBalls(u16 item);
 // Whether a port trainer says something during the battle (Gen5Trainer.hintText; btl_client.c's patch; btlv_core.c's
 // patch shows it)
 BOOL Gen5_PortTrainerHasHint(u32 trainerId, u32 msgId);

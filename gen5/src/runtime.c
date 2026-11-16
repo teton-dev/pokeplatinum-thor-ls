@@ -74,6 +74,7 @@ static BOOL sStarted;
 static NNSGfdVramTransferTask sVramTransferTasks[VRAM_TRANSFER_TASKS];
 static BtlSetup *sSetup;
 static BOOL sApricornBalls; // Gen5Battle.apricornBalls
+static BOOL sBugContest; // Gen5Battle.bugContest
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
@@ -329,6 +330,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     GFL_HeapCreateChild(HEAPID_USER, HEAPID_PORT_BATTLE, HEAP_PORT_BATTLE_SIZE);
     // Before the bag: the Apricorn Balls' item data (pml_item.c's patch) decides whether they go in it
     sApricornBalls = battle->apricornBalls != 0;
+    sBugContest = battle->bugContest != 0;
     sBattleBlockCount = 0;
     sPlaceCount = 0;
 
@@ -804,6 +806,17 @@ enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary)
 BOOL Gen5_PortApricornBalls(void)
 {
     return sApricornBalls;
+}
+
+// The Bug-Catching Contest's last Sport Ball was thrown (and missed): the battle ends (btl_server_flow_sub.c's patch)
+BOOL Gen5_PortContestOutOfBalls(u16 item)
+{
+    if (!sBugContest || sBag == NULL) {
+        return FALSE;
+    }
+    const u16 left = BagSave_GetItemCountByID(sBag, item, HEAPID_PORT_BATTLE);
+    printf("Gen 5: Bug-Catching Contest, %u of item %u left\n", (unsigned)left, (unsigned)item);
+    return left == 0;
 }
 
 u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp)
