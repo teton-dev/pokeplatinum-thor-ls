@@ -23,6 +23,9 @@ BOOL NuzlockeModeGame_CanWrite(void);
 // The bag has a Poke Ball (any ball)
 BOOL NuzlockeModeGame_HasPokeBalls(void);
 
+// Logs (NuzlockeMode_RecordDeath) the party's dead Pokemon the books don't have yet, where it isn't known
+void NuzlockeModeGame_LogDeadParty(void);
+
 BOOL NuzlockeModeGame_ReadFlash(u32 address, void *data, u32 size);
 BOOL NuzlockeModeGame_WriteFlash(u32 address, void *data, u32 size);
 

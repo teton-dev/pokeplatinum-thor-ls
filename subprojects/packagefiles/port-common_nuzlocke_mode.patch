@@ -1,0 +1,141 @@
+--- a/src/nuzlocke.c
++++ b/src/nuzlocke.c
+@@ -22,11 +22,38 @@
+     return config;
+ }
+ 
+-BOOL Nuzlocke_Enabled(void)
++// teton-dev: the game's own Nuzlocke mode (per save, enforced) hands the Gear its books in this API's shapes; NULL
++// while the mode is off. The helper's settings and battle hooks stay as they were (the game may have retired them).
++const NuzlockeRun *__attribute__((weak)) PortGame_NuzlockeModeRun(void)
+ {
++    return NULL;
++}
++
++int __attribute__((weak)) PortGame_NuzlockeModeEncounter(void)
++{
++    return NUZLOCKE_ENC_NONE;
++}
++
++BOOL __attribute__((weak)) PortGame_NuzlockeModeCatchRule(void)
++{
++    return FALSE;
++}
++
++static BOOL HelperOn(void)
++{
+     return Config().enabled;
+ }
+ 
++BOOL Nuzlocke_Enabled(void)
++{
++    return PortGame_NuzlockeModeRun() != NULL || HelperOn();
++}
++
++BOOL Nuzlocke_CatchRule(void)
++{
++    return PortGame_NuzlockeModeRun() != NULL ? PortGame_NuzlockeModeCatchRule() : HelperOn();
++}
++
+ static void FilePath(int slot, char *out, size_t size)
+ {
+     snprintf(out, size, "save_slot%d.nuzlocke", slot + 1);
+@@ -99,6 +126,10 @@
+ 
+ const NuzlockeRun *Nuzlocke_Get(void)
+ {
++    const NuzlockeRun *mode = PortGame_NuzlockeModeRun();
++    if (mode != NULL) {
++        return mode;
++    }
+     EnsureLoaded();
+     return &sRun;
+ }
+@@ -115,17 +146,38 @@
+ 
+ const NuzlockeArea *Nuzlocke_Area(u16 location)
+ {
++    const NuzlockeRun *mode = PortGame_NuzlockeModeRun();
++    if (mode != NULL) {
++        for (int i = 0; i < mode->areaCount; i++) {
++            if (mode->areas[i].location == location) {
++                return &mode->areas[i];
++            }
++        }
++        return NULL;
++    }
+     EnsureLoaded();
+     return FindArea(location);
+ }
+ 
+ int Nuzlocke_CurrentEncounter(void)
+ {
+-    return Nuzlocke_Enabled() ? sCurrent : NUZLOCKE_ENC_NONE;
++    if (PortGame_NuzlockeModeRun() != NULL) {
++        return PortGame_NuzlockeModeEncounter();
++    }
++    return HelperOn() ? sCurrent : NUZLOCKE_ENC_NONE;
+ }
+ 
+ BOOL Nuzlocke_IsDead(u32 personality)
+ {
++    const NuzlockeRun *mode = PortGame_NuzlockeModeRun();
++    if (mode != NULL) {
++        for (int i = 0; i < mode->deathCount; i++) {
++            if (mode->deaths[i].personality == personality) {
++                return TRUE;
++            }
++        }
++        return FALSE;
++    }
+     EnsureLoaded();
+     for (int i = 0; i < sRun.deathCount; i++) {
+         if (sRun.deaths[i].personality == personality) {
+@@ -150,7 +202,7 @@
+ void Nuzlocke_OnBattleStart(u32 battleType, struct Party *wildParty)
+ {
+     sCurrent = NUZLOCKE_ENC_NONE;
+-    if (!Nuzlocke_Enabled() || !PortGame_Battle_IsWild(battleType) || wildParty == NULL
++    if (!HelperOn() || !PortGame_Battle_IsWild(battleType) || wildParty == NULL
+         || PortGame_Party_Count(wildParty) == 0) {
+         return;
+     }
+@@ -187,7 +239,7 @@
+ {
+     const int encounter = sCurrent;
+     sCurrent = NUZLOCKE_ENC_NONE;
+-    if (!Nuzlocke_Enabled()) {
++    if (!HelperOn()) {
+         return;
+     }
+     EnsureLoaded();
+--- a/include/port/nuzlocke.h
++++ b/include/port/nuzlocke.h
+@@ -7,6 +7,8 @@
+ // caught), whether it was caught or missed, and which Pokemon fainted (died), optionally
+ // sending them to the PC after the battle. The Gear shows it all; nothing is stopped by
+ // force. Kept beside the save slot (save_slotN.nuzlocke), like the shiny-hunt counters.
++// teton-dev: a game with its own Nuzlocke mode gives the Gear that mode's books instead (PortGame_NuzlockeModeRun,
++// nuzlocke.c), while the mode is on.
+ 
+ #include <nitro/types.h>
+ 
+@@ -54,6 +56,7 @@
+ };
+ 
+ BOOL Nuzlocke_Enabled(void);
++BOOL Nuzlocke_CatchRule(void);                    // areas count (the game's mode: Normal or Hard, once it has balls)
+ const NuzlockeRun *Nuzlocke_Get(void);
+ const NuzlockeArea *Nuzlocke_Area(u16 location); // NULL: still open
+ int Nuzlocke_CurrentEncounter(void);              // NuzlockeEncounter
+--- a/src/gear_ui.cpp
++++ b/src/gear_ui.cpp
+@@ -1059,7 +1059,7 @@
+ 
+ // The area's encounter: still open, or what it was
+ void DrawNuzlockeArea() {
+-  if (!Nuzlocke_Enabled()) {
++  if (!Nuzlocke_Enabled() || !Nuzlocke_CatchRule()) {
+     return;
+   }
+   const int label = Gear_CurrentLocationLabel();
