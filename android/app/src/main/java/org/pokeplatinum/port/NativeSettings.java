@@ -125,10 +125,10 @@ public class NativeSettings extends FrameLayout {
         LinearLayout root = new LinearLayout(themed);
         root.setOrientation(LinearLayout.HORIZONTAL);
         addView(root, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        // Clear of the system bars and cutouts
+        // Clear of display cutouts (the system bars stay hidden: the activity keeps SDL's immersive mode)
         setOnApplyWindowInsetsListener((v, insets) -> {
-            root.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
-                insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            android.graphics.Insets cut = insets.getInsets(WindowInsets.Type.displayCutout());
+            root.setPadding(cut.left, cut.top, cut.right, cut.bottom);
             return insets;
         });
 
