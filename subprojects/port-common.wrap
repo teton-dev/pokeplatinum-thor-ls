@@ -5,6 +5,10 @@ url = https://github.com/SilasMayes/port-common.git
 revision = 8c28eaf6155af94afa3823a5f8c8f1ba791bee36
 depth = 1
 directory = port-common
+# teton-dev fork: port-common_nuzlocke_mode.patch: the Gear shows Nuzlocke mode's books (src/port/nuzlocke_gear.c hands
+# them over through weak PortGame_NuzlockeMode* hooks) while the mode is on; the retired helper's hooks stay off. Its
+# lines that name a settings page follow the fork's pages (Challenges, Gear)
+diff_files = port-common_nuzlocke_mode.patch
 
 [provide]
 dependency_names = port_common

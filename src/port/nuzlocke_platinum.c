@@ -1,6 +1,7 @@
 // Platinum's side of Nuzlocke mode (port/nuzlocke_mode_game.h): the running save, where the
 // records go in the save image, and the dead flag on a Pokemon.
 #include <nitro.h>
+#include <string.h>
 
 #include "constants/savedata/savedata.h"
 #include "constants/savedata/save_table.h"
@@ -13,7 +14,9 @@
 #include "port/nuzlocke_mode.h"
 #include "port/nuzlocke_mode_game.h"
 #include "port/save_slots.h"
+#include "party.h"
 #include "pokemon.h"
+#include "port/port_game.h"
 #include "save_player.h"
 #include "savedata.h"
 #include "system.h"
@@ -122,6 +125,35 @@ static BOOL IsRealMon(Pokemon *mon)
     return Pokemon_GetValue(mon, MON_DATA_SPECIES_EXISTS, NULL) && !Pokemon_GetValue(mon, MON_DATA_IS_EGG, NULL);
 }
 
+// The Gear's graveyard (the deaths in the mode's record)
+static void LogDeath(Pokemon *mon, u16 location)
+{
+    NuzlockeModeDeath death;
+    memset(&death, 0, sizeof(death));
+    death.personality = Pokemon_GetValue(mon, MON_DATA_PERSONALITY, NULL);
+    death.species = (u16)Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL);
+    death.level = (u8)Pokemon_GetValue(mon, MON_DATA_LEVEL, NULL);
+    death.location = location;
+    PortGame_Mon_GetName(mon, death.name, sizeof(death.name));
+    NuzlockeMode_RecordDeath(&death);
+}
+
+void NuzlockeModeGame_LogDeadParty(void)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (fieldSystem == NULL || fieldSystem->saveData == NULL) {
+        return;
+    }
+    Party *party = SaveData_GetParty(fieldSystem->saveData);
+    for (int i = 0; i < Party_GetCurrentCount(party); i++) {
+        Pokemon *mon = Party_GetPokemonBySlotIndex(party, i);
+        if (IsRealMon(mon) && NuzlockeMode_IsDead(mon)
+            && !NuzlockeMode_DeathLogged(Pokemon_GetValue(mon, MON_DATA_PERSONALITY, NULL))) {
+            LogDeath(mon, 0xFFFF);
+        }
+    }
+}
+
 u32 NuzlockeMode_FilterHP(Pokemon *mon, u32 hp)
 {
     if (hp == 0 || !NuzlockeMode_On()) {
@@ -138,6 +170,7 @@ void NuzlockeMode_OnHPSet(Pokemon *mon, u32 hp)
         return;
     }
     NuzlockeMode_SetDead(mon, TRUE);
+    LogDeath(mon, PortGame_Field_LocationName());
 }
 
 BOOL NuzlockeMode_RefusesItem(Pokemon *mon, u16 item, int heapID)

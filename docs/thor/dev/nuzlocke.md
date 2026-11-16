@@ -308,6 +308,27 @@ little darker and flatter) in slots it doesn't use:
   Pokémon under the hand was not looked at apart from the box), the battle's party balls (a fainted Pokémon's is
   already its own), BW2's summary pages from its list.
 
+## The Gear's tracker shows the mode (2026-11-16)
+
+The Gear (port-common's `gear_ui.cpp`, upstream's) drew the retired helper's books, so with Nuzlocke mode on it showed
+nothing. Now it shows the mode's:
+- **The record is version 3** (2568 bytes, still one per 4 KB sector): a **death log** of up to 64 Pokémon
+  (personality, species, level, nickname, the area it fainted in), written when the dead flag is set
+  (`NuzlockeMode_OnHPSet`, so both engines). Version 1 and 2 records read as version 3 with no deaths, and dead
+  Pokémon already in the party are logged with the area unknown (the Gear shows "?"), twice a second while the mode is
+  on. An older build reads a version 3 record as no record (the save shows as Off there).
+- **port-common is patched** (`subprojects/packagefiles/port-common_nuzlocke_mode.patch`, in the wrap's `diff_files`):
+  its Nuzlocke API (`Nuzlocke_Enabled`, `_Get`, `_Area`, `_IsDead`, `_CurrentEncounter`, and a new `_CatchRule`) asks
+  weak `PortGame_NuzlockeMode*` hooks first; `src/port/nuzlocke_gear.c` answers them from the mode while it is on.
+  The helper's battle hooks still go by its own (retired) setting, so they stay off. `DrawNuzlockeArea` shows the
+  area line only when the catch rule applies (Normal or Hard, once the save has had Poké Balls).
+- **What the Gear shows**: on the Area tab, "this area's first encounter is still to come" or what it was; in a wild
+  battle, "This one counts!", the area's used encounter, or the shiny line; on the Trainer tab, the areas caught and
+  missed and the graveyard (icons in gray, nickname, species, level, area). A static encounter with Normal has no line.
+- **Test**: `nuzlocke_gear.txt` (from `nuz-normal`) logs what the Gear's API returns (`nuzlocke state` prints `gear`
+  lines): a faint logged with its area and dead, a run-from Starly as the area's missed encounter. The other Nuzlocke
+  tests pass with version 3 records. HGSS has no Gear, so its copy of the mode keeps version 2.
+
 ## Decisions
 
 With the owner (2026-11-13):

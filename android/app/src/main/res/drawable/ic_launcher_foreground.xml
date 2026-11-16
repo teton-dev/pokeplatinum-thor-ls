@@ -1,17 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Two stacked screens in platinum grey: an original mark, no game artwork -->
+<!-- Eterna: an evergreen in an unbroken platinum ring (an original mark, no game artwork) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#D9DDE4"
-        android:pathData="M36,30h36a4,4 0,0 1,4 4v14a4,4 0,0 1,-4 4h-36a4,4 0,0 1,-4 -4v-14a4,4 0,0 1,4 -4z" />
+        android:pathData="M54,22a32,32 0,1 1,-0.01 0zM54,26.5a27.5,27.5 0,1 0,0.01 0z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="22" android:startY="22" android:endX="86" android:endY="86">
+                    <item android:offset="0" android:color="#FFF4F6FA" />
+                    <item android:offset="0.55" android:color="#FFC3CAD6" />
+                    <item android:offset="1" android:color="#FF8E98A8" />
+            </gradient>
+        </aapt:attr>
+    </path>
     <path
-        android:fillColor="#9AA1AE"
-        android:pathData="M38,56h32a4,4 0,0 1,4 4v12a4,4 0,0 1,-4 4h-32a4,4 0,0 1,-4 -4v-12a4,4 0,0 1,4 -4z" />
+        android:pathData="M54,31L63.5,44.5H58.5L67,56H61L71,69H37L47,56H41L49.5,44.5H44.5Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="54" android:startY="31" android:endX="54" android:endY="69">
+                    <item android:offset="0" android:color="#FFE8F3EC" />
+                    <item android:offset="1" android:color="#FFA9C9B8" />
+            </gradient>
+        </aapt:attr>
+    </path>
     <path
-        android:fillColor="#2A2E38"
-        android:pathData="M51,63h6v6h-6z" />
+        android:fillColor="#FF8E98A8"
+        android:pathData="M51,69h6v8h-6z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M76,30l1.6,4.4l4.4,1.6l-4.4,1.6l-1.6,4.4l-1.6,-4.4l-4.4,-1.6l4.4,-1.6z" />
 </vector>

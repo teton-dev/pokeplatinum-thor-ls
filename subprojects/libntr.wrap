@@ -32,7 +32,10 @@ directory = libntr
 # callback) never read a sequence half set up (a crash in the sequencer's byte cache)
 # libntr_wide_subtop_bgs.patch: SIM_SetWidescreenSceneOptions' wide BG layers for the sub engine on top too (BW2's
 # Summary: its scrolling grid drawn across the sides from its tilemap, where the edge columns flickered)
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch, libntr_snd_lock.patch, libntr_g3_tex_wrap.patch, libntr_wide_subtop_bgs.patch
+# libntr_native_menus.patch: the settings in the platform's own UI (Android's views, NativeSettings.java): SIM::UI's
+# widgets record themselves as JSON instead of drawing, and answer the events that UI sends back; Link play's page
+# goes beside the game's connections (order 68)
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch, libntr_snd_lock.patch, libntr_g3_tex_wrap.patch, libntr_wide_subtop_bgs.patch, libntr_native_menus.patch
 
 [provide]
 dependency_names = NitroSDK

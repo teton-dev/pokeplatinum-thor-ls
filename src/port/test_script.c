@@ -42,6 +42,10 @@
 #include "pokedex.h"
 #include "hardware_palette.h"
 #include "item_use_pokemon.h"
+#include "port/nuzlocke.h"
+
+// libntr's settings screen (simulator/sim_settings.hpp, C++)
+void SIM_Settings_Open(const char *page);
 #include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #ifdef GEN5_BATTLES
@@ -104,6 +108,7 @@ enum TestOp {
     OP_FOLLOWER_BALL,
     OP_SHOT,
     OP_LOG,
+    OP_SETTINGS,
     OP_EXIT,
 };
 
@@ -549,6 +554,13 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_SHOT;
         command->frames = words[0][0] == 's' && words[0][1] == 't' ? 1 : 0;
         snprintf(command->text, sizeof(command->text), "%s", rest);
+        return TRUE;
+    } else if (strcmp(words[0], "settings") == 0) {
+        // settings [PAGE]: opens the settings (on PAGE), as the back button does. The game waits while they are
+        // open, and so does this script: with SIM_NATIVE_SETTINGS=1 their own scripted events
+        // (SIM_NATIVE_SETTINGS_EVENTS, ending with "close") drive the native menus
+        command->op = OP_SETTINGS;
+        snprintf(command->text, sizeof(command->text), "%s", rest != NULL ? rest : "");
         return TRUE;
     } else if (strcmp(words[0], "log") == 0 && rest != NULL) {
         command->op = OP_LOG;
@@ -1225,6 +1237,18 @@ static u16 Step(void)
                     NuzlockeMode_BallsReceived() ? ", has had balls" : "", location,
                     area == NUZLOCKE_AREA_CAUGHT ? "caught" : area == NUZLOCKE_AREA_MISSED ? "missed" : "open",
                     areaSpecies, NuzlockeMode_LevelCap());
+                // What the Gear shows (port-common's Nuzlocke API, fed by src/port/nuzlocke_gear.c)
+                const NuzlockeRun *run = Nuzlocke_Get();
+                const NuzlockeArea *gearArea = Nuzlocke_Area(location);
+                printf("[test] gear nuzlocke: %s, catch rule %s, encounter %d, %d areas, this one %s; %d deaths\n",
+                    Nuzlocke_Enabled() ? "shown" : "hidden", Nuzlocke_CatchRule() ? "on" : "off",
+                    Nuzlocke_CurrentEncounter(), run->areaCount,
+                    gearArea == NULL ? "open" : gearArea->result == NUZLOCKE_CAUGHT ? "caught" : "missed", run->deathCount);
+                for (int i = 0; i < run->deathCount; i++) {
+                    printf("[test] gear death: %s, species %u, Lv %u, location %u, dead %d\n", run->deaths[i].name,
+                        run->deaths[i].species, run->deaths[i].level, run->deaths[i].location,
+                        Nuzlocke_IsDead(run->deaths[i].personality));
+                }
             }
             Next();
             continue;
@@ -1257,6 +1281,11 @@ static u16 Step(void)
             sTest.pauseUntil = SDL_GetTicks64() + SHOT_PAUSE_MS;
             Next();
             return 0;
+        case OP_SETTINGS:
+            printf("[test] settings %s\n", command->text);
+            SIM_Settings_Open(command->text[0] != '\0' ? command->text : NULL);
+            Next();
+            continue;
         case OP_LOG:
             printf("[test] %s\n", command->text);
             Next();
