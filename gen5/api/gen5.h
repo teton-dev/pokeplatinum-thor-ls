@@ -203,6 +203,10 @@ typedef struct Gen5Battle {
     int legendary;
     int roamer;
     int boxesFull;
+    // After a catch, ask "Give a nickname to the caught ...?" in the battle (BW2 asks in its field): nicknameWanted
+    // says the answer was Yes (the game then opens its naming screen)
+    int askNickname;
+    int nicknameWanted;
 } Gen5Battle;
 
 // How a battle ended, for Platinum

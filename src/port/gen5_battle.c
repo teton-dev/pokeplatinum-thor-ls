@@ -1056,6 +1056,9 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         }
     } else {
         sBattle.legendary = (dto->battleStatusMask & BATTLE_STATUS_LEGENDARY) != 0;
+        // "Give a nickname to the caught ...?" after a catch, as Platinum's battle asks it (the Safari Zone's view
+        // catches without it: its naming screen always opens)
+        sBattle.askNickname = TRUE;
         sBattle.roamer = (dto->battleType & BATTLE_TYPE_ROAMER) != 0;
         // Platinum's battle doesn't let a ball be thrown when the party and every box are full; nor does BW2's then
         sBattle.boxesFull = Party_GetCurrentCount(party) >= MAX_PARTY_SIZE && PCBoxes_FirstEmptyBox(dto->pcBoxes) >= MAX_PC_BOXES;
@@ -1332,6 +1335,13 @@ static BOOL Main(ApplicationManager *appMan, int *state)
     case STATE_CATCH: {
         Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_BATTLE, 0x30000);
         TakeCaught(dto);
+        if (sBattle.askNickname && !sBattle.nicknameWanted) {
+            // No nickname: it keeps its species' name
+            StoreCaught(dto);
+            Heap_Destroy(HEAP_ID_BATTLE);
+            *state = STATE_CHECK_EVOLUTION;
+            return FALSE;
+        }
         Pokemon *mon = CaughtPokemon(dto);
         sNamingArgs = NamingScreenArgs_Init(HEAP_ID_BATTLE, NAMING_SCREEN_TYPE_POKEMON,
             Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL), MON_NAME_LEN, dto->options);

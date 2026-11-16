@@ -133,6 +133,9 @@ BOOL Gen5_PortCatchRefused(u32 personality);
 BOOL Gen5_PortApricornBalls(void);
 // The Bug-Catching Contest's balls are gone (Gen5Battle.bugContest; btl_server_flow_sub.c's UseBagItem)
 BOOL Gen5_PortContestOutOfBalls(u16 item);
+// After a catch, ask for a nickname (Gen5Battle.askNickname; btl_client.c's ScBallThrow), and its answer
+BOOL Gen5_PortAskNickname(void);
+void Gen5_PortNicknameAnswer(BOOL yes);
 // Whether a port trainer says something during the battle (Gen5Trainer.hintText; btl_client.c's patch; btlv_core.c's
 // patch shows it)
 BOOL Gen5_PortTrainerHasHint(u32 trainerId, u32 msgId);

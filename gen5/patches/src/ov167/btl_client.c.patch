@@ -51,26 +51,19 @@
          if (weather < NELEMS(sWeatherStartTable)) {
              BtlvEffect_Start(sWeatherStartTable[weather].se);
          }
-@@ -5578,6 +5587,8 @@
-     switch (*seq) {
+@@ -5579,6 +5588,8 @@
      case 0: {
          u16 msg;
-+
-+        BtlvEffect_PortWeatherAmbient(0); // The port: the weather's particles go
  
++        BtlvEffect_PortWeatherAmbient(0); // The port: the weather's particles go
++
          switch ((u8)args[0]) {
          case 1:
-@@ -5602,9 +5613,54 @@
-     case 1:
-         if (BtlvCore_WaitMsg(client->viewCore)) {
-             BtlField_ClearWeather(client->field);
-+            return TRUE;
-+        }
-+        break;
-+    }
-+    return FALSE;
-+}
-+
+             msg = 0x59;
+@@ -5609,6 +5620,51 @@
+     return FALSE;
+ }
+ 
 +// The port: the weather at a turn's end, in an ability bar of the side that set it: its name and the turns left, in the
 +// weather's colors (btlv_scu.c's patch). args: the setter's Pokemon (0xff for none), the weather, the turns left (0xff
 +// for no end)
@@ -88,11 +81,11 @@
 +    switch (*seq) {
 +    case 0:
 +        if (BattleClient_IsChapterSkipping(client)) {
-             return TRUE;
-         }
++            return TRUE;
++        }
 +        BtlvCore_PortShowWeatherWin(client->viewCore, player, args[1], args[2]);
 +        (*seq)++;
-         break;
++        break;
 +    case 1:
 +        if (BtlvCore_PortWaitShowWeatherWin(client->viewCore, player)) {
 +            sWait = 40;
@@ -112,19 +105,81 @@
 +            return TRUE;
 +        }
 +        break;
-     }
-     return FALSE;
- }
-@@ -6219,6 +6275,8 @@
-     }
-     return FALSE;
- }
++    }
++    return FALSE;
++}
 +
-+void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core); // The port (btlv_core.c's patch)
+ static BOOL BattleClient_ScUpdateHpGauge(BtlClient *client, s32 *seq, const u32 *args) {
+     switch (*seq) {
+     case 0:
+@@ -6153,6 +6209,8 @@
+     return FALSE;
+ }
  
++void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species); // The port (btlv_core.c's patch)
++
+ static BOOL BattleClient_ScBallThrow(BtlClient *client, s32 *seq, const u32 *args) {
+     static const u16 sEscapeMessages[4] = { 0x3d, 0x3e, 0x3f, 0x40 };
+     BattleMon *mon;
+@@ -6205,21 +6263,56 @@
+                 BtlvCore_StartMsg(client->viewCore, &client->strParam);
+                 (*seq)++;
+             } else {
+-                return TRUE;
++                // The port: the nickname question next
++                *seq = 5;
+             }
+         }
+         break;
+     case 4:
++        if (BtlvCore_WaitMsg(client->viewCore)) {
++            (*seq)++;
++        }
++        break;
++    // The port: "Give a nickname to the caught ...?", as Platinum's and HGSS's battles ask it (BW2 asks in its field);
++    // the answer goes to the port, whose game opens its naming screen after the battle
++    case 5:
++        if (!Gen5_PortAskNickname()) {
++            return TRUE;
++        }
++        mon = PokeCon_GetPosMonInner(client->pokeCon, args[0]);
++        BtlvCore_PortStartMsgNickname(client->viewCore, GetBattleMonSpecies(mon));
++        (*seq)++;
++        break;
++    case 6:
++        if (BtlvCore_IsMsgJustDone(client->viewCore)) {
++            BtlvStringParam yesParam;
++            BtlvStringParam noParam;
++
++            Btlv_StringParam_Setup(&yesParam, BTLV_STR_YES_NO, 0);
++            Btlv_StringParam_Setup(&noParam, BTLV_STR_YES_NO, 1);
++            BtlvCore_ShowYesNo(client->viewCore, &yesParam, &noParam, 1);
++        }
+         if (BtlvCore_WaitMsg(client->viewCore)) {
+             (*seq)++;
++        }
++        break;
++    case 7: {
++        u32 answer;
++
++        if (BtlvCore_PollYesNo(client->viewCore, &answer)) {
++            Gen5_PortNicknameAnswer(answer == 0);
++            return TRUE;
+         }
+         break;
++    }
+     default:
+         return TRUE;
+     }
+     return FALSE;
+ }
+ 
++void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core); // The port (btlv_core.c's patch)
++
  static BOOL BattleClient_ScBallThrowTrainer(BtlClient *client, s32 *seq, const u32 *args) {
      switch (*seq) {
-@@ -6228,8 +6286,14 @@
+     case 0:
+@@ -6228,8 +6321,14 @@
          break;
      case 1:
          if (!BtlvEffect_IsBusy()) {
