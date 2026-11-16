@@ -1,6 +1,6 @@
 # Gen 5 battles: the nickname question after a catch ("Give a nickname to the caught ...?", BW2's Yes and No, as
 # Platinum's battle asks it). From the turtwig fixture with a Master Ball: a wild Bidoof caught; the shot shows the
-# question; B answers No, so no naming screen opens and the Bidoof joins the party with its species' name (the log's
+# question; B answers No; the Pokédex entry of the new species shows (A closes it); no naming screen opens and the Bidoof joins the party with its species' name (the log's
 # "a nickname for the catch: no" and "party" lines).
 #
 #   tools/docker/desktop.sh test tests/scripts/gen5_nickname.txt --from turtwig
@@ -26,6 +26,10 @@ wait 600
 shot gen5-nickname-2
 wait 600
 shot gen5-nickname-question
-mash B until free timeout 6000
+mash B for 900
+# The Pokédex entry of the new species (A closes it)
+wait 60
+shot gen5-nickname-dex
+mash A until free timeout 6000
 party
 exit 0

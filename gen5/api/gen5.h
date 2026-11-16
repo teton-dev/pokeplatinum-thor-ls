@@ -213,6 +213,9 @@ typedef struct Gen5Battle {
     // The level up to which another trainer's Pokémon obeys, by the game's own rule for the player's badges (100: every
     // Pokémon obeys); 0 keeps BW2's ((badges + 1) * 10, all with 8)
     int obeyLevel;
+    // The species the player has caught, a bit each from species 1 (bit 0 of byte 0), for BW2's Pokédex: its "data was
+    // added to the Pokédex" for a new species only, and its critical captures' chance by the number caught
+    unsigned char dexCaught[0x54];
 } Gen5Battle;
 
 // How a battle ended, for Platinum
