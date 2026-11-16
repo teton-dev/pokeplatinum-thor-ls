@@ -506,6 +506,11 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
             battle->partyCount, battle->party[0].species, battle->party[0].level, battle->wild.species,
             battle->wild.level);
     }
+    if (!battle->isTrainer && battle->captureDemo) {
+        // The catching tutorial: BW2's capture demo, played by the view alone (btlv_core.c's CmdCaptureDemo)
+        sSetup->battleType = BTL_TYPE_CAPTURE_DEMO;
+        printf("Gen 5: the catching tutorial, as BW2's capture demo\n");
+    }
     NNS_GfdInitVramTransferManager(sVramTransferTasks, VRAM_TRANSFER_TASKS);
     Gen5_SoundBattleBegin();
     GCTX_ProcMgrQueueProc(OVERLAY_NONE, &BATTLE_PROC_FUNCTIONS, sSetup);
@@ -881,6 +886,20 @@ BOOL Gen5_PortPcText(StrBuf *strbuf, u32 personality)
     }
     GFL_StrBufLoadString(strbuf, text);
     printf("Gen 5: the catch goes to the PC (its line shown)\n");
+    return TRUE;
+}
+
+// The catching tutorial's lines (Gen5Battle.demoText; btlv_core.c's CmdCaptureDemo): FALSE for BW2's own
+BOOL Gen5_PortCaptureDemoText(StrBuf *strbuf, int which)
+{
+    if (sBattleIn == NULL || !sBattleIn->captureDemo || which < 0 || which > 1) {
+        return FALSE;
+    }
+    const unsigned short *text = sBattleIn->demoText[which];
+    if (text[0] == 0 || text[0] == 0xFFFF) {
+        return FALSE;
+    }
+    GFL_StrBufLoadString(strbuf, text);
     return TRUE;
 }
 

@@ -26,6 +26,8 @@ int GUI_CreateMon_StartSafariEncounter(int speciesNo, int level, int balls);
 int GUI_CreateMon_StartLegendaryBattle(int speciesNo, int level, int kind);
 // A roaming Pokémon's encounter (BATTLE_TYPE_ROAMER)
 int GUI_CreateMon_StartRoamerEncounter(int speciesNo, int level);
+// The catching tutorial (Route 202's: the counterpart catches a Bidoof)
+int GUI_CreateMon_StartCatchingTutorial(void);
 
 #ifdef __cplusplus
 }

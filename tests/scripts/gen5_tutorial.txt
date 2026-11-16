@@ -1,0 +1,28 @@
+# Gen 5 battles: the catching tutorial (Route 202's: the counterpart catches a Bidoof with their starter), as BW2's
+# capture demo plays it: Lucas or Dawn's back and name, their starter's first move, the Bidoof's Tackle, their line
+# "OK! Its HP is down!..." and the throw ("... used a Poké Ball!"), then back to the overworld; nothing is kept.
+# From the turtwig fixture (a girl's save would show Lucas).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_tutorial.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+party
+tutorial
+until battle
+wait 400
+shot gen5-tutorial-1
+wait 300
+shot gen5-tutorial-2
+wait 300
+shot gen5-tutorial-3
+wait 300
+shot gen5-tutorial-4
+wait 300
+shot gen5-tutorial-5
+wait 300
+shot gen5-tutorial-6
+mash A until free timeout 6000
+party
+exit 0

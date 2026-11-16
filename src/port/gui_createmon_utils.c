@@ -128,6 +128,27 @@ int GUI_CreateMon_StartLegendaryBattle(int speciesNo, int level, int kind)
     return StartDebugBattle(speciesNo, level, 0, 0, 0, kind);
 }
 
+static BOOL FieldTask_CatchingTutorial(FieldTask *task)
+{
+    int *state = FieldTask_GetState(task);
+    if ((*state)++ == 0) {
+        Encounter_NewCatchingTutorial(task);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+int GUI_CreateMon_StartCatchingTutorial(void)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)) {
+        return FALSE;
+    }
+    // As Route 202's script starts it (Dawn or Lucas catches a Bidoof with their starter)
+    FieldSystem_CreateTask(fieldSystem, FieldTask_CatchingTutorial, NULL);
+    return TRUE;
+}
+
 int GUI_CreateMon_StartRoamerEncounter(int speciesNo, int level)
 {
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
