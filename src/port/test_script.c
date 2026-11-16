@@ -43,9 +43,11 @@
 #include "hardware_palette.h"
 #include "item_use_pokemon.h"
 #include "port/nuzlocke.h"
+#include "port/rom_patches.h"
 
 // libntr's settings screen (simulator/sim_settings.hpp, C++)
 void SIM_Settings_Open(const char *page);
+BOOL SIM_Prj_CartWarning(const char *dir, char *text, int textSize);
 #include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #ifdef GEN5_BATTLES
@@ -109,6 +111,7 @@ enum TestOp {
     OP_SHOT,
     OP_LOG,
     OP_SETTINGS,
+    OP_CARTNAME,
     OP_EXIT,
 };
 
@@ -553,6 +556,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         // of a short effect one at a time (wait N frames between the shots)
         command->op = OP_SHOT;
         command->frames = words[0][0] == 's' && words[0][1] == 't' ? 1 : 0;
+        snprintf(command->text, sizeof(command->text), "%s", rest);
+        return TRUE;
+    } else if (strcmp(words[0], "cartname") == 0 && rest != NULL) {
+        // cartname DIR: what the game picker calls the game extracted in DIR, and its warning (rom_patches.c)
+        command->op = OP_CARTNAME;
         snprintf(command->text, sizeof(command->text), "%s", rest);
         return TRUE;
     } else if (strcmp(words[0], "settings") == 0) {
@@ -1281,6 +1289,16 @@ static u16 Step(void)
             sTest.pauseUntil = SDL_GetTicks64() + SHOT_PAUSE_MS;
             Next();
             return 0;
+        case OP_CARTNAME: {
+            char name[96];
+            char warning[512];
+            RomPatches_DescribeRom(command->text, name, sizeof(name));
+            const BOOL warned = SIM_Prj_CartWarning(command->text, warning, sizeof(warning));
+            printf("[test] cartname %s: %s%s%s\n", command->text, name, warned ? "; warning: " : "",
+                warned ? warning : "");
+            Next();
+            continue;
+        }
         case OP_SETTINGS:
             printf("[test] settings %s\n", command->text);
             SIM_Settings_Open(command->text[0] != '\0' ? command->text : NULL);

@@ -375,3 +375,39 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (still unk_-named overlay files); left as a to-do since Gen 5 battles are this fork's primary engine. No doubles
   wild support either, so only the first wild Pokémon is covered. Still no settings UI, gray icons, or the save/
   main-menu mark — Nuzlocke mode can only be turned on through the test script for now.
+
+## Goldenrod, and the settings in Android's views (2026-11-16)
+
+- **The app is Goldenrod** (`app.goldenrod`, dev flavor `app.goldenrod.dev`, "Goldenrod dev"), with a goldenrod-spray
+  icon; it installs beside the old `org.pokeheartgold.port.dev`. On the Thor its files were copied over with adb
+  (`cp -r` from the old `Android/data/.../files` after launching the new app once; `save.bin` compared identical).
+- **Settings in Android's own views**, as in the Platinum fork (`NativeSettings.java`, `libntr_native_menus.patch`,
+  see that fork's CLAUDE.md): every page including the save editor; *Advanced > Android menus* switches back.
+- **Pages regrouped** like the Platinum fork's: Gameplay (the Japanese Game Corner), Battles (Gen 5 battles and the
+  BW2 ROM, was "Gen 5 battles"), the frame rate on Display (was Gameplay), Link play after Controls, Save editor at
+  the end with Advanced.
+- Tried on the Thor: D-pad, A, B work; the first build left the system bars showing after the settings (the game
+  lost its bottom strip) and a green focus outline round the game: fixed (immersive flags and WindowInsetsController,
+  no default focus highlight on SDL's surface).
+
+## Sacred Gold and Storm Silver (2026-11-16)
+
+- **Adding them**: *Settings > Games > Add a game* (the new Games page: switch games, add one, choose at launch),
+  from Drayano's 1.05 download. Its patches are **xdelta 1.1** (`%XDZ004%`), which libntr didn't read:
+  `libntr_carts_known.patch` (both forks) decodes them (gzip'd data segment and libedsio-serialized control; the
+  output's MD5 is the check). The HeartGold (USA) No-Intro dump (MD5 258cea3a..., CRC C180A0E9) isn't the dump the
+  patch was made from (ae2a483d...), but they only differ where the patch doesn't copy from: the output checks out.
+  Complete and Classic are both full rebuilds, so they're two games to choose from (no per-save versions).
+- **What the hack changes**: data files only (Pokemon, learnsets, trainers, encounters, text, sound...), plus a new
+  `msgdata/msg.narc`, and 243 bytes of arm9: its anti-piracy fix and the special marts' lists (`_0210FA3C`,
+  `src/scrcmd_mart.c`), changed in place. No overlay changes. `lib/port/rom_hacks.c` reads those lists from the
+  ROM's arm9 the first time a special mart opens (BLZ-decompressed; the pointer table is found by the lists'
+  lengths, so HeartGold's and SoulSilver's layouts both work): 13 of 30 differ in Sacred Gold Complete.
+- **Names**: Sacred Gold / Storm Silver by `msgdata/msg.narc` and the game code; Classic unless Venomoth is
+  Bug/Psychic (personal data, `a/0/0/2` member 49).
+- **Warnings**: the clean HeartGold and SoulSilver dumps (No-Intro's and Drayano's sources) and the four 1.05 patches
+  are known by MD5 (`SIM_Prj_KnownRom`, `SIM_Prj_KnownPatch`); anything else is added with a warning.
+- **Tests**: `rom_hack_sg.txt` with `ROM=~/thor-dev/sg_complete.nds DATA=~/thor-dev/desktop-sg` (the hack imported
+  as the main ROM: name, marts, boots to the new game); on vanilla HeartGold it reads 0 changed lists. Storm Silver
+  is untested (no SoulSilver ROM here). Not done: the Gen 5 battles' and Japanese Game Corner's imported files live
+  in each game's folder, so an added game imports them again.
