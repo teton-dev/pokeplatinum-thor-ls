@@ -118,6 +118,7 @@ public class NativeSettings extends FrameLayout {
         this.accent = getResources().getColor(R.color.settings_accent, null);
         setBackgroundColor(BACKDROP);
         setClickable(true); // touches stop here, not on the game below
+        setDefaultFocusHighlightEnabled(false); // the rows draw their own focus ring
         setVisibility(GONE);
 
         Context themed = getContext();
@@ -231,6 +232,7 @@ public class NativeSettings extends FrameLayout {
         if (!open) {
             open = true;
             setVisibility(VISIBLE);
+            activity.nativeSettingsShown();
             setAlpha(0f);
             animate().alpha(1f).setDuration(120).start();
             gen = -1;
