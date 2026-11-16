@@ -69,6 +69,7 @@ typedef struct DebugBattle {
     int trainerID;
     int trainer2ID;
     int partnerID;
+    int kind; // a wild one: 0 a scripted encounter, 1 a legendary's, 2 Giratina's in the Distortion World
     int resultMask;
 } DebugBattle;
 
@@ -81,8 +82,10 @@ static BOOL FieldTask_DebugBattle(FieldTask *task)
         if (battle->trainerID != 0) {
             Encounter_NewVsTrainer(task, battle->trainerID, battle->trainer2ID, battle->partnerID, HEAP_ID_FIELD2,
                 &battle->resultMask);
+        } else if (battle->kind == 2) {
+            Encounter_NewVsGiratinaOrigin(task, battle->species, battle->level, &battle->resultMask, TRUE);
         } else {
-            Encounter_NewVsSpeciesAtLevel(task, battle->species, battle->level, &battle->resultMask, FALSE);
+            Encounter_NewVsSpeciesAtLevel(task, battle->species, battle->level, &battle->resultMask, battle->kind == 1);
         }
         return FALSE;
     case 1:
@@ -99,7 +102,7 @@ static BOOL FieldTask_DebugBattle(FieldTask *task)
     return TRUE;
 }
 
-static int StartDebugBattle(int speciesNo, int level, int trainerID, int trainer2ID, int partnerID)
+static int StartDebugBattle(int speciesNo, int level, int trainerID, int trainer2ID, int partnerID, int kind)
 {
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
     if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)
@@ -115,18 +118,40 @@ static int StartDebugBattle(int speciesNo, int level, int trainerID, int trainer
     battle->trainerID = trainerID;
     battle->trainer2ID = trainer2ID;
     battle->partnerID = partnerID;
+    battle->kind = kind;
     FieldSystem_CreateTask(fieldSystem, FieldTask_DebugBattle, battle);
+    return TRUE;
+}
+
+int GUI_CreateMon_StartLegendaryBattle(int speciesNo, int level, int kind)
+{
+    return StartDebugBattle(speciesNo, level, 0, 0, 0, kind);
+}
+
+int GUI_CreateMon_StartRoamerEncounter(int speciesNo, int level)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)
+        || Party_GetCurrentCount(SaveData_GetParty(fieldSystem->saveData)) == 0
+        || speciesNo <= 0 || speciesNo > MAX_SPECIES) {
+        return FALSE;
+    }
+    // As a roamer's encounter (WildEncounters_TryWildEncounter with a roamer on the map): the roamer battle type
+    FieldBattleDTO *dto = FieldBattleDTO_New(HEAP_ID_FIELD2, BATTLE_TYPE_ROAMER);
+    FieldBattleDTO_Init(dto, fieldSystem);
+    CreateWildMon_Scripted(fieldSystem, speciesNo, level, dto);
+    Encounter_NewVsWild(fieldSystem, dto);
     return TRUE;
 }
 
 int GUI_CreateMon_StartBattle(int speciesNo, int level, int trainerID, int doubles)
 {
-    return StartDebugBattle(speciesNo, level, trainerID, doubles ? trainerID : 0, 0);
+    return StartDebugBattle(speciesNo, level, trainerID, doubles ? trainerID : 0, 0, 0);
 }
 
 int GUI_CreateMon_StartTrainerBattle(int trainer1, int trainer2, int partner)
 {
-    return trainer1 != 0 && StartDebugBattle(0, 0, trainer1, trainer2, partner);
+    return trainer1 != 0 && StartDebugBattle(0, 0, trainer1, trainer2, partner, 0);
 }
 
 int GUI_CreateMon_StartWildEncounter(int speciesNo, int level)
