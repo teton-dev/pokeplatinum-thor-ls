@@ -15,14 +15,13 @@
  #include "battle/btlv_scd.h"
  #include "battle/tr_ai.h"
  #include "battle/trainer_data.h"
-@@ -325,9 +327,16 @@
-     }
+@@ -326,8 +328,15 @@
      return FALSE;
  }
-+
+ 
 +BOOL BtlvCore_PortCmdSafari(BtlvCore *core, s32 *seq, void *work);
 +int Gen5_PortSafari(void); // A Safari Zone battle (safari.c)
- 
++
  BOOL BtlvCore_CmdCaptureDemo(BtlvCore *core, s32 *seq, void *work) {
      BtlvCaptureDemoWork *wk = work;
 +
@@ -32,10 +31,13 @@
      void *data;
      u8 *keys;
      BattleMon *mon;
-@@ -497,7 +506,341 @@
-     }
-     return FALSE;
- }
+@@ -494,6 +503,340 @@
+     case 20:
+         *BtlvScd_GetKeyCursorFlag(core->scd) = wk->savedKeys;
+         return TRUE;
++    }
++    return FALSE;
++}
 +
 +// ---- The port: the Safari Zone's battle (src/safari.c has its rules and texts) ----
 +// None of the player's Pokémon is on the field: the wild Pokémon appears, the player's trainer slides in and stays in
@@ -141,7 +143,7 @@
 +    switch (*seq) {
 +    case SAFARI_SETUP: {
 +        void *data = BtlvEffect_CreateSetup(core->mainModule, core->scu, core->heapId);
- 
++
 +        BtlvEffect_Init(data, core->font2, core->heapId);
 +        GFL_HeapFree(data);
 +        sPortSafariSavedKeys = *BtlvScd_GetKeyCursorFlag(core->scd);
@@ -367,12 +369,8 @@
 +            return TRUE;
 +        }
 +        break;
-+    }
-+    return FALSE;
-+}
-+
- BattleMon *BtlvCore_GetMonAtViewPos(BtlvCore *core, u32 index) {
-     return PokeCon_GetPosMonInner(core->pokeCon, ViewPosToBattlePos(core->mainModule, index));
+     }
+     return FALSE;
  }
 @@ -561,6 +904,7 @@
      core->result = 0;
@@ -382,14 +380,10 @@
  }
  
  void BtlvCore_StopCommandSelect(BtlvCore *core) {
-@@ -1370,7 +1714,44 @@
+@@ -1374,6 +1718,43 @@
+     BtlvCore_StartMsgStr(core, core->strbuf, param->mode, 0);
  }
  
- void BtlvCore_StartMsg(BtlvCore *core, const BtlvStringParam *param) {
-+    BtlvCore_MakeString(param, core->strbuf);
-+    BtlvCore_StartMsgStr(core, core->strbuf, param->mode, 0);
-+}
-+
 +// The port: the prize money's line, and in HGSS, with Mom's savings on, "Sent some to Mom!" after it as HGSS's battle
 +// has it (on its own line, or a page of its own when the prize line already has two)
 +void BtlvCore_PortStartMsgPrize(BtlvCore *core, const BtlvStringParam *param);
@@ -400,7 +394,7 @@
 +    u32 i;
 +    BOOL twoLines = FALSE;
 +
-     BtlvCore_MakeString(param, core->strbuf);
++    BtlvCore_MakeString(param, core->strbuf);
 +    if (Gen5_PortMomSavings()) {
 +        GFL_StrBufStoreString(core->strbuf, chars, NELEMS(chars));
 +        for (length = 0; length < NELEMS(chars) && chars[length] != 0xFFFF; length++) {
@@ -424,16 +418,16 @@
 +            GFL_StrBufLoadString(core->strbuf, chars);
 +        }
 +    }
-     BtlvCore_StartMsgStr(core, core->strbuf, param->mode, 0);
- }
- 
-@@ -1391,10 +1772,46 @@
- 
- void BtlvCore_StartMsgSet(BtlvCore *core, u16 message, const u32 *args) {
-     BtlString_FormatSetMsg(core->strbuf, message, args);
-+    BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++    BtlvCore_StartMsgStr(core, core->strbuf, param->mode, 0);
 +}
 +
+ void BtlvCore_StartMsgCallback(BtlvCore *core, const BtlvStringParam *param, BtlvMsgCallback callback) {
+     BtlvCore_MakeString(param, core->strbuf);
+     BtlvCore_StartMsgStr(core, core->strbuf, param->mode, callback);
+@@ -1394,7 +1775,54 @@
+     BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
+ }
+ 
 +BOOL Gen5_PortTrainerHintText(StrBuf *strbuf, u32 trainerId, u32 msgId); // The port (runtime.c)
 +BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId); // The port (runtime.c)
 +
@@ -442,15 +436,26 @@
 +void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core);
 +void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core) {
 +    Gen5_PortCatchRefusedText(core->strbuf);
-     BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
- }
- 
++    BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++}
++
 +// The port: "Give a nickname to the caught ...?" (btl_client.c's patch asks it after a catch), waiting for the answer
 +void Gen5_PortNicknameText(StrBuf *strbuf, u16 species); // The port (runtime.c)
 +void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species);
 +void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species) {
 +    Gen5_PortNicknameText(core->strbuf, species);
 +    BtlvCore_StartMsgStr(core, core->strbuf, 0xff, NULL);
++}
++
++// The port: the game's line about the PC a catch with no nickname goes to (btl_client.c's patch), FALSE if none
++BOOL Gen5_PortPcText(StrBuf *strbuf, u32 personality); // The port (runtime.c)
++BOOL BtlvCore_PortStartMsgPc(BtlvCore *core, u32 personality);
++BOOL BtlvCore_PortStartMsgPc(BtlvCore *core, u32 personality) {
++    if (!Gen5_PortPcText(core->strbuf, personality)) {
++        return FALSE;
++    }
++    BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++    return TRUE;
 +}
 +
  BOOL BtlvCore_StartMsgTrainer(BtlvCore *core, u32 trainerId, u32 msgId) {
@@ -474,12 +479,10 @@
      if (TrainerMsg_CheckExists(trainerId, msgId, core->heapId)) {
          TrainerMsg_Load(trainerId, msgId, core->strbuf, core->heapId);
          BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
-@@ -1449,8 +1866,28 @@
- 
- BOOL BtlvCore_WaitUpdateAbilityWin(BtlvCore *core, u8 pos) {
+@@ -1451,6 +1879,26 @@
      return BtlvScu_WaitAbilityWinChange(core->scu, pos);
-+}
-+
+ }
+ 
 +// The port: the weather's bar (btl_client.c's patch, btlv_scu.c's patch)
 +void BtlvScu_PortShowWeatherWin(BtlvScu *scu, BOOL player, u8 weather, u8 turns);
 +BOOL BtlvScu_PortWaitShowWeatherWin(BtlvScu *scu, BOOL player);
@@ -494,8 +497,8 @@
 +
 +BOOL BtlvCore_PortWaitShowWeatherWin(BtlvCore *core, BOOL player) {
 +    return BtlvScu_PortWaitShowWeatherWin(core->scu, player);
- }
- 
++}
++
 +BOOL BtlvCore_PortHideWeatherWin(BtlvCore *core, BOOL player) {
 +    return BtlvScu_PortHideWeatherWin(core->scu, player);
 +}

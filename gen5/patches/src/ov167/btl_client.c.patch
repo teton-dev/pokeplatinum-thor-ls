@@ -79,17 +79,10 @@
          switch ((u8)args[0]) {
          case 1:
              msg = 0x59;
-@@ -5602,6 +5616,51 @@
-     case 1:
-         if (BtlvCore_WaitMsg(client->viewCore)) {
-             BtlField_ClearWeather(client->field);
-+            return TRUE;
-+        }
-+        break;
-+    }
-+    return FALSE;
-+}
-+
+@@ -5609,6 +5623,51 @@
+     return FALSE;
+ }
+ 
 +// The port: the weather at a turn's end, in an ability bar of the side that set it: its name and the turns left, in the
 +// weather's colors (btlv_scu.c's patch). args: the setter's Pokemon (0xff for none), the weather, the turns left (0xff
 +// for no end)
@@ -128,19 +121,27 @@
 +    case 3:
 +        // The bar goes, and its palette comes back
 +        if (BtlvCore_PortHideWeatherWin(client->viewCore, player)) {
-             return TRUE;
-         }
-         break;
-@@ -6153,6 +6212,8 @@
++            return TRUE;
++        }
++        break;
++    }
++    return FALSE;
++}
++
+ static BOOL BattleClient_ScUpdateHpGauge(BtlClient *client, s32 *seq, const u32 *args) {
+     switch (*seq) {
+     case 0:
+@@ -6152,6 +6211,9 @@
+     }
      return FALSE;
  }
- 
-+void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species); // The port (btlv_core.c's patch)
 +
++void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species); // The port (btlv_core.c's patch)
++BOOL BtlvCore_PortStartMsgPc(BtlvCore *core, u32 personality); // The port (btlv_core.c's patch)
+ 
  static BOOL BattleClient_ScBallThrow(BtlClient *client, s32 *seq, const u32 *args) {
      static const u16 sEscapeMessages[4] = { 0x3d, 0x3e, 0x3f, 0x40 };
-     BattleMon *mon;
-@@ -6205,21 +6266,56 @@
+@@ -6205,7 +6267,8 @@
                  BtlvCore_StartMsg(client->viewCore, &client->strParam);
                  (*seq)++;
              } else {
@@ -150,11 +151,10 @@
              }
          }
          break;
-     case 4:
-+        if (BtlvCore_WaitMsg(client->viewCore)) {
-+            (*seq)++;
-+        }
-+        break;
+@@ -6214,12 +6277,58 @@
+             (*seq)++;
+         }
+         break;
 +    // The port: "Give a nickname to the caught ...?", as Platinum's and HGSS's battles ask it (BW2 asks in its field);
 +    // the answer goes to the port, whose game opens its naming screen after the battle
 +    case 5:
@@ -174,19 +174,31 @@
 +            Btlv_StringParam_Setup(&noParam, BTLV_STR_YES_NO, 1);
 +            BtlvCore_ShowYesNo(client->viewCore, &yesParam, &noParam, 1);
 +        }
-         if (BtlvCore_WaitMsg(client->viewCore)) {
-             (*seq)++;
-         }
-         break;
++        if (BtlvCore_WaitMsg(client->viewCore)) {
++            (*seq)++;
++        }
++        break;
 +    case 7: {
 +        u32 answer;
 +
 +        if (BtlvCore_PollYesNo(client->viewCore, &answer)) {
 +            Gen5_PortNicknameAnswer(answer == 0);
++            // No nickname with a full party: the game's line about the PC it goes to (with one, the naming screen
++            // shows it)
++            mon = PokeCon_GetPosMonInner(client->pokeCon, args[0]);
++            if (answer != 0 && BtlvCore_PortStartMsgPc(client->viewCore, PokeParty_GetParam(mon->core.src, 0 /* PKM_PARAM_PID */, NULL))) {
++                (*seq)++;
++                break;
++            }
 +            return TRUE;
 +        }
 +        break;
 +    }
++    case 8:
++        if (BtlvCore_WaitMsg(client->viewCore)) {
++            return TRUE;
++        }
++        break;
      default:
          return TRUE;
      }
@@ -198,7 +210,7 @@
  static BOOL BattleClient_ScBallThrowTrainer(BtlClient *client, s32 *seq, const u32 *args) {
      switch (*seq) {
      case 0:
-@@ -6228,8 +6324,14 @@
+@@ -6228,8 +6337,14 @@
          break;
      case 1:
          if (!BtlvEffect_IsBusy()) {

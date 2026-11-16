@@ -79,6 +79,7 @@ static BOOL sAskNickname; // Gen5Battle.askNickname
 static BOOL sNicknameWanted; // and its answer
 static BOOL sMomSavings; // Gen5Battle.momSavings
 static int sObeyLevel; // Gen5Battle.obeyLevel
+static const Gen5Battle *sBattleIn; // the battle as handed over, while it runs (its texts)
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
@@ -339,6 +340,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sNicknameWanted = FALSE;
     sMomSavings = battle->momSavings != 0;
     sObeyLevel = battle->obeyLevel;
+    sBattleIn = battle;
     sBattleBlockCount = 0;
     sPlaceCount = 0;
 
@@ -693,6 +695,7 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
     Gen5_PortSafariEnd(battle);
     printf("Gen 5: the battle ended (BW2's result %lu, money %+d)\n", (unsigned long)result, battle->moneyChange);
     sSetup = NULL;
+    sBattleIn = NULL;
     while (sBattleBlockCount > 0) {
         GFL_HeapFree(sBattleBlocks[--sBattleBlockCount]);
     }
@@ -858,6 +861,27 @@ BOOL Gen5_PortMomSavings(void)
         printf("Gen 5: the prize line says some went to Mom\n");
     }
     return sMomSavings;
+}
+
+// The line about the PC a catch with no nickname goes to (Gen5Battle.pcText; btl_client.c's patch shows it after the
+// answer), for the wild Pokémon with that personality: FALSE if there is none
+BOOL Gen5_PortPcText(StrBuf *strbuf, u32 personality)
+{
+    if (sBattleIn == NULL) {
+        return FALSE;
+    }
+    const unsigned short *text = NULL;
+    if (personality == sBattleIn->wild.personality) {
+        text = sBattleIn->pcText[0];
+    } else if (sBattleIn->hasWild2 && personality == sBattleIn->wild2.personality) {
+        text = sBattleIn->pcText[1];
+    }
+    if (text == NULL || text[0] == 0 || text[0] == 0xFFFF) {
+        return FALSE;
+    }
+    GFL_StrBufLoadString(strbuf, text);
+    printf("Gen 5: the catch goes to the PC (its line shown)\n");
+    return TRUE;
 }
 
 // After a catch: whether to ask for a nickname (btl_client.c's patch), its question, and the answer

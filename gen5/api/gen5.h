@@ -216,6 +216,9 @@ typedef struct Gen5Battle {
     // The species the player has caught, a bit each from species 1 (bit 0 of byte 0), for BW2's Pokédex: its "data was
     // added to the Pokédex" for a new species only, and its critical captures' chance by the number caught
     unsigned char dexCaught[0x54];
+    // For a catch the player gives no nickname with a full party: the game's own line about the PC it goes to, for
+    // wild and wild2 (BW2's text, empty: none), shown after the answer
+    unsigned short pcText[2][GEN5_TEXT_LENGTH];
 } Gen5Battle;
 
 // How a battle ended, for Platinum
