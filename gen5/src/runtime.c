@@ -589,6 +589,22 @@ int Gen5_GameVersion(void)
 
 static int sWhiteGauges = 0;
 
+static int sApricornBallPalettes; // Gen5_SetApricornBallSprites
+
+void Gen5_SetApricornBallSprites(int firstPalette)
+{
+    sApricornBallPalettes = firstPalette;
+}
+
+// The member of archive 94 with a thrown Apricorn Ball's palette (17 to 24; btlv_effvm.c's patch), 0 if none
+int Gen5_PortApricornBallPalette(int ball)
+{
+    if (sApricornBallPalettes == 0 || !sApricornBalls || ball < 17 || ball > 24) {
+        return 0;
+    }
+    return sApricornBallPalettes + (ball - 17);
+}
+
 void Gen5_SetWhiteGauges(int white)
 {
     sWhiteGauges = white;
