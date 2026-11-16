@@ -1,0 +1,28 @@
+# Gen 5 battles: a trainer's lines during the battle in BW2's engine, as Platinum's battle shows them
+# (TRMSG_FIRST_DAMAGE to TRMSG_LAST_BATTLER_HALF_HP). Gym Leader Roark (Platinum's trainer 246) against the finished
+# save's level 100 party: when his last Pokemon, Cranidos, comes out he says his TRMSG_LAST_BATTLER line (the log's
+# "says its line 19", BW2's hint number), then the battle is won. From the owner's fixture full100 (never committed):
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_trainer_lines.txt --from full100
+
+gen5-import
+gen5-battles on
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+battle-style set
+trainer 246
+until battle
+until command timeout 6000
+wait 30
+touch 128 95
+wait 30
+touch 64 54
+wait 120
+mash A until free timeout 12000
+shot gen5-trainer-lines-back
+exit 0

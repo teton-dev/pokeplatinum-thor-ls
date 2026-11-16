@@ -451,6 +451,24 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->condition = COND_FREE;
         command->timeout = DEFAULT_TIMEOUT;
         return TRUE;
+    } else if (strcmp(words[0], "tutorial") == 0) {
+        // tutorial: the catching tutorial (Route 202's), once the player is free
+        command->op = OP_WILD;
+        command->map = 6;
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
+    } else if ((strcmp(words[0], "legendary") == 0 || strcmp(words[0], "giratina") == 0
+                   || strcmp(words[0], "roamer") == 0) && count >= 3) {
+        // legendary SPECIES LEVEL: a legendary's scripted encounter; giratina SPECIES LEVEL: Giratina's in the
+        // Distortion World (its Origin Forme); roamer SPECIES LEVEL: a roaming Pokémon's encounter
+        command->op = OP_WILD;
+        command->map = strcmp(words[0], "legendary") == 0 ? 3 : strcmp(words[0], "giratina") == 0 ? 4 : 5;
+        command->x = atoi(words[1]);
+        command->y = atoi(words[2]);
+        command->condition = COND_FREE;
+        command->timeout = DEFAULT_TIMEOUT;
+        return TRUE;
     } else if (strcmp(words[0], "safari") == 0 && count >= 3) {
         // safari SPECIES LEVEL [BALLS]: a Safari Zone encounter (30 balls unless given), once the player is free
         command->op = OP_WILD;
@@ -960,7 +978,10 @@ static u16 Step(void)
                 }
                 return 0;
             }
-            if (!(command->map == 2 ? GUI_CreateMon_StartSafariEncounter(command->x, command->y, command->frames)
+            if (!(command->map == 6 ? GUI_CreateMon_StartCatchingTutorial()
+                    : command->map == 5 ? GUI_CreateMon_StartRoamerEncounter(command->x, command->y)
+                    : command->map >= 3 ? GUI_CreateMon_StartLegendaryBattle(command->x, command->y, command->map - 2)
+                    : command->map == 2 ? GUI_CreateMon_StartSafariEncounter(command->x, command->y, command->frames)
                     : command->map ? GUI_CreateMon_StartBattle(command->x, command->y, 0, 0)
                                    : GUI_CreateMon_StartWildEncounterShiny(command->x, command->y, command->frames))) {
                 Fail(command, "the wild encounter couldn't start");

@@ -1,0 +1,40 @@
+# Gen 5 battles: the PC line after a catch with no nickname and a full party, as Platinum's battle shows it ("STARLY
+# was transferred to someone's PC. It was placed in BOX 1."). From the turtwig fixture with a Master Ball and a party
+# of six: a wild Starly caught; B answers No to the nickname question; the battle shows the PC line (the shot
+# gen5-pc-message; the log's "the catch goes to the PC"); then the new species' Pokédex entry (A closes it), and the
+# Starly is in box 1 (the log's "box" lines).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_pc_message.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+item 1 1
+give 403 3
+give 396 3
+give 399 3
+give 401 3
+give 418 3
+wild 396 2
+until battle
+until command
+wait 60
+touch 40 180
+wait 60
+touch 192 48
+wait 60
+touch 64 33
+wait 60
+touch 108 175
+wait 2100
+shot gen5-pc-question
+# B: the first press shows BW2's cursor, the second answers
+press B
+wait 20
+press B
+wait 120
+shot gen5-pc-message
+mash B for 600
+mash A until free timeout 6000
+party
+exit 0

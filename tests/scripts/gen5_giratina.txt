@@ -1,0 +1,32 @@
+# Gen 5 battles: Giratina's battle in the Distortion World (BATTLE_STATUS_GIRATINA and DISTORTION, its Origin Forme)
+# in Black 2 and White 2's engine. From the turtwig fixture with a Master Ball: Giratina at level 47 in the Distortion
+# World's arena, caught at once; the log's party has it in its Origin Forme (form 1).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_giratina.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+item 1 1
+giratina 487 47
+until battle
+until command timeout 6000
+wait 30
+shot gen5-giratina
+wait 30
+touch 40 180
+wait 60
+touch 192 48
+wait 60
+touch 64 33
+wait 60
+touch 108 175
+# YES to "Give a nickname to the caught ...?" (BW2's Yes and No on the touch screen)
+mash A touch 128 55 until naming timeout 6000
+wait 90
+press START
+wait 30
+press A
+mash B until free
+party
+exit 0

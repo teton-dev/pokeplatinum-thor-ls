@@ -1,0 +1,21 @@
+# Gen 5 battles: a roaming Pokémon (BATTLE_TYPE_ROAMER) in Black 2 and White 2's engine. From the turtwig fixture:
+# Mesprit at level 50; Turtwig uses Tackle and Mesprit flees (BW2's roaming AI, BTL_SETUP_FLAG_ROAMING). The log's
+# "the wild Pokémon after the battle" line has the HP it is left with (which RoamerAfterBattle_UpdateRoamers keeps).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_roamer.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+roamer 481 50
+until battle
+until command timeout 6000
+wait 60
+touch 128 95
+wait 60
+touch 64 54
+wait 60
+shot gen5-roamer
+mash A until free timeout 6000
+party
+exit 0

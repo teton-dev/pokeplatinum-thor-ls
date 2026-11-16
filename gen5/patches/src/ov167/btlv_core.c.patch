@@ -15,12 +15,20 @@
  #include "battle/btlv_scd.h"
  #include "battle/tr_ai.h"
  #include "battle/trainer_data.h"
-@@ -326,8 +328,15 @@
+@@ -326,11 +328,27 @@
      return FALSE;
  }
  
 +BOOL BtlvCore_PortCmdSafari(BtlvCore *core, s32 *seq, void *work);
 +int Gen5_PortSafari(void); // A Safari Zone battle (safari.c)
++
++// The port: Platinum's catching tutorial plays as this demo (Gen5Battle.captureDemo): the moves are the two
++// Pokemon's first (BW2's demo: Tackle, then the foe's Growl), and its two lines are the game's (BW2's: Bianca's)
++BOOL Gen5_PortCaptureDemoText(StrBuf *strbuf, int which); // The port (runtime.c)
++static u16 BtlvCore_PortDemoMove(BtlvCore *core, u32 viewPos, u16 bw2Move) {
++    u16 move = MoveGetID(BtlvCore_GetMonAtViewPos(core, viewPos), 0);
++    return move != 0 ? move : bw2Move;
++}
 +
  BOOL BtlvCore_CmdCaptureDemo(BtlvCore *core, s32 *seq, void *work) {
      BtlvCaptureDemoWork *wk = work;
@@ -31,10 +39,108 @@
      void *data;
      u8 *keys;
      BattleMon *mon;
-@@ -498,6 +507,340 @@
-     return FALSE;
- }
++    u16 move;
  
+     switch (*seq) {
+     case 0:
+@@ -379,14 +397,15 @@
+         break;
+     case 5:
+         if (BtlvScd_GetCommandResult(core->scd)) {
+-            BtlvCore_StartMsgMove(core, GetMonID(BtlvCore_GetMonAtViewPos(core, 0)), 0x21);
++            BtlvCore_StartMsgMove(core, GetMonID(BtlvCore_GetMonAtViewPos(core, 0)), BtlvCore_PortDemoMove(core, 0, 0x21));
+             BtlvScd_ResetScreen(core->scd);
+             (*seq)++;
+         }
+         break;
+     case 6:
+         if (BtlvCore_WaitMsg(core) && BtlvScd_IsIdle(core->scd)) {
+-            BtlvScu_StartMoveEffect(core->scu, 0, 1, 0x21, PML_MoveGetParam(0x21, MOVE_PARAM_TARGET), 0, 0);
++            move = BtlvCore_PortDemoMove(core, 0, 0x21);
++            BtlvScu_StartMoveEffect(core->scu, 0, 1, move, PML_MoveGetParam(move, MOVE_PARAM_TARGET), 0, 0);
+             (*seq)++;
+         }
+         break;
+@@ -394,29 +413,46 @@
+         if (BtlvScu_WaitMoveEffect(core->scu)) {
+             mon = BtlvCore_GetMonAtViewPos(core, 1);
+             BtlvEffect_CalcGaugeHP(1, (s32)GetBattleMonStat(mon, BATTLEMON_MAX_HP) / 6);
+-            BtlvEffect_StartDamage(1, 0x21);
++            BtlvEffect_StartDamage(1, BtlvCore_PortDemoMove(core, 0, 0x21));
+             BtlvCore_PlaySE(core, 0x564);
+             (*seq)++;
+         }
+         break;
+     case 8:
+         if (BtlvScu_WaitDamage(core->scu)) {
+-            BtlvCore_StartMsgMove(core, GetMonID(BtlvCore_GetMonAtViewPos(core, 1)), 0x2d);
++            BtlvCore_StartMsgMove(core, GetMonID(BtlvCore_GetMonAtViewPos(core, 1)), BtlvCore_PortDemoMove(core, 1, 0x2d));
+             (*seq)++;
+         }
+         break;
+     case 9:
+         if (BtlvCore_WaitMsg(core)) {
+-            BtlvScu_StartMoveEffect(core->scu, 1, 0, 0x2d, PML_MoveGetParam(0x2d, MOVE_PARAM_TARGET), 0, 0);
++            move = BtlvCore_PortDemoMove(core, 1, 0x2d);
++            BtlvScu_StartMoveEffect(core->scu, 1, 0, move, PML_MoveGetParam(move, MOVE_PARAM_TARGET), 0, 0);
+             (*seq)++;
+         }
+         break;
+     case 10:
+         if (BtlvScu_WaitMoveEffect(core->scu)) {
++            move = BtlvCore_PortDemoMove(core, 1, 0x2d);
++            // The port: a foe's move that hurts (Platinum's Bidoof's Tackle) takes a little of the HP, no stat drop
++            if (PML_MoveGetParam(move, MOVE_PARAM_POWER) != 0) {
++                mon = BtlvCore_GetMonAtViewPos(core, 0);
++                // The HP left (BW2's demo leaves its foe a sixth): an eighth off
++                BtlvEffect_CalcGaugeHP(0, (s32)GetBattleMonStat(mon, BATTLEMON_MAX_HP) - (s32)GetBattleMonStat(mon, BATTLEMON_MAX_HP) / 8);
++                BtlvEffect_StartDamage(0, move);
++                BtlvCore_PlaySE(core, 0x564);
++                *seq = 30;
++                break;
++            }
+             BtlvCore_StartRankDownEffect(core, 0);
+             (*seq)++;
+         }
+         break;
++    case 30:
++        if (BtlvScu_WaitDamage(core->scu)) {
++            *seq = 12;
++        }
++        break;
+     case 11:
+         if (BtlvCore_WaitRankEffect(core, 0)) {
+             BtlvStringParam param;
+@@ -433,7 +469,9 @@
+         break;
+     case 12:
+         if (BtlvCore_WaitMsg(core)) {
+-            GFL_MsgDataLoadStrbuf(wk->msgData, BtlvCore_Text_JustHaveUsePoke, core->strbuf);
++            if (!Gen5_PortCaptureDemoText(core->strbuf, 0)) {
++                GFL_MsgDataLoadStrbuf(wk->msgData, BtlvCore_Text_JustHaveUsePoke, core->strbuf);
++            }
+             BtlvCore_StartMsgStr(core, core->strbuf, 0, NULL);
+             wk->wait = 60;
+             (*seq)++;
+@@ -453,7 +491,9 @@
+         break;
+     case 15:
+         if (BtlvCore_WaitItemSelect(core)) {
+-            GFL_MsgDataLoadStrbuf(wk->msgData, BtlvCore_Text_BiancaUsedPokeBall, core->strbuf);
++            if (!Gen5_PortCaptureDemoText(core->strbuf, 1)) {
++                GFL_MsgDataLoadStrbuf(wk->msgData, BtlvCore_Text_BiancaUsedPokeBall, core->strbuf);
++            }
+             BtlvCore_StartMsgStr(core, core->strbuf, 0, NULL);
+             BtlvScd_ResetScreen(core->scd);
+             (*seq)++;
+@@ -494,6 +534,340 @@
+     case 20:
+         *BtlvScd_GetKeyCursorFlag(core->scd) = wk->savedKeys;
+         return TRUE;
++    }
++    return FALSE;
++}
++
 +// ---- The port: the Safari Zone's battle (src/safari.c has its rules and texts) ----
 +// None of the player's Pokémon is on the field: the wild Pokémon appears, the player's trainer slides in and stays in
 +// the throwing pose, and each turn the player throws a Safari Ball, bait or mud, or runs; the Pokémon then watches or
@@ -365,14 +471,10 @@
 +            return TRUE;
 +        }
 +        break;
-+    }
-+    return FALSE;
-+}
-+
- BattleMon *BtlvCore_GetMonAtViewPos(BtlvCore *core, u32 index) {
-     return PokeCon_GetPosMonInner(core->pokeCon, ViewPosToBattlePos(core->mainModule, index));
+     }
+     return FALSE;
  }
-@@ -561,6 +904,7 @@
+@@ -561,6 +935,7 @@
      core->result = 0;
      core->laterMon = laterMon;
      BtlvCore_SetMainProc(core, BtlvCore_ProcCommandSelect);
@@ -380,10 +482,59 @@
  }
  
  void BtlvCore_StopCommandSelect(BtlvCore *core) {
-@@ -1394,7 +1738,26 @@
-     BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
+@@ -1373,7 +1748,44 @@
+     BtlvCore_MakeString(param, core->strbuf);
+     BtlvCore_StartMsgStr(core, core->strbuf, param->mode, 0);
  }
++
++// The port: the prize money's line, and in HGSS, with Mom's savings on, "Sent some to Mom!" after it as HGSS's battle
++// has it (on its own line, or a page of its own when the prize line already has two)
++void BtlvCore_PortStartMsgPrize(BtlvCore *core, const BtlvStringParam *param);
++void BtlvCore_PortStartMsgPrize(BtlvCore *core, const BtlvStringParam *param) {
++    static const char kMom[] = "Sent some to Mom!";
++    u16 chars[0x100];
++    u32 length;
++    u32 i;
++    BOOL twoLines = FALSE;
  
++    BtlvCore_MakeString(param, core->strbuf);
++    if (Gen5_PortMomSavings()) {
++        GFL_StrBufStoreString(core->strbuf, chars, NELEMS(chars));
++        for (length = 0; length < NELEMS(chars) && chars[length] != 0xFFFF; length++) {
++            if (chars[length] == 0xFFFE) {
++                twoLines = TRUE;
++            }
++        }
++        if (length + 24 < NELEMS(chars)) {
++            if (twoLines) {
++                // A new page: BW2's stream command that clears the window
++                chars[length++] = 0xF000;
++                chars[length++] = 0xBE01;
++                chars[length++] = 0;
++            } else {
++                chars[length++] = 0xFFFE;
++            }
++            for (i = 0; kMom[i] != '\0'; i++) {
++                chars[length++] = (u8)kMom[i];
++            }
++            chars[length] = 0xFFFF;
++            GFL_StrBufLoadString(core->strbuf, chars);
++        }
++    }
++    BtlvCore_StartMsgStr(core, core->strbuf, param->mode, 0);
++}
++
+ void BtlvCore_StartMsgCallback(BtlvCore *core, const BtlvStringParam *param, BtlvMsgCallback callback) {
+     BtlvCore_MakeString(param, core->strbuf);
+     BtlvCore_StartMsgStr(core, core->strbuf, param->mode, callback);
+@@ -1391,10 +1803,57 @@
+ 
+ void BtlvCore_StartMsgSet(BtlvCore *core, u16 message, const u32 *args) {
+     BtlString_FormatSetMsg(core->strbuf, message, args);
++    BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++}
++
++BOOL Gen5_PortTrainerHintText(StrBuf *strbuf, u32 trainerId, u32 msgId); // The port (runtime.c)
 +BOOL Gen5_PortTrainerDefeatText(StrBuf *strbuf, u32 trainerId); // The port (runtime.c)
 +
 +// The port: Nuzlocke mode's "You've already used your catch for this area!" (btl_client.c's patch)
@@ -391,7 +542,26 @@
 +void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core);
 +void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core) {
 +    Gen5_PortCatchRefusedText(core->strbuf);
+     BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
+ }
+ 
++// The port: "Give a nickname to the caught ...?" (btl_client.c's patch asks it after a catch), waiting for the answer
++void Gen5_PortNicknameText(StrBuf *strbuf, u16 species); // The port (runtime.c)
++void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species);
++void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species) {
++    Gen5_PortNicknameText(core->strbuf, species);
++    BtlvCore_StartMsgStr(core, core->strbuf, 0xff, NULL);
++}
++
++// The port: the game's line about the PC a catch with no nickname goes to (btl_client.c's patch), FALSE if none
++BOOL Gen5_PortPcText(StrBuf *strbuf, u32 personality); // The port (runtime.c)
++BOOL BtlvCore_PortStartMsgPc(BtlvCore *core, u32 personality);
++BOOL BtlvCore_PortStartMsgPc(BtlvCore *core, u32 personality) {
++    if (!Gen5_PortPcText(core->strbuf, personality)) {
++        return FALSE;
++    }
 +    BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++    return TRUE;
 +}
 +
  BOOL BtlvCore_StartMsgTrainer(BtlvCore *core, u32 trainerId, u32 msgId) {
@@ -404,10 +574,18 @@
 +        BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
 +        return TRUE;
 +    }
++    // and its lines during the battle (Gen5Trainer.hintText; btl_client.c's hints)
++    if (trainerId >= 0x800) {
++        if (!Gen5_PortTrainerHintText(core->strbuf, trainerId, msgId)) {
++            return FALSE;
++        }
++        BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++        return TRUE;
++    }
      if (TrainerMsg_CheckExists(trainerId, msgId, core->heapId)) {
          TrainerMsg_Load(trainerId, msgId, core->strbuf, core->heapId);
          BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
-@@ -1451,6 +1814,26 @@
+@@ -1451,6 +1910,26 @@
      return BtlvScu_WaitAbilityWinChange(core->scu, pos);
  }
  

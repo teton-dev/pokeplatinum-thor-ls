@@ -78,7 +78,6 @@ gen5_sources = [
     # The battle bag (overlay 286)
     'src/ov286/b_bag_anm.c',
     'src/ov286/b_bag_bmp.c',
-    'src/ov286/b_bag_item.c',
     'src/ov286/b_bag_main.c',
     'src/ov286/b_bag_obj.c',
     'src/ov286/b_bag_ui.c',
@@ -168,7 +167,6 @@ gen5_sources = [
     'src/system/player_volume_fader.c',
     'src/system/playtime.c',
     'src/system/pml_hm_check.c',
-    'src/system/pml_item.c',
     'src/system/pml_species_names.c',
     'src/system/pms_data.c',
     'src/system/pms_word.c',
@@ -246,6 +244,8 @@ gen5_patched = [
     'src/system/mcss_tool.c',         # A pointer through an animation callback's u32
     'src/system/vm.c',                # Return addresses on the VM's stack
     'src/system/poke_tool.c',         # PokeParty_SetParam, PML_PkmSetParam (nicknames, OT names, mail)
+    'src/ov286/b_bag_item.c',         # HGSS's Apricorn Balls in the battle bag's Poke Balls (Gen5_PortApricornBalls)
+    'src/system/pml_item.c',          # HGSS's Apricorn Balls read a Poke Ball's data (Gen5_PortApricornBalls)
     'src/system/pml_met_data.c',
     'src/system/resonance_resort_data.c', # No Join Avenue: a catch records nothing there
     'src/ov167/btl_calc.c',           # A Platinum trainer's prize money (runtime.c), the 18-type chart (Fairy)

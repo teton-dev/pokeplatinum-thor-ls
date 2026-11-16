@@ -19,7 +19,19 @@
          }
      }
      for (i = 0; i < numMons; i++) {
-@@ -879,6 +882,12 @@
+@@ -770,6 +773,11 @@
+         if (ItemGetParam(item, 0xf) == 4) {
+             if (ThrowBall(flow, mon, item)) {
+                 BattleClient_SubItem(flow->mainModule, clientId, item);
++                // The port: HGSS's Bug-Catching Contest ends when its last Sport Ball misses (escaping, silently: the
++                // field goes to the judging)
++                if (flow->result != BTL_FLOW_RESULT_CAPTURE && Gen5_PortContestOutOfBalls(item)) {
++                    return TRUE;
++                }
+             }
+             return FALSE;
+         }
+@@ -879,6 +887,12 @@
          }
      }
      if (BtlSetup_GetBattleType(flow->mainModule) == BTL_TYPE_WILD) {
@@ -32,3 +44,110 @@
          if (targetPos != BTL_POS_NONE) {
              caught = CheckBallCapture(flow, mon, target, item, &shakes, &critical);
              if (caught) {
+@@ -898,7 +912,83 @@
+     }
+     return FALSE;
+ }
++
++// The port: in HeartGold and SoulSilver (Gen5_PortApricornBalls), the catch rate an Apricorn Ball gives the target, as
++// HGSS's battle_command.c works it out (its quirks kept: the Heavy Ball's penalty for light Pokemon checks the catch
++// rate, not the weight); the species' own rate for any other ball, and in Platinum
++static u16 Gen5_PortApricornCatchRate(BtlServerFlow *flow, BattleMon *mon, BattleMon *target, u16 item, u16 catchRate) {
++    // Nidoran F to Nidoking, Cleffa, Clefairy, Clefable, Igglybuff, Jigglypuff, Wigglytuff, Skitty, Delcatty
++    static const u16 moonBallSpecies[] = { 29, 30, 31, 32, 33, 34, 173, 35, 36, 174, 39, 40, 300, 301 };
++    s32 rate = catchRate;
++    u32 i;
++
++    if (!Gen5_PortApricornBalls()) {
++        return catchRate;
++    }
++    switch (item) {
++    case ITEM_FAST_BALL:
++        if (PML_PersonalGetParamSingle(GetBattleMonSpecies(target), GetBattleMonStat(target, BATTLEMON_FORM), PERSONAL_BASE_SPEED) >= 100) {
++            rate *= 4;
++        }
++        break;
++    case ITEM_LEVEL_BALL: {
++        u32 attacker = GetBattleMonStat(mon, BATTLEMON_LEVEL);
++        u32 defender = GetBattleMonStat(target, BATTLEMON_LEVEL);
+ 
++        if (attacker <= defender) {
++        } else if (attacker / 2 <= defender) {
++            rate *= 2;
++        } else if (attacker / 4 <= defender) {
++            rate *= 4;
++        } else {
++            rate *= 8;
++        }
++        break;
++    }
++    case ITEM_LURE_BALL:
++        if (BtlSetup_IsBattleType(flow->mainModule, BTL_SETUP_FLAG_FISHING)) {
++            rate *= 3;
++        }
++        break;
++    case ITEM_HEAVY_BALL: {
++        u32 weight = GetBattleMonWeight(target); // tenths of a kilogram, as HGSS's Pokedex data
++
++        if (weight >= 4096) {
++            rate += 40;
++        } else if (weight >= 3072) {
++            rate += 30;
++        } else if (weight >= 2048) {
++            rate += 20;
++        } else if (rate < 1024) {
++            rate -= 20;
++        }
++        break;
++    }
++    case ITEM_LOVE_BALL:
++        if (GetBattleMonSpecies(mon) == GetBattleMonSpecies(target)
++            && GetBattleMonStat(mon, BATTLEMON_GENDER) != GetBattleMonStat(target, BATTLEMON_GENDER)) {
++            rate *= 8;
++        }
++        break;
++    case ITEM_MOON_BALL:
++        for (i = 0; i < NELEMS(moonBallSpecies); i++) {
++            if (moonBallSpecies[i] == GetBattleMonSpecies(target)) {
++                rate *= 4;
++                break;
++            }
++        }
++        break;
++    default:
++        return catchRate;
++    }
++    if (rate > 255) {
++        rate = 255;
++    } else if (rate < 0) {
++        rate = 1;
++    }
++    return (u16)rate;
++}
++
+ // Whether a ball catches its target, with how many times it shakes and whether it was a critical capture
+ static BOOL CheckBallCapture(BtlServerFlow *flow, BattleMon *mon, BattleMon *target, u16 item, u8 *shakes,
+                              u8 *critical) {
+@@ -924,7 +1014,8 @@
+     }
+     species = GetBattleMonSpecies(target);
+     form = GetBattleMonStat(target, BATTLEMON_FORM);
+-    rate *= (u16)PML_PersonalGetParamSingle(species, form, PERSONAL_CATCH_RATE);
++    // The port: HGSS's Apricorn Balls change the species' catch rate itself (Gen5_PortApricornCatchRate)
++    rate *= Gen5_PortApricornCatchRate(flow, mon, target, item, (u16)PML_PersonalGetParamSingle(species, form, PERSONAL_CATCH_RATE));
+     rate = (u32)FX_MUL(rate, GetBallCaptureMod(flow, mon, target, item)) / maxHP;
+     switch (GetBattleMonStatus(target)) {
+     case CONDITION_SLEEP:
+@@ -1041,6 +1132,12 @@
+             return FX32_CONST(5);
+         }
+         break;
++    case ITEM_SPORT_BALL:
++        // The port: HGSS's Sport Ball (Gen5_PortApricornCatchRate)
++        if (Gen5_PortApricornBalls()) {
++            return FX32_CONST(1.5);
++        }
++        break;
+     }
+     return FX32_ONE;
+ }

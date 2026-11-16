@@ -22,7 +22,26 @@
      GFL_BGSysSetBGPriority(3, 1);
      GFL_BGSysLoadNCGRStatic(ARCID_BTLV_EFFVM_BG, fileId + 1, 3, 0, 0, FALSE, HEAPID_TAIL(wk->heapId));
      loadBGScrToVramByNarcNoReserveNegAlign(ARCID_BTLV_EFFVM_BG, fileId, 3, 0, 0, FALSE, HEAPID_TAIL(wk->heapId));
-@@ -2712,6 +2714,7 @@
+@@ -2572,6 +2574,18 @@
+     NNS_G3dWorldPosToScrPos(&world, &x, &y);
+     ball = PML_ItemGetMonsBallID(wk->param.itemNo);
+     if (ball == EFFVM_BALL_NONE || ball > EFFVM_BALL_DREAM) {
++        ball = EFFVM_BALL_POKE;
++    }
++    // The port: BW2 throws none of the Apricorn Balls (17 to 24), and its archive has no sprites for them (pair 17 is
++    // the Dream Ball's): HeartGold's are the Poke Ball's frames in a palette of their own, which the port adds to its
++    // copy of the archive (Gen5_PortApricornBallPalette), else they are thrown as a Poke Ball looks
++    if (ball > EFFVM_BALL_CHERISH && ball < EFFVM_BALL_DREAM) {
++        int palette = Gen5_PortApricornBallPalette(ball);
++        if (palette != 0) {
++            wk->clactIndexes[index] = BtlvClact_AddActorEx(BtlvEffect_GetClact(), ARCID_BTLV_EFFVM_BG,
++                EFFVM_BALL_POKE * 2 + 231, palette, 231, 232, x, y, scaleX, scaleY);
++            return wk->ret;
++        }
+         ball = EFFVM_BALL_POKE;
+     }
+     if (ball == EFFVM_BALL_DREAM) {
+@@ -2712,6 +2726,7 @@
              BtlvScu_RestoreBG3(scu);
          }
          GFL_BGSysSetBGPriority(3, 0);
@@ -30,7 +49,7 @@
          wk->bgMoved = FALSE;
          GFL_BGSysMoveBG(3, BG_MOVE_SET_X, wk->bgX);
          GFL_BGSysMoveBG(3, BG_MOVE_SET_Y, wk->bgY);
-@@ -3630,9 +3633,10 @@
+@@ -3630,9 +3645,10 @@
          VEC_CrossProduct(&base, &dir, &axis);
          VEC_Normalize(&axis, &axis);
          MTX_RotAxis43(&work->mtx, &axis, FX_SinIdx(angle), FX_CosIdx(angle));
@@ -44,7 +63,7 @@
      }
      if (param->from != EFFVM_EMIT_EXPLICIT && param->to != EFFVM_EMIT_EXPLICIT && param->from != param->to) {
          spinAxis = 2;
-@@ -4128,7 +4132,7 @@
+@@ -4128,7 +4144,7 @@
          pos->z += offset->z;
      }
      BtlvEffvm_MulVec44(pos, &mtx, pos, &w);
@@ -53,7 +72,7 @@
      pos->y = FX_Mul(FX_Div(pos->y, w), FX32_CONST(3));
      pos->z = -pos->z;
  }
-@@ -4550,4 +4554,156 @@
+@@ -4550,4 +4566,156 @@
          }
      }
      return FALSE;

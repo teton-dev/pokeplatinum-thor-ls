@@ -30,6 +30,7 @@
 #include "sound_playback.h"
 #include "unk_02017038.h"
 #include "trainer_data.h"
+#include "port/rom_patches.h"
 #include "bag.h"
 #include "game_options.h"
 #include "battle/battle_system.h"
@@ -45,10 +46,14 @@
 #include "string_gf.h"
 #include "tv_segment.h"
 #include "gen5.h"
+#include "message_util.h"
 #include "party.h"
+#include "string_template.h"
 #include "pokemon.h"
 #include "charcode_convert.h"
 #include "port/gen5_data.h"
+#include "port/gen5_dex_entry.h"
+#include "res/text/bank/battle_strings.h"
 #include "port/gen5_rom.h"
 #include "port/nuzlocke_gray.h"
 #include "port/nuzlocke_mode.h"
@@ -94,9 +99,18 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     if (dto->battleType == BATTLE_TYPE_SAFARI) {
         return dto->battleStatusMask == 0;
     }
-    // A wild battle, alone or beside a partner (two wild Pokémon), with nothing special about it but a honey tree
-    if (dto->battleType == BATTLE_TYPE_WILD_MON || dto->battleType == BATTLE_TYPE_AI_PARTNER) {
-        return (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
+    // The catching tutorial (Dawn or Lucas catches a Bidoof on Route 202): BW2's capture demo plays it
+    if (dto->battleType == BATTLE_TYPE_CATCH_TUTORIAL) {
+        return TRUE;
+    }
+    // A wild battle, alone or beside a partner (two wild Pokémon), or a roaming Pokémon's (BW2's roaming AI flees):
+    // a honey tree's, a legendary's (the field picks its intro and music; BW2 leaves "wild" out of its message), and
+    // Giratina's in the Distortion World (its Origin Forme, the Distortion World's arena) too
+    if (dto->battleType == BATTLE_TYPE_WILD_MON || dto->battleType == BATTLE_TYPE_AI_PARTNER
+        || dto->battleType == BATTLE_TYPE_ROAMER) {
+        const u32 wildFlags = BATTLE_STATUS_HONEY_TREE | BATTLE_STATUS_LEGENDARY | BATTLE_STATUS_GIRATINA
+            | BATTLE_STATUS_DISTORTION;
+        return (dto->battleStatusMask & ~wildFlags) == 0;
     }
     // A trainer battle: single, double (one trainer's two Pokémon), against two trainers (TAG), or with them beside a
     // partner (2vs2 and AI). The story's trainers (Gym Leaders, the rival, Cynthia, Team Galactic) are started by
@@ -133,6 +147,8 @@ static Gen5Battle sBattle;
 // The bag's counts before the battle
 static Gen5Item sItemCountsBefore[GEN5_ITEMS_MAX];
 static int sItemsBefore;
+// The wild Pokémon whose species the player hadn't caught before the battle
+static BOOL sWildNewSpecies[2];
 // After a catch: the naming screen
 static NamingScreenArgs *sNamingArgs;
 static ApplicationManager *sNamingApp;
@@ -791,6 +807,20 @@ static void TrainerToGen5Ex(FieldBattleDTO *dto, int battler, Gen5Trainer *dest,
             }
         }
     }
+    // What the trainer says during the battle (first hit, half HP, last Pokémon, last at half HP), as Platinum's
+    // battle shows TRMSG_FIRST_DAMAGE to TRMSG_LAST_BATTLER_HALF_HP (battle_lib.c); BW2 shows them at the same
+    // moments (btl_client.c's hints)
+    static const int hintTypes[4] = {
+        TRMSG_FIRST_DAMAGE, TRMSG_ACTIVE_BATTLER_HALF_HP, TRMSG_LAST_BATTLER, TRMSG_LAST_BATTLER_HALF_HP
+    };
+    for (int k = 0; k < 4; k++) {
+        dest->hintText[k][0] = 0xFFFF;
+        if (!partner && Trainer_HasMessageType(id, hintTypes[k], HEAP_ID_APPLICATION)) {
+            Trainer_LoadMessage(id, hintTypes[k], text, HEAP_ID_APPLICATION);
+            Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->hintText[k], GEN5_TEXT_LENGTH);
+            printf("Gen 5: trainer %d has line %d\n", id, hintTypes[k]);
+        }
+    }
     String_Free(text);
 
     Party *party = dto->parties[battler];
@@ -925,6 +955,12 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
             break;
         }
     }
+    // Giratina's battle (Encounter_NewVsGiratinaOrigin) is the Distortion World's whatever the map says, as Platinum's
+    // terrain for it (TERRAIN_GIRATINA) draws it
+    if ((dto->battleStatusMask & BATTLE_STATUS_DISTORTION) || dto->terrain == TERRAIN_GIRATINA) {
+        *bg = ARENA_BG_VOID;
+        *terrain = 0;
+    }
     const char *override = getenv("POKEPLATINUM_GEN5_ARENA");
     if (override != NULL) {
         sscanf(override, "%d,%d", bg, terrain);
@@ -932,6 +968,56 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
 }
 
 int Gear_LevelCap(void);
+
+// The catching tutorial's two lines, as Platinum's battle has them (battle_display.c, battle_script.c): "All right! I
+// got its HP down! Time to throw a Poké Ball!" (Dawn's, or Lucas's "OK! Its HP is down!...") and "Dawn used a Poké
+// Ball!", the counterpart being the DTO's player
+static void CaptureDemoTextToGen5(FieldBattleDTO *dto)
+{
+    TrainerInfo *trainerInfo = dto->trainerInfo[BATTLER_PLAYER_1];
+    StringTemplate *template = StringTemplate_Default(HEAP_ID_APPLICATION);
+    MessageLoader *loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG,
+        TEXT_BANK_BATTLE_STRINGS, HEAP_ID_APPLICATION);
+    StringTemplate_SetPlayerName(template, 0, trainerInfo);
+    const u32 ids[2] = {
+        BattleStrings_Text_AllRightIGotItsHPDownTimeToThrowAPokeBall + TrainerInfo_Gender(trainerInfo),
+        BattleStrings_Text_01228,
+    };
+    for (int i = 0; i < 2; i++) {
+        String *text = MessageUtil_ExpandedString(template, loader, ids[i], HEAP_ID_APPLICATION);
+        Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, sBattle.demoText[i], GEN5_TEXT_LENGTH);
+        String_Free(text);
+    }
+    MessageLoader_Free(loader);
+    StringTemplate_Free(template);
+}
+
+// The line Platinum's battle shows when a catch with no nickname goes to the PC (battle_script.c's catch sequence):
+// "{0} was transferred to someone's PC. It was placed in {1}." (Bebe's once met), or the current box is full and it
+// went to the next; for a full party with room in a box, else empty
+static void PcTextToGen5(FieldBattleDTO *dto, Pokemon *wild, unsigned short *dest)
+{
+    dest[0] = 0xFFFF;
+    const u32 currentBox = PCBoxes_GetCurrentBoxID(dto->pcBoxes);
+    const u32 emptyBox = PCBoxes_FirstEmptyBox(dto->pcBoxes);
+    if (Party_GetCurrentCount(dto->parties[BATTLER_PLAYER_1]) < MAX_PARTY_SIZE || emptyBox >= MAX_PC_BOXES) {
+        return;
+    }
+    StringTemplate *template = StringTemplate_Default(HEAP_ID_APPLICATION);
+    MessageLoader *loader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG,
+        TEXT_BANK_BATTLE_STRINGS, HEAP_ID_APPLICATION);
+    StringTemplate_SetSpeciesName(template, 0, Pokemon_GetBoxPokemon(wild));
+    StringTemplate_SetPCBoxName(template, 1, dto->pcBoxes, currentBox);
+    StringTemplate_SetPCBoxName(template, 2, dto->pcBoxes, emptyBox);
+    const u32 id = (currentBox == emptyBox ? BattleStrings_Text_PokemonWasTransferredToBoxInSomeonesPC
+                                           : BattleStrings_Text_BoxInSomeonesPCIsFullPokemonWasTransferredToOtherBoxInstead)
+        + (dto->metBebe ? 1 : 0);
+    String *text = MessageUtil_ExpandedString(template, loader, id, HEAP_ID_APPLICATION);
+    Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest, GEN5_TEXT_LENGTH);
+    String_Free(text);
+    MessageLoader_Free(loader);
+    StringTemplate_Free(template);
+}
 
 // Nuzlocke mode's rules and the Hard level cap setting, for BW2's engine (gen5/src/runtime.c and its patches)
 static void PortNuzlockeToGen5(FieldBattleDTO *dto)
@@ -1003,6 +1089,13 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     sBattle.player.gender = TrainerInfo_Gender(trainerInfo);
     sBattle.player.money = TrainerInfo_Money(trainerInfo);
     sBattle.player.badges = TrainerInfo_BadgeCount(trainerInfo);
+    {
+        // Platinum's obedience (battle_controller_player.c): another trainer's Pokémon obeys up to level 10, 30 with two
+        // badges, 50 with four, 70 with six, and always with every badge (none in Renegade Platinum: obeyAllBadges)
+        const int badges = sBattle.player.badges;
+        sBattle.obeyLevel = badges >= RomPatches_Info()->obeyAllBadges ? 100 : badges >= 6 ? 70 : badges >= 4 ? 50
+            : badges >= 2 ? 30 : 10;
+    }
     sBattle.partyCount = Party_GetCurrentCount(party);
     if (sBattle.partyCount > GEN5_PARTY_MAX) {
         sBattle.partyCount = GEN5_PARTY_MAX;
@@ -1019,6 +1112,12 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         sBattle.safariCatchRate = SpeciesData_GetSpeciesValue(species, SPECIES_DATA_CATCH_RATE);
         sBattle.safariFleeRate = SpeciesData_GetSpeciesValue(species, SPECIES_DATA_SAFARI_FLEE_RATE);
     }
+    // The species caught, for BW2's Pokédex
+    for (int species = 1; species <= NATIONAL_DEX_COUNT && (species - 1) / 8 < (int)sizeof(sBattle.dexCaught); species++) {
+        if (Pokedex_HasCaughtSpecies(dto->pokedex, species)) {
+            sBattle.dexCaught[(species - 1) / 8] |= 1 << ((species - 1) % 8);
+        }
+    }
     sBattle.isTrainer = (dto->battleType & BATTLE_TYPE_TRAINER) != 0;
     sBattle.doubles = (dto->battleType & BATTLE_TYPE_DOUBLES) != 0;
     if (sBattle.isTrainer) {
@@ -1030,6 +1129,27 @@ static BOOL Init(ApplicationManager *appMan, int *state)
             TrainerToGen5(dto, BATTLER_ENEMY_2, &sBattle.trainer2);
         }
     } else {
+        sBattle.legendary = (dto->battleStatusMask & BATTLE_STATUS_LEGENDARY) != 0;
+        // "Give a nickname to the caught ...?" after a catch, as Platinum's battle asks it (the Safari Zone's view
+        // catches without it: its naming screen always opens)
+        sBattle.captureDemo = dto->battleType == BATTLE_TYPE_CATCH_TUTORIAL;
+        if (sBattle.captureDemo) {
+            CaptureDemoTextToGen5(dto);
+        }
+        sBattle.askNickname = !sBattle.safari && !sBattle.captureDemo;
+        // With a full party, the line about the PC a catch with no nickname goes to
+        PcTextToGen5(dto, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), sBattle.pcText[0]);
+        if (Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0) {
+            PcTextToGen5(dto, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_2], 0), sBattle.pcText[1]);
+        }
+        // A species never caught before gets its Pokédex entry after the catch, as in Platinum's battle
+        sWildNewSpecies[0] = !Pokedex_HasCaughtSpecies(dto->pokedex,
+            Pokemon_GetValue(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), MON_DATA_SPECIES, NULL));
+        sWildNewSpecies[1] = Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0 && !Pokedex_HasCaughtSpecies(dto->pokedex,
+            Pokemon_GetValue(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_2], 0), MON_DATA_SPECIES, NULL));
+        sBattle.roamer = (dto->battleType & BATTLE_TYPE_ROAMER) != 0;
+        // Platinum's battle doesn't let a ball be thrown when the party and every box are full; nor does BW2's then
+        sBattle.boxesFull = Party_GetCurrentCount(party) >= MAX_PARTY_SIZE && PCBoxes_FirstEmptyBox(dto->pcBoxes) >= MAX_PC_BOXES;
         Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), &sBattle.wild);
         // Beside a partner: a second wild Pokémon, in Platinum's second enemy's party
         if (sBattle.doubles && Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0) {
@@ -1133,6 +1253,16 @@ static void Finish(FieldBattleDTO *dto)
                 Bag_TryAddItem(dto->bag, sBattle.items[i].item, after - before, HEAP_ID_APPLICATION);
             }
         }
+        // A wild Pokémon not caught keeps the HP and status the battle left it (RoamerAfterBattle_UpdateRoamers reads a
+        // roamer's back from here)
+        if (!sBattle.isTrainer && result != GEN5_BATTLE_CAUGHT) {
+            Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
+            u32 value = sBattle.wild.hp;
+            Pokemon_SetValue(wild, MON_DATA_HP, &value);
+            value = StatusFromGen5(sBattle.wild.status, Pokemon_GetValue(wild, MON_DATA_STATUS, NULL));
+            Pokemon_SetValue(wild, MON_DATA_STATUS, &value);
+            printf("Gen 5: the wild Pokémon after the battle: HP %u, status %u\n", (unsigned)sBattle.wild.hp, (unsigned)value);
+        }
         TrainerInfo *trainerInfo = dto->trainerInfo[BATTLER_PLAYER_1];
         if (sBattle.moneyChange > 0) {
             TrainerInfo_GiveMoney(trainerInfo, sBattle.moneyChange);
@@ -1163,6 +1293,8 @@ enum {
     STATE_NAMING,
     STATE_CHECK_EVOLUTION,
     STATE_WAIT_FOR_EVOLUTION,
+    STATE_DEX_ENTRY,
+    STATE_NICKNAME,
 };
 
 // A caught Pokémon, as Platinum's battle takes it (battle_script.c's catch sequence, BattleSystem_DexFlagCaught,
@@ -1290,13 +1422,39 @@ static BOOL Main(ApplicationManager *appMan, int *state)
         *state = sBattle.caught ? STATE_CATCH : STATE_CHECK_EVOLUTION;
         return FALSE;
     // The caught Pokémon: Platinum's catch data, then its naming screen (left empty, it keeps its species' name)
-    case STATE_CATCH: {
+    case STATE_CATCH:
         Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_BATTLE, 0x30000);
         TakeCaught(dto);
+        if (sWildNewSpecies[sBattle.caughtWild2 ? 1 : 0]) {
+            // A new species: its Pokédex entry first, as Platinum's battle shows it
+            Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_EVOLUTION, 0x80000);
+            Gen5DexEntry_Start(CaughtPokemon(dto), dto->pokedex, HEAP_ID_EVOLUTION);
+            *state = STATE_DEX_ENTRY;
+            return FALSE;
+        }
+        *state = STATE_NICKNAME;
+        return FALSE;
+    case STATE_DEX_ENTRY:
+        if (Gen5DexEntry_Run()) {
+            Gen5DexEntry_Free();
+            Heap_Destroy(HEAP_ID_EVOLUTION);
+            *state = STATE_NICKNAME;
+        }
+        return FALSE;
+    case STATE_NICKNAME: {
+        if (sBattle.askNickname && !sBattle.nicknameWanted) {
+            // No nickname: it keeps its species' name
+            StoreCaught(dto);
+            Heap_Destroy(HEAP_ID_BATTLE);
+            *state = STATE_CHECK_EVOLUTION;
+            return FALSE;
+        }
         Pokemon *mon = CaughtPokemon(dto);
         sNamingArgs = NamingScreenArgs_Init(HEAP_ID_BATTLE, NAMING_SCREEN_TYPE_POKEMON,
             Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL), MON_NAME_LEN, dto->options);
-        sNamingArgs->battleMsgID = 0;
+        // With a full party, the line about the PC it goes to under the name, as Platinum's battle has it
+        sNamingArgs->battleMsgID = Party_GetCurrentCount(dto->parties[BATTLER_PLAYER_1]) < MAX_PARTY_SIZE ? 0
+            : BattleStrings_Text_PokemonWasTransferredToBoxInSomeonesPC + (dto->metBebe ? 1 : 0);
         sNamingArgs->monForm = Pokemon_GetValue(mon, MON_DATA_FORM, NULL);
         sNamingArgs->pcBoxes = dto->pcBoxes;
         sNamingArgs->monGender = Pokemon_GetValue(mon, MON_DATA_GENDER, NULL);

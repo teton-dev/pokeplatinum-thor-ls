@@ -951,3 +951,68 @@ the whole battle itself, as BW2's capture demo does (`BattleClient_SetupView` st
 - **Widescreen:** the scene fills the window; the balls bar extends over the left side like the ability bars (by design).
 - **Open:** the Thor (needs an APK); the wild Pokémon's cry and the catch jingle (BW2's music calls are stubs); Nuzlocke mode's catch
   rule doesn't know the Safari Zone; Pal Park stays Platinum's; HGSS's Safari is a to-do in `hgss.md`.
+
+## The rest of the battles, second pass (2026-11-15)
+
+- **Trainers' lines during the battle:** Platinum fills `Gen5Trainer.hintText` from `TRMSG_FIRST_DAMAGE`,
+  `TRMSG_ACTIVE_BATTLER_HALF_HP`, `TRMSG_LAST_BATTLER` and `TRMSG_LAST_BATTLER_HALF_HP`, which BW2 shows at the same
+  moments (the runtime and patches HGSS added). Test `gen5_trainer_lines.txt` (`full100`: Roark's last-Pokémon line).
+- **Trainers' items** needed nothing: `Gen5Trainer.items` reach BW2's AI (`BattleClient_LoadAIItems`), which uses a
+  potion at a quarter HP and X items and status cures by its own rule (`AICheckItemUse`, with BW2's limit by the
+  party's size).
+- **Evolutions and new moves after trainer battles** needed nothing either: the Gen 5 application evolves after every
+  battle it runs, and BW2 teaches new moves in the battle.
+- **Legendaries, roamers, Giratina:** `Gen5Battle_Wants` now takes wild battles with `BATTLE_STATUS_LEGENDARY` (which
+  Platinum's battle never reads: the field picks the intro and music; BW2's legendary flag leaves "wild" out of its
+  message), `BATTLE_TYPE_ROAMER` (BW2's roaming flag: its AI flees; the runtime now reads the wild Pokémon back after
+  every wild battle, and the bridge gives a roamer's HP and status to the DTO for `RoamerAfterBattle_UpdateRoamers`) and
+  Giratina's `BATTLE_STATUS_GIRATINA | DISTORTION` (its Origin Forme, drawn as such; the arena is BW2's purple void
+  whenever the battle has the Distortion flag or `TERRAIN_GIRATINA`, as Platinum's terrain draws it, whatever the map).
+  Still Platinum's: `NO_RUNNING` (never set by the C code), the catching tutorial, Pal Park, link and Frontier battles.
+  Test commands `legendary`, `giratina`, `roamer SPECIES LEVEL`; tests `gen5_legendary.txt` (Uxie), `gen5_giratina.txt`,
+  `gen5_roamer.txt` (Mesprit flees, its HP kept).
+- **Full boxes:** with the party and every box full, no ball can be thrown (BW2's `BTL_SETUP_FLAG_BOXES_FULL`), as
+  Platinum's battle refuses one; before, the catch was lost.
+- **The nickname question:** "Give a nickname to the / caught ...?" with BW2's YES and NO (`BTLV_STR_YES_NO` 0 and 1),
+  asked in the battle after the catch messages (`btl_client.c`'s `ScBallThrow`, patched; `btlv_core.c`'s
+  `BtlvCore_PortStartMsgNickname`; the text from `Gen5_PortNicknameText`): BW2 asks in its field. The naming screen opens
+  only on YES (`Gen5Battle.askNickname`, `nicknameWanted`). The Safari Zone's view-only catch still always names. Tests
+  touch YES at (128, 55); `gen5_nickname.txt` answers NO. Not done: the PC message after a declined nickname with a
+  full party, and the Pokédex entry screen for a new species.
+- **Obedience:** BW2 makes another trainer's Pokémon (ID, gender and name compared) disobey above `(badges + 1) * 10`.
+  `btl_server_flow.c`'s `ServerControl_CheckObedience` (patched) takes the game's own level (`Gen5Battle.obeyLevel`):
+  Platinum's 10, 30 with two badges, 50 with four, 70 with six, every Pokémon from `obeyAllBadges` (8; 0 in Renegade
+  Platinum, where everything obeys). The runtime logs each party Pokémon BW2 doesn't count as the player's own.
+- **HGSS (shared `gen5/`):** the Bug-Catching Contest (`Gen5Battle.bugContest`: `btl_server_flow_sub.c`'s `UseBagItem`
+  ends the battle when the last Sport Ball misses), Mom's line under the prize (`Gen5Battle.momSavings`), legendaries and
+  roamers, obedience; see `hgss.md`.
+- `gen5_safari_catch.txt` threw one ball and waited for the naming screen; a Safari Ball isn't a sure catch at full HP,
+  so it hung about half the time. It throws again after each miss now.
+
+## After the catch, and the catching tutorial (2026-11-15, third pass)
+
+- **The Pokédex entry for a new species** (`src/port/gen5_dex_entry.c`): Platinum's own entry screen (`ov21_021E8D48`,
+  as its battle shows it after a catch) runs after a battle in BW2's engine, before the naming screen. Platinum's
+  battle gives it its display; the port sets that up alone, as the evolution scene does (VRAM banks, BGs, palettes,
+  the 3D Pokémon sprite, OAM with its char and palette transfers, `FONT_SUBSCREEN`), and resets the master
+  brightness BW2's battle leaves faded out (else the screen stayed black). A or a touch closes it. Order differs from
+  Platinum's: the nickname question (in BW2's battle) comes before the entry, not after.
+- **BW2's Pokédex** gets the species the player has caught (`Gen5Battle.dexCaught`, its save block's bit layout):
+  "...'s data was added to the Pokédex" was shown for every catch (its Pokédex was empty), and its critical captures
+  count the species caught.
+- **The PC line** for a catch with no nickname and a full party: the bridge makes the game's own line (battle messages
+  1174 to 1177, the box names; someone's or Bebe's PC) and BW2's battle shows it after the answer
+  (`Gen5Battle.pcText`, found by the caught Pokémon's personality); with a nickname, the naming screen shows it
+  (`battleMsgID`), as Platinum's battle sets it up. Test `gen5_pc_message.txt`.
+- **The catching tutorial** (Route 202: Dawn or Lucas catches a Bidoof) runs as BW2's capture demo
+  (`BTL_TYPE_CAPTURE_DEMO`, Bianca's in BW2), which the battle view plays alone: the counterpart's name and back sprite
+  (the DTO's player), the two Pokémon's first moves instead of BW2's Tackle and Growl (a damaging foe move takes an
+  eighth of the HP: BW2's gauge call takes the HP left), and Platinum's two lines instead of Bianca's
+  (`Gen5Battle.captureDemo`, `demoText`; `btlv_core.c`'s `CmdCaptureDemo`). Test command `tutorial`; test
+  `gen5_tutorial.txt`. HGSS's (Route 29, Lyra or Ethan with Marill) the same way.
+- **The Safari Zone's catch** names again without the nickname question (its view-only catch never asks it).
+- **HGSS's Apricorn Balls** (shared patch): BW2 throws and opens them with its own art (its particles have all 25
+  balls); the ball shaking on the ground was a Poké Ball. HGSS's arena maker adds a palette per Apricorn Ball to a copy of
+  archive 94 (BW2's Poké Ball reds as shades of the ball's main colour, from HGSS's own sheet), which
+  `btlv_effvm.c` uses with BW2's Poké Ball frames (`Gen5_SetApricornBallSprites`). An approximation: one colour each.
+- Still Platinum's: Pal Park, link and Frontier battles, `NO_RUNNING` battles.
