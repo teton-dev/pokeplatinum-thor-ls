@@ -1,0 +1,12 @@
+# The settings in the platform's own UI (libntr_native_menus.patch): with SIM_NATIVE_SETTINGS=1 each page is drawn
+# as a recording and its state printed ("[native-settings] {...}"); SIM_NATIVE_SETTINGS_EVENTS plays the events
+# Android's views would send. The check is the log: Gameplay's "Instant text" toggle changes, its JSON follows.
+#
+#   SIM_NATIVE_SETTINGS=1 SIM_NATIVE_SETTINGS_EVENTS='toggle @Instant text 1|toggle @Instant text 0|page 0|list|back' \
+#     tools/docker/desktop.sh test tests/scripts/native_settings.txt --from turtwig
+
+mash A until free
+settings Gameplay
+wait 30
+log back in the game
+exit 0

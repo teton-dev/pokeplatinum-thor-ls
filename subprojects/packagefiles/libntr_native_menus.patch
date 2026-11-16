@@ -1,0 +1,1016 @@
+--- a/include/simulator/sim_settings.hpp
++++ b/include/simulator/sim_settings.hpp
+@@ -20,6 +20,9 @@
+ bool PageBack();
+ 
+ void Open(const char *page = nullptr);
++// The platform's own UI (Android's views) sent an event: "page N", "list", "back", "close", "classic" (Dear
++// ImGui's menus instead), or one for a widget (SIM::UI::NativeEvent: "toggle ID 1", "tap @Label", ...). Any thread.
++void PostNativeEvent(const char *text);
+ void Close();
+ bool IsOpen();
+ void Draw(); // libntr internal: every frame while open
+@@ -30,6 +33,13 @@
+ 
+ } // namespace SIM::Settings
+ 
++// The same from C (test scripts)
++extern "C" {
++void SIM_Settings_Open(const char *page);
++int SIM_Settings_IsOpen(void);
++void SIM_Settings_NativeEvent(const char *text);
++}
++
+ // Game hook (weak, none by default): adds the game's pages. Called once, the first time
+ // the settings open.
+ void SIM_Prj_SettingsPages();
+--- a/include/simulator/sim_ui.hpp
++++ b/include/simulator/sim_ui.hpp
+@@ -14,6 +14,8 @@
+ 
+ #include "simulator/imgui/imgui.hpp"
+ 
++#include <string>
++
+ namespace SIM::UI {
+ 
+ // Size unit: the main window's height / 540 (a 540p layout scaled up)
+@@ -89,6 +91,20 @@
+ // B was pressed: it goes back in what's drawn now, and what's drawn after doesn't see it
+ bool TakeBack();
+ 
++// Native menus (the platform's own UI, sim_settings.cpp): while a pass is recorded, the widgets above draw nothing
++// and add themselves to a JSON array instead; the pass's event (from that UI) goes to the widget it is for, which
++// returns as if it had been tapped. Kinds: toggle, choice, step, number (value: the new value), tap, pair (value: 1
++// or 2). A label instead of an ID (label != "") finds the widget by the text it shows.
++struct NativeEvent {
++  std::string kind;
++  unsigned id = 0;
++  int value = 0;
++  std::string label;
++};
++void BeginNativeRecording(const NativeEvent *event, bool back);
++std::string EndNativeRecording(bool *eventUsed, bool *backUsed, unsigned *focusId, bool *focusRequest);
++bool NativeRecording();
++
+ // libntr internals
+ void Init();               // with the main ImGui context current, after the GUI's own init
+ void FeedPad(bool active); // between the platform backend's NewFrame and ImGui::NewFrame
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -10,13 +10,17 @@
+ #include "simulator/sim_ui.hpp"
+ #ifdef SDK_BUILD_ANDROID
+ #include "simulator/sim_android.h"
++#include <jni.h>
+ #endif
+ 
+ #include <SDL2/SDL.h>
+ 
+ #include <algorithm>
+ #include <cstdio>
++#include <cstdlib>
+ #include <cstring>
++#include <deque>
++#include <mutex>
+ #include <string>
+ #include <vector>
+ 
+@@ -48,6 +52,117 @@
+ bool sPageMayTakeBack = false; // B can go back inside the page being drawn (PageBack)
+ 
+ void EnsurePages();
++
++// --- Native menus ---------------------------------------------------------------------------
++// On Android the settings can show in the platform's own views (org.pokeplatinum.port.NativeSettings) instead of
++// Dear ImGui. The pages are the same: each frame the page shown is drawn as a recording pass (SIM::UI's widgets
++// write themselves as JSON, sim_ui.cpp), the state goes to Java when it changes, and Java's taps come back as
++// events, one per frame, answered by the widget they are for on the render thread, as an ImGui tap would be.
++// The game waits while they are open, as with ImGui's. Desktop tests: SIM_NATIVE_SETTINGS=1 prints the state
++// ("[native-settings] {...}") and SIM_NATIVE_SETTINGS_EVENTS ("page 2|toggle @Instant text 1|close") plays events.
++
++bool sNative = false;
++std::mutex sNativeLock;
++std::deque<std::string> sNativeEvents;
++std::string sNativeSent;
++Uint64 sNativeSentAt = 0;
++int sNativeUrgent = 0;   // frames left that send their state at once (after an event)
++int sNativeGen = 0;      // what is shown changed: Java moves the cursor to the default item
++std::vector<std::string> sNativeScript; // desktop tests' events
++size_t sNativeScriptNext = 0;
++int sNativeScriptWait = 0;
++
++#ifdef SDK_BUILD_ANDROID
++// Calls a method of the SDL activity (PlatinumActivity); FALSE when it has none (an older Java side)
++bool CallActivity(const char *name, const char *signature, jvalue *args, jboolean *result) {
++  JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
++  jobject activity = (jobject)SDL_AndroidGetActivity();
++  if (env == nullptr || activity == nullptr) {
++    return false;
++  }
++  jclass cls = env->GetObjectClass(activity);
++  jmethodID method = env->GetMethodID(cls, name, signature);
++  bool ok = method != nullptr;
++  if (!ok) {
++    env->ExceptionClear();
++  } else if (result != nullptr) {
++    *result = env->CallBooleanMethodA(activity, method, args);
++  } else {
++    env->CallVoidMethodA(activity, method, args);
++  }
++  if (env->ExceptionCheck()) {
++    env->ExceptionClear();
++    ok = false;
++  }
++  env->DeleteLocalRef(cls);
++  env->DeleteLocalRef(activity);
++  return ok;
++}
++#endif
++
++bool NativeWanted() {
++#ifdef SDK_BUILD_ANDROID
++  jboolean on = JNI_FALSE;
++  return CallActivity("nativeSettingsEnabled", "()Z", nullptr, &on) && on;
++#else
++  const char *env = getenv("SIM_NATIVE_SETTINGS");
++  return env != nullptr && env[0] == '1';
++#endif
++}
++
++void NativeSend(const std::string &json) {
++#ifdef SDK_BUILD_ANDROID
++  JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
++  if (env == nullptr) {
++    return;
++  }
++  jvalue arg;
++  arg.l = env->NewStringUTF(json.c_str());
++  CallActivity("nativeSettingsState", "(Ljava/lang/String;)V", &arg, nullptr);
++  env->DeleteLocalRef(arg.l);
++#else
++  printf("[native-settings] %s\n", json.c_str());
++#endif
++}
++
++void NativeHide() {
++#ifdef SDK_BUILD_ANDROID
++  CallActivity("nativeSettingsClosed", "()V", nullptr, nullptr);
++#else
++  printf("[native-settings] closed\n");
++#endif
++}
++
++void PushNativeEvent(const char *text) {
++  std::lock_guard<std::mutex> lock(sNativeLock);
++  if (sNativeEvents.size() < 64) {
++    sNativeEvents.push_back(text);
++  }
++}
++
++// "kind id value" or "kind @label value" (the label may have spaces; the value is the last word)
++bool ParseNativeEvent(const std::string &text, SIM::UI::NativeEvent *out) {
++  const size_t space = text.find(' ');
++  if (space == std::string::npos) {
++    return false;
++  }
++  out->kind = text.substr(0, space);
++  std::string rest = text.substr(space + 1);
++  const size_t last = rest.rfind(' ');
++  std::string target = last == std::string::npos ? rest : rest.substr(0, last);
++  out->value = last == std::string::npos ? 0 : atoi(rest.c_str() + last + 1);
++  if (!target.empty() && target[0] == '@') {
++    out->label = target.substr(1);
++    if (last != std::string::npos && (out->kind == "tap")) {
++      out->label = rest.substr(1); // a tap has no value: all of it is the label
++    }
++  } else {
++    out->id = (unsigned)strtoul(target.c_str(), nullptr, 10);
++  }
++  return true;
++}
++
++void DrawNative();
+ 
+ // --- Display ------------------------------------------------------------------------------
+ 
+@@ -426,6 +541,25 @@
+   Note(SIM_Android_CpuInfo());
+ #endif
+ 
++#ifdef SDK_BUILD_ANDROID
++  Section("Menus");
++  bool native = sNative;
++  if (Toggle("Android menus", "These settings in Android's own views: smoother scrolling, the system's fonts and "
++             "controls. Off: the menus drawn by the game, as on a computer.", &native)) {
++    jvalue arg;
++    arg.z = native ? JNI_TRUE : JNI_FALSE;
++    CallActivity("setNativeSettingsEnabled", "(Z)V", &arg, nullptr);
++    if (native) {
++      sNative = true;
++      sNativeSent.clear();
++      sNativeGen++;
++    } else {
++      sNative = false;
++      NativeHide();
++    }
++  }
++#endif
++
+   Section("Developer");
+   if (Button("Developer windows", "The original debug windows: libntr, multiplayer, the game's tools.")) {
+     Close();
+@@ -476,6 +610,13 @@
+   EnsurePages();
+   sOpen = true;
+   sShowList = true;
++  sNative = NativeWanted();
++  sNativeSent.clear();
++  sNativeGen++;
++  {
++    std::lock_guard<std::mutex> lock(sNativeLock);
++    sNativeEvents.clear();
++  }
+   if (page != nullptr) {
+     for (size_t i = 0; i < sPages.size(); i++) {
+       if (sPages[i].name == page) {
+@@ -490,8 +631,16 @@
+   sOpen = false;
+   sCaptureTarget = nullptr;
+   LinkPlayClosed();
++  if (sNative) {
++    sNative = false;
++    NativeHide();
++  }
+ }
+ 
++void PostNativeEvent(const char *text) {
++  PushNativeEvent(text);
++}
++
+ bool IsOpen() {
+   return sOpen;
+ }
+@@ -553,6 +702,10 @@
+   if (sPage >= (int)sPages.size()) {
+     sPage = 0;
+   }
++  if (sNative) {
++    DrawNative();
++    return;
++  }
+ 
+   ImGuiIO &io = ImGui::GetIO();
+   const float width = io.DisplaySize.x, height = io.DisplaySize.y;
+@@ -672,7 +825,166 @@
+   }
+   if (close) {
+     Close();
++  }
++}
++
++namespace {
++
++void DrawNative() {
++  // Desktop tests: the scripted events, one every few frames
++  if (sNativeScript.empty() && sNativeScriptNext == 0) {
++    const char *script = getenv("SIM_NATIVE_SETTINGS_EVENTS");
++    if (script != nullptr && script[0] != '\0') {
++      std::string all = script;
++      size_t start = 0;
++      while (start <= all.size()) {
++        const size_t bar = all.find('|', start);
++        sNativeScript.push_back(all.substr(start, bar == std::string::npos ? std::string::npos : bar - start));
++        if (bar == std::string::npos) {
++          break;
++        }
++        start = bar + 1;
++      }
++    }
+   }
++  if (sNativeScriptNext < sNativeScript.size() && ++sNativeScriptWait >= 20) {
++    sNativeScriptWait = 0;
++    printf("[native-settings] event %s\n", sNativeScript[sNativeScriptNext].c_str());
++    PushNativeEvent(sNativeScript[sNativeScriptNext++].c_str());
++  }
++
++  std::string text;
++  {
++    std::lock_guard<std::mutex> lock(sNativeLock);
++    if (!sNativeEvents.empty()) {
++      text = sNativeEvents.front();
++      sNativeEvents.pop_front();
++    }
++  }
++  SIM::UI::NativeEvent event;
++  bool hasEvent = false;
++  bool back = false;
++  if (!text.empty()) {
++    sNativeUrgent = 3;
++    if (text == "close") {
++      Close();
++      return;
++    } else if (text == "classic") {
++      sNative = false; // ImGui's from the next frame, on the same page
++      NativeHide();
++      return;
++    } else if (text == "list") {
++      sShowList = true;
++      sCaptureTarget = nullptr;
++      sNativeGen++;
++    } else if (text == "back") {
++      back = true;
++    } else if (text.compare(0, 5, "page ") == 0) {
++      const int page = atoi(text.c_str() + 5);
++      if (page >= 0 && page < (int)sPages.size() && (page != sPage || sShowList)) {
++        sPage = page;
++        sShowList = false;
++        sCaptureTarget = nullptr;
++        sNativeGen++;
++      }
++    } else {
++      hasEvent = ParseNativeEvent(text, &event);
++    }
++  }
++  if (sCaptureTarget != nullptr && SDL_GetTicks64() > sCaptureUntil) {
++    sCaptureTarget = nullptr;
++  }
++
++  // The page, as a recording (the window is off-screen and draws nothing: the widgets don't draw while recording)
++  std::string items = "[]";
++  bool eventUsed = false, backUsed = false, focusRequest = false;
++  unsigned focusId = 0;
++  if (!sShowList) {
++    const Page &page = sPages[sPage];
++    ImGui::SetNextWindowPos(ImVec2(-20000.0f, -20000.0f));
++    ImGui::SetNextWindowSize(ImVec2(640.0f, 480.0f));
++    ImGui::Begin("##native settings", nullptr,
++                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
++                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
++                     ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoBackground);
++    ImGui::PushID(page.name.c_str());
++    SIM::UI::BeginNativeRecording(hasEvent ? &event : nullptr, back);
++    sPageMayTakeBack = true;
++    DrawPage(page);
++    sPageMayTakeBack = false;
++    items = SIM::UI::EndNativeRecording(&eventUsed, &backUsed, &focusId, &focusRequest);
++    ImGui::PopID();
++    ImGui::End();
++  }
++  if (!sOpen || !sNative) {
++    return; // the page closed the settings, or switched to ImGui's
++  }
++  if (back && !backUsed) {
++    if (sShowList) {
++      Close();
++      return;
++    }
++    sShowList = true; // out of the page, to the list (Java keeps a wide screen's page shown)
++    sCaptureTarget = nullptr;
++    sNativeGen++;
++  }
++  if (focusRequest) {
++    sNativeGen++;
++  }
++
++  std::string json = "{\"pages\":[";
++  for (size_t i = 0; i < sPages.size(); i++) {
++    json += i > 0 ? ",{\"name\":" : "{\"name\":";
++    std::string name, summary;
++    for (char c : sPages[i].name) {
++      name += c == '"' || c == '\\' ? std::string("\\") + c : std::string(1, c);
++    }
++    for (char c : sPages[i].summary) {
++      summary += c == '"' || c == '\\' ? std::string("\\") + c : std::string(1, c);
++    }
++    json += "\"" + name + "\",\"summary\":\"" + summary + "\"}";
++  }
++  json += "],\"page\":" + std::to_string(sPage) + ",\"list\":" + (sShowList ? "true" : "false") +
++          ",\"capturing\":" + (sCaptureTarget != nullptr ? "true" : "false") + ",\"focus\":" +
++          std::to_string(focusId) + ",\"gen\":" + std::to_string(sNativeGen) + ",\"items\":" + items + "}";
++
++  // Live text (timings, progress) changes every frame: at most 4 times a second, but at once after an event
++  const Uint64 now = SDL_GetTicks64();
++  const bool urgent = sNativeUrgent > 0 || sNativeSent.empty();
++  if (sNativeUrgent > 0) {
++    sNativeUrgent--;
++  }
++  if (json != sNativeSent && (urgent || now - sNativeSentAt >= 250)) {
++    NativeSend(json);
++    sNativeSent = json;
++    sNativeSentAt = now;
++  }
+ }
+ 
++} // namespace
++
+ } // namespace SIM::Settings
++
++// Java: org.pokeplatinum.port.NativeSettings (UI thread). Test scripts: the same events from C.
++#ifdef SDK_BUILD_ANDROID
++extern "C" JNIEXPORT void JNICALL Java_org_pokeplatinum_port_NativeSettings_nativeEvent(JNIEnv *env, jclass,
++                                                                                      jstring text) {
++  const char *chars = env->GetStringUTFChars(text, nullptr);
++  if (chars != nullptr) {
++    SIM::Settings::PostNativeEvent(chars);
++    env->ReleaseStringUTFChars(text, chars);
++  }
++}
++#endif
++
++extern "C" void SIM_Settings_Open(const char *page) {
++  SIM::Settings::Open(page);
++}
++
++extern "C" int SIM_Settings_IsOpen(void) {
++  return SIM::Settings::IsOpen() ? 1 : 0;
++}
++
++extern "C" void SIM_Settings_NativeEvent(const char *text) {
++  SIM::Settings::PostNativeEvent(text);
++}
+--- a/libraries/sim/src/sim_settings_link.cpp
++++ b/libraries/sim/src/sim_settings_link.cpp
+@@ -200,7 +200,7 @@
+ 
+ void AddLinkPlayPage() {
+   SIM_Net_SetDeviceName(SIM_DeviceName());
+-  AddPage("Link play", "Trade and battle with another device", DrawLinkPlay, 35);
++  AddPage("Link play", "Trade and battle with another device", DrawLinkPlay, 68); // beside the game's connections
+ }
+ 
+ void LinkPlayClosed() {
+--- a/libraries/sim/src/sim_ui.cpp
++++ b/libraries/sim/src/sim_ui.cpp
+@@ -12,6 +12,8 @@
+ #include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
++#include <string>
++#include <unordered_map>
+ 
+ extern "C" void __attribute__((weak)) SIM_Prj_UIFont(const void **regular, int *regularSize, const void **bold,
+                                                       int *boldSize) {
+@@ -138,10 +140,166 @@
+     sFocusNext = false;
+   }
+   return pressed;
++}
++
++} // namespace
++
++
++// --- Native menus ---------------------------------------------------------------------------
++// While a pass is recorded (BeginNativeRecording), the widgets draw nothing: each one adds itself to a JSON array
++// (what the platform's own UI shows, sim_settings.cpp) and answers the pass's event when it is the widget's.
++
++namespace {
++
++struct Recorder {
++  bool active = false;
++  std::string items;
++  bool firstItem = true;
++  bool inTiles = false;
++  bool firstTile = true;
++  NativeEvent event;
++  bool hasEvent = false;
++  bool eventUsed = false;
++  bool back = false;
++  bool backUsed = false;
++  unsigned lastId = 0;
++  unsigned focusId = 0;
++  bool focusRequest = false;
++  bool focusNext = false;
++  std::unordered_map<unsigned, int> seen;
++};
++Recorder sRec;
++
++std::string Shown(const char *label) {
++  return label != nullptr ? std::string(label, TextEnd(label)) : std::string();
++}
++
++void Json(std::string &out, const char *text) {
++  out += '"';
++  for (const char *c = text != nullptr ? text : ""; *c != '\0'; c++) {
++    const unsigned char ch = (unsigned char)*c;
++    if (ch == '"' || ch == '\\') {
++      out += '\\';
++      out += (char)ch;
++    } else if (ch == '\n') {
++      out += "\\n";
++    } else if (ch < 0x20) {
++      char esc[8];
++      snprintf(esc, sizeof(esc), "\\u%04x", ch);
++      out += esc;
++    } else {
++      out += (char)ch;
++    }
++  }
++  out += '"';
++}
++
++// A widget's ID: Dear ImGui's for its label in the current ID stack, made unique within the pass
++unsigned RecId(const char *label, const char *kind) {
++  ImGui::PushID(kind);
++  unsigned id = ImGui::GetID(label != nullptr ? label : "");
++  ImGui::PopID();
++  int &count = sRec.seen[id];
++  if (count++ > 0) {
++    id = ImHashData(&count, sizeof(count), id);
++  }
++  return id & 0x7FFFFFFF; // a positive JSON number for any platform
++}
++
++// The pass's event, when it is for this widget (by ID, or by its shown label for "@label" events)
++bool RecEvent(const char *kind, unsigned id, const char *label) {
++  if (!sRec.hasEvent || sRec.eventUsed || sRec.event.kind != kind) {
++    return false;
++  }
++  const bool match = sRec.event.label.empty() ? sRec.event.id == id : sRec.event.label == Shown(label);
++  if (match) {
++    sRec.eventUsed = true;
++  }
++  return match;
++}
++
++std::string &RecBegin(const char *type, unsigned id) {
++  std::string &out = sRec.items;
++  if (sRec.inTiles) {
++    out += sRec.firstTile ? "" : ",";
++    sRec.firstTile = false;
++  } else {
++    out += sRec.firstItem ? "" : ",";
++    sRec.firstItem = false;
++  }
++  out += "{\"t\":";
++  Json(out, type);
++  if (id != 0) {
++    out += ",\"id\":" + std::to_string(id);
++    sRec.lastId = id;
++    if (sRec.focusNext) {
++      sRec.focusId = id;
++      sRec.focusRequest = true;
++      sRec.focusNext = false;
++    }
++  }
++  return out;
+ }
+ 
++void RecStr(const char *key, const char *value) {
++  if (value == nullptr) {
++    return;
++  }
++  sRec.items += ",\"";
++  sRec.items += key;
++  sRec.items += "\":";
++  Json(sRec.items, value);
++}
++
++void RecStr(const char *key, const std::string &value) {
++  RecStr(key, value.c_str());
++}
++
++void RecInt(const char *key, long long value) {
++  sRec.items += ",\"";
++  sRec.items += key;
++  sRec.items += "\":" + std::to_string(value);
++}
++
++void RecBool(const char *key, bool value) {
++  sRec.items += ",\"";
++  sRec.items += key;
++  sRec.items += value ? "\":true" : "\":false";
++}
++
++void RecEnd() {
++  sRec.items += "}";
++}
++
+ } // namespace
++
++void BeginNativeRecording(const NativeEvent *event, bool back) {
++  sRec = Recorder();
++  sRec.active = true;
++  if (event != nullptr) {
++    sRec.event = *event;
++    sRec.hasEvent = true;
++  }
++  sRec.back = back;
++}
++
++std::string EndNativeRecording(bool *eventUsed, bool *backUsed, unsigned *focusId, bool *focusRequest) {
++  if (sRec.inTiles) {
++    sRec.items += "]}";
++    sRec.inTiles = false;
++  }
++  sRec.active = false;
++  *eventUsed = sRec.eventUsed;
++  *backUsed = sRec.backUsed;
++  *focusId = sRec.focusId;
++  *focusRequest = sRec.focusRequest;
++  return "[" + sRec.items + "]";
++}
+ 
++bool NativeRecording() {
++  return sRec.active;
++}
++
+ float Scale() {
+   float scale = ImGui::GetIO().DisplaySize.y / 540.0f;
+   return scale < 1.0f ? 1.0f : scale;
+@@ -229,6 +387,9 @@
+ }
+ 
+ bool PadPressed(int bit) {
++  if (sRec.active) {
++    return bit == 1 && sRec.back && !sRec.backUsed;
++  }
+   return (sPressed & (1 << bit)) != 0;
+ }
+ 
+@@ -237,6 +398,13 @@
+ }
+ 
+ bool TakeBack() {
++  if (sRec.active) {
++    if (sRec.back && !sRec.backUsed) {
++      sRec.backUsed = true;
++      return true;
++    }
++    return false;
++  }
+   if (!PadPressed(1)) {
+     return false;
+   }
+@@ -245,18 +413,27 @@
+ }
+ 
+ bool IsDragging() {
+-  return sDragging;
++  return sDragging && !sRec.active;
+ }
+ 
+ bool UsingPad() {
+-  return sPadMode;
++  return sPadMode && !sRec.active;
+ }
+ 
+ bool LastItemFocused() {
++  if (sRec.active) {
++    return false;
++  }
+   return sLastItem.ID != 0 && GImGui->NavId == sLastItem.ID;
+ }
+ 
+ void SetDefaultFocus() {
++  if (sRec.active) {
++    if (sRec.focusId == 0 || !sRec.focusRequest) {
++      sRec.focusId = sRec.lastId;
++    }
++    return;
++  }
+   ImGuiContext &g = *GImGui;
+   ImGuiWindow *window = sLastItemWindow;
+   if (sFocusRequest && window == ImGui::GetCurrentWindow() && sLastItem.ID != 0 && g.NavWindow != nullptr &&
+@@ -275,11 +452,19 @@
+ }
+ 
+ void RequestFocus() {
++  if (sRec.active) {
++    sRec.focusRequest = true;
++    return;
++  }
+   sFocusRequest = true;
+   sFocusRequestLate = sInWindow;
+ }
+ 
+ void FocusNextItem() {
++  if (sRec.active) {
++    sRec.focusNext = true;
++    return;
++  }
+   sFocusNext = true;
+ }
+ 
+@@ -411,10 +596,19 @@
+ }
+ 
+ void Space(float px) {
++  if (sRec.active) {
++    return;
++  }
+   ImGui::Dummy(ImVec2(0, S(px)));
+ }
+ 
+ void Section(const char *title) {
++  if (sRec.active) {
++    RecBegin("section", 0);
++    RecStr("text", Shown(title));
++    RecEnd();
++    return;
++  }
+   Space(10.0f);
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   float width = ImGui::GetContentRegionAvail().x;
+@@ -424,6 +618,12 @@
+ }
+ 
+ void Note(const char *text) {
++  if (sRec.active) {
++    RecBegin("note", 0);
++    RecStr("text", text);
++    RecEnd();
++    return;
++  }
+   float width = ImGui::GetContentRegionAvail().x - S(8.0f);
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   ImVec2 size = Measure(RegularFont(), S(14.0f), text, width);
+@@ -435,6 +635,13 @@
+   if (text == nullptr || text[0] == '\0') {
+     return;
+   }
++  if (sRec.active) {
++    RecBegin("status", 0);
++    RecStr("text", text);
++    RecBool("error", error);
++    RecEnd();
++    return;
++  }
+   float width = ImGui::GetContentRegionAvail().x - S(8.0f);
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   ImVec2 size = Measure(BoldFont(), S(15.0f), text, width);
+@@ -444,6 +651,13 @@
+ }
+ 
+ void Progress(const char *text, float fraction) {
++  if (sRec.active) {
++    RecBegin("progress", 0);
++    RecStr("text", text);
++    RecInt("permille", fraction < 0.0f ? -1 : (long long)(fraction * 1000.0f));
++    RecEnd();
++    return;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float pad = S(14.0f);
+@@ -474,6 +688,21 @@
+ }
+ 
+ bool Toggle(const char *label, const char *help, bool *value, bool enabled) {
++  if (sRec.active) {
++    const unsigned id = RecId(label, "toggle");
++    bool changed = false;
++    if (RecEvent("toggle", id, label) && enabled && (sRec.event.value != 0) != *value) {
++      *value = sRec.event.value != 0;
++      changed = true;
++    }
++    RecBegin("toggle", id);
++    RecStr("label", Shown(label));
++    RecStr("help", help);
++    RecBool("on", *value);
++    RecBool("en", enabled);
++    RecEnd();
++    return changed;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float pad = S(14.0f);
+@@ -509,6 +738,28 @@
+ }
+ 
+ bool Choice(const char *label, const char *help, int *value, const char *const *options, int count, bool enabled) {
++  if (sRec.active) {
++    const unsigned id = RecId(label, "choice");
++    bool changed = false;
++    if (RecEvent("choice", id, label) && enabled && sRec.event.value >= 0 && sRec.event.value < count &&
++        sRec.event.value != *value) {
++      *value = sRec.event.value;
++      changed = true;
++    }
++    std::string &out = RecBegin("choice", id);
++    RecStr("label", Shown(label));
++    RecStr("help", help);
++    RecInt("value", *value);
++    RecBool("en", enabled);
++    out += ",\"options\":[";
++    for (int i = 0; i < count; i++) {
++      out += i > 0 ? "," : "";
++      Json(out, Shown(options[i]).c_str());
++    }
++    out += "]";
++    RecEnd();
++    return changed;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float pad = S(14.0f);
+@@ -564,6 +815,28 @@
+ 
+ bool Stepper(const char *label, const char *help, int *value, int min, int max, int step, const char *format,
+              bool enabled) {
++  if (sRec.active) {
++    const unsigned id = RecId(label, "stepper");
++    bool changed = false;
++    if (RecEvent("step", id, label) && enabled) {
++      const int v = sRec.event.value < min ? min : (sRec.event.value > max ? max : sRec.event.value);
++      changed = v != *value;
++      *value = v;
++    }
++    char text[48];
++    snprintf(text, sizeof(text), format, *value);
++    RecBegin("stepper", id);
++    RecStr("label", Shown(label));
++    RecStr("help", help);
++    RecInt("value", *value);
++    RecInt("min", min);
++    RecInt("max", max);
++    RecInt("step", step);
++    RecStr("text", text);
++    RecBool("en", enabled);
++    RecEnd();
++    return changed;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float pad = S(14.0f);
+@@ -657,6 +930,17 @@
+ } // namespace
+ 
+ bool Button(const char *label, const char *help, bool primary, bool enabled) {
++  if (sRec.active) {
++    const unsigned id = RecId(label, "button");
++    const bool tapped = RecEvent("tap", id, label) && enabled;
++    RecBegin("button", id);
++    RecStr("label", Shown(label));
++    RecStr("help", help);
++    RecBool("primary", primary);
++    RecBool("en", enabled);
++    RecEnd();
++    return tapped;
++  }
+   const float width = ImGui::GetContentRegionAvail().x;
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   bool tapped = ButtonAt(label, help, primary, enabled, width, pos);
+@@ -665,6 +949,21 @@
+ }
+ 
+ int ButtonPair(const char *left, const char *right, bool leftPrimary, bool leftEnabled, bool rightEnabled) {
++  if (sRec.active) {
++    const unsigned id = RecId(left, "pair");
++    int result = 0;
++    if (RecEvent("pair", id, left)) {
++      result = sRec.event.value == 1 && leftEnabled ? 1 : (sRec.event.value == 2 && rightEnabled ? 2 : 0);
++    }
++    RecBegin("pair", id);
++    RecStr("left", Shown(left));
++    RecStr("right", Shown(right));
++    RecBool("primary", leftPrimary);
++    RecBool("len", leftEnabled);
++    RecBool("ren", rightEnabled);
++    RecEnd();
++    return result;
++  }
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float gap = S(8.0f);
+   const float half = (width - gap) * 0.5f;
+@@ -684,6 +983,17 @@
+ }
+ 
+ bool Card(const char *title, const char *subtitle, bool selected, bool enabled) {
++  if (sRec.active) {
++    const unsigned id = RecId(title, "card");
++    const bool tapped = RecEvent("tap", id, title) && enabled;
++    RecBegin("card", id);
++    RecStr("title", Shown(title));
++    RecStr("sub", subtitle);
++    RecBool("sel", selected);
++    RecBool("en", enabled);
++    RecEnd();
++    return tapped;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float pad = S(14.0f);
+@@ -711,6 +1021,15 @@
+ }
+ 
+ bool ListItem(const char *label, bool selected) {
++  if (sRec.active) {
++    const unsigned id = RecId(label, "item");
++    const bool tapped = RecEvent("tap", id, label);
++    RecBegin("item", id);
++    RecStr("label", Shown(label));
++    RecBool("sel", selected);
++    RecEnd();
++    return tapped;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float height = S(46.0f);
+@@ -787,6 +1106,24 @@
+ } // namespace
+ 
+ bool NumberField(const char *label, const char *help, int *value, int min, int max, bool enabled) {
++  if (sRec.active) {
++    const unsigned id = RecId(label, "number");
++    bool changed = false;
++    if (RecEvent("number", id, label) && enabled) {
++      const int v = sRec.event.value < min ? min : (sRec.event.value > max ? max : sRec.event.value);
++      changed = v != *value;
++      *value = v;
++    }
++    RecBegin("number", id);
++    RecStr("label", Shown(label));
++    RecStr("help", help);
++    RecInt("value", *value);
++    RecInt("min", min);
++    RecInt("max", max);
++    RecBool("en", enabled);
++    RecEnd();
++    return changed;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float pad = S(14.0f);
+@@ -945,6 +1282,14 @@
+ }
+ 
+ bool BackButton(const char *label) {
++  if (sRec.active) {
++    const unsigned id = RecId(label, "back");
++    const bool tapped = RecEvent("tap", id, label);
++    RecBegin("back", id);
++    RecStr("label", Shown(label));
++    RecEnd();
++    return tapped;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   char text[96];
+@@ -969,6 +1314,13 @@
+ }
+ 
+ void Panel(const char *title, const char *text) {
++  if (sRec.active) {
++    RecBegin("panel", 0);
++    RecStr("title", Shown(title));
++    RecStr("text", text);
++    RecEnd();
++    return;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float width = ImGui::GetContentRegionAvail().x;
+   const float pad = S(14.0f);
+@@ -982,6 +1334,15 @@
+ 
+ void BeginTiles(const char *id, int perRow, float height) {
+   ImGui::PushID(id);
++  if (sRec.active) {
++    std::string &out = RecBegin("tiles", 0);
++    RecInt("per", perRow < 1 ? 1 : perRow);
++    out += ",\"items\":[";
++    sRec.inTiles = true;
++    sRec.firstTile = true;
++    sTilesIndex = 0;
++    return;
++  }
+   sTilesPos = ImGui::GetCursorScreenPos();
+   sTilesWidth = ImGui::GetContentRegionAvail().x;
+   sTilesPerRow = perRow < 1 ? 1 : perRow;
+@@ -990,6 +1351,21 @@
+ }
+ 
+ bool Tile(const char *label, const char *sub, bool selected, bool enabled) {
++  if (sRec.active) {
++    ImGui::PushID(sTilesIndex++);
++    const unsigned id = RecId(label, "tile");
++    ImGui::PopID();
++    const bool tapped = RecEvent("tap", id, label) && enabled;
++    RecBegin("tile", id);
++    RecStr("label", Shown(label));
++    if (sub != nullptr && sub[0] != '\0') {
++      RecStr("sub", sub);
++    }
++    RecBool("sel", selected);
++    RecBool("en", enabled);
++    RecEnd();
++    return tapped;
++  }
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+   const float gap = S(6.0f);
+   const int column = sTilesIndex % sTilesPerRow, row = sTilesIndex / sTilesPerRow;
+@@ -1026,6 +1402,14 @@
+ }
+ 
+ void EndTiles() {
++  if (sRec.active) {
++    if (sRec.inTiles) {
++      sRec.items += "]}";
++      sRec.inTiles = false;
++    }
++    ImGui::PopID();
++    return;
++  }
+   const float gap = S(6.0f);
+   const int rows = (sTilesIndex + sTilesPerRow - 1) / sTilesPerRow;
+   const float total = rows > 0 ? rows * sTilesHeight + (rows - 1) * gap : 0.0f;
