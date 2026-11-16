@@ -197,6 +197,12 @@ typedef struct Gen5Battle {
     // HeartGold and SoulSilver's Bug-Catching Contest (a wild battle): the bag holds the contest's Sport Balls alone, and
     // the battle ends when the last one misses, as HGSS's does (the field then goes to the judging)
     int bugContest;
+    // A legendary Pokémon's encounter (BW2's message without "wild"), a roaming Pokémon's (BW2's roaming AI: it flees),
+    // and the party and every box full (no ball can be thrown, as Platinum's battle refuses one then). After a wild
+    // battle, wild and wild2 hold the Pokémon as the battle left them (a roamer's HP and status go back to it)
+    int legendary;
+    int roamer;
+    int boxesFull;
 } Gen5Battle;
 
 // How a battle ended, for Platinum

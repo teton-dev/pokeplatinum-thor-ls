@@ -420,6 +420,15 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     if (battle->fishing) {
         BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_FISHING);
     }
+    if (battle->legendary) {
+        BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_LEGENDARY);
+    }
+    if (battle->roamer) {
+        BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_ROAMING);
+    }
+    if (battle->boxesFull) {
+        BtlSetup_SetFlag(sSetup, BTL_SETUP_FLAG_BOXES_FULL);
+    }
     sSetup->result = BTL_RESULT_VICTORY;
     sSetup->party[0] = Keep(PokeParty_Create(HEAPID_PORT_BATTLE));
     PokeParty_Copy(party, sSetup->party[0]);
@@ -643,6 +652,15 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
         // Items BW2 doesn't have were never in its bag: they keep their count
         if (sItemInBag[i]) {
             battle->items[i].count = BagSave_GetItemCountByID(sBag, battle->items[i].item, HEAPID_PORT_BATTLE);
+        }
+    }
+    // The wild Pokémon as the battle left them (a roamer keeps its HP and status)
+    if (!battle->isTrainer && sSetup->party[1] != NULL) {
+        if (PokeParty_GetPkmCount(sSetup->party[1]) > 0) {
+            ReadPkm(PokeParty_GetPkm(sSetup->party[1], 0), &battle->wild);
+        }
+        if (battle->hasWild2 && PokeParty_GetPkmCount(sSetup->party[1]) > 1) {
+            ReadPkm(PokeParty_GetPkm(sSetup->party[1], 1), &battle->wild2);
         }
     }
     // A caught Pokémon is in the wild party (BtlMain_StorePartiesToSetup), with the ball it was caught in

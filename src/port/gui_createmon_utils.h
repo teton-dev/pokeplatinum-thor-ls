@@ -22,6 +22,10 @@ int GUI_CreateMon_StartWildEncounterShiny(int speciesNo, int level, BOOL shiny);
 // The same as the Safari Zone's: with balls Safari Balls and the Safari game flag on (the test command safari SPECIES
 // LEVEL BALLS; the game is left on, as the Great Marsh's gate would have it)
 int GUI_CreateMon_StartSafariEncounter(int speciesNo, int level, int balls);
+// A legendary's scripted encounter (kind 1), or Giratina's Origin Forme in the Distortion World (kind 2)
+int GUI_CreateMon_StartLegendaryBattle(int speciesNo, int level, int kind);
+// A roaming Pokémon's encounter (BATTLE_TYPE_ROAMER)
+int GUI_CreateMon_StartRoamerEncounter(int speciesNo, int level);
 
 #ifdef __cplusplus
 }

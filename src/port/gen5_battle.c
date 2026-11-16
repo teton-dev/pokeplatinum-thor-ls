@@ -94,9 +94,14 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     if (dto->battleType == BATTLE_TYPE_SAFARI) {
         return dto->battleStatusMask == 0;
     }
-    // A wild battle, alone or beside a partner (two wild Pokémon), with nothing special about it but a honey tree
-    if (dto->battleType == BATTLE_TYPE_WILD_MON || dto->battleType == BATTLE_TYPE_AI_PARTNER) {
-        return (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
+    // A wild battle, alone or beside a partner (two wild Pokémon), or a roaming Pokémon's (BW2's roaming AI flees):
+    // a honey tree's, a legendary's (the field picks its intro and music; BW2 leaves "wild" out of its message), and
+    // Giratina's in the Distortion World (its Origin Forme, the Distortion World's arena) too
+    if (dto->battleType == BATTLE_TYPE_WILD_MON || dto->battleType == BATTLE_TYPE_AI_PARTNER
+        || dto->battleType == BATTLE_TYPE_ROAMER) {
+        const u32 wildFlags = BATTLE_STATUS_HONEY_TREE | BATTLE_STATUS_LEGENDARY | BATTLE_STATUS_GIRATINA
+            | BATTLE_STATUS_DISTORTION;
+        return (dto->battleStatusMask & ~wildFlags) == 0;
     }
     // A trainer battle: single, double (one trainer's two Pokémon), against two trainers (TAG), or with them beside a
     // partner (2vs2 and AI). The story's trainers (Gym Leaders, the rival, Cynthia, Team Galactic) are started by
@@ -939,6 +944,12 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
             break;
         }
     }
+    // Giratina's battle (Encounter_NewVsGiratinaOrigin) is the Distortion World's whatever the map says, as Platinum's
+    // terrain for it (TERRAIN_GIRATINA) draws it
+    if ((dto->battleStatusMask & BATTLE_STATUS_DISTORTION) || dto->terrain == TERRAIN_GIRATINA) {
+        *bg = ARENA_BG_VOID;
+        *terrain = 0;
+    }
     const char *override = getenv("POKEPLATINUM_GEN5_ARENA");
     if (override != NULL) {
         sscanf(override, "%d,%d", bg, terrain);
@@ -1044,6 +1055,10 @@ static BOOL Init(ApplicationManager *appMan, int *state)
             TrainerToGen5(dto, BATTLER_ENEMY_2, &sBattle.trainer2);
         }
     } else {
+        sBattle.legendary = (dto->battleStatusMask & BATTLE_STATUS_LEGENDARY) != 0;
+        sBattle.roamer = (dto->battleType & BATTLE_TYPE_ROAMER) != 0;
+        // Platinum's battle doesn't let a ball be thrown when the party and every box are full; nor does BW2's then
+        sBattle.boxesFull = Party_GetCurrentCount(party) >= MAX_PARTY_SIZE && PCBoxes_FirstEmptyBox(dto->pcBoxes) >= MAX_PC_BOXES;
         Gen5_PokemonToGen5(Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), &sBattle.wild);
         // Beside a partner: a second wild Pokémon, in Platinum's second enemy's party
         if (sBattle.doubles && Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0) {
@@ -1146,6 +1161,16 @@ static void Finish(FieldBattleDTO *dto)
             } else if (after > before) {
                 Bag_TryAddItem(dto->bag, sBattle.items[i].item, after - before, HEAP_ID_APPLICATION);
             }
+        }
+        // A wild Pokémon not caught keeps the HP and status the battle left it (RoamerAfterBattle_UpdateRoamers reads a
+        // roamer's back from here)
+        if (!sBattle.isTrainer && result != GEN5_BATTLE_CAUGHT) {
+            Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
+            u32 value = sBattle.wild.hp;
+            Pokemon_SetValue(wild, MON_DATA_HP, &value);
+            value = StatusFromGen5(sBattle.wild.status, Pokemon_GetValue(wild, MON_DATA_STATUS, NULL));
+            Pokemon_SetValue(wild, MON_DATA_STATUS, &value);
+            printf("Gen 5: the wild Pokémon after the battle: HP %u, status %u\n", (unsigned)sBattle.wild.hp, (unsigned)value);
         }
         TrainerInfo *trainerInfo = dto->trainerInfo[BATTLER_PLAYER_1];
         if (sBattle.moneyChange > 0) {
