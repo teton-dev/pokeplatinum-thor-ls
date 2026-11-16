@@ -381,7 +381,7 @@
  }
  
  void BtlvCore_StopCommandSelect(BtlvCore *core) {
-@@ -1394,7 +1738,35 @@
+@@ -1394,7 +1738,43 @@
      BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
  }
  
@@ -394,6 +394,14 @@
 +void BtlvCore_PortStartMsgCatchRefused(BtlvCore *core) {
 +    Gen5_PortCatchRefusedText(core->strbuf);
 +    BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
++}
++
++// The port: "Give a nickname to the caught ...?" (btl_client.c's patch asks it after a catch), waiting for the answer
++void Gen5_PortNicknameText(StrBuf *strbuf, u16 species); // The port (runtime.c)
++void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species);
++void BtlvCore_PortStartMsgNickname(BtlvCore *core, u16 species) {
++    Gen5_PortNicknameText(core->strbuf, species);
++    BtlvCore_StartMsgStr(core, core->strbuf, 0xff, NULL);
 +}
 +
  BOOL BtlvCore_StartMsgTrainer(BtlvCore *core, u32 trainerId, u32 msgId) {
@@ -417,10 +425,12 @@
      if (TrainerMsg_CheckExists(trainerId, msgId, core->heapId)) {
          TrainerMsg_Load(trainerId, msgId, core->strbuf, core->heapId);
          BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
-@@ -1451,6 +1823,26 @@
-     return BtlvScu_WaitAbilityWinChange(core->scu, pos);
- }
+@@ -1449,8 +1829,28 @@
  
+ BOOL BtlvCore_WaitUpdateAbilityWin(BtlvCore *core, u8 pos) {
+     return BtlvScu_WaitAbilityWinChange(core->scu, pos);
++}
++
 +// The port: the weather's bar (btl_client.c's patch, btlv_scu.c's patch)
 +void BtlvScu_PortShowWeatherWin(BtlvScu *scu, BOOL player, u8 weather, u8 turns);
 +BOOL BtlvScu_PortWaitShowWeatherWin(BtlvScu *scu, BOOL player);
@@ -431,8 +441,8 @@
 +
 +void BtlvCore_PortShowWeatherWin(BtlvCore *core, BOOL player, u8 weather, u8 turns) {
 +    BtlvScu_PortShowWeatherWin(core->scu, player, weather, turns);
-+}
-+
+ }
+ 
 +BOOL BtlvCore_PortWaitShowWeatherWin(BtlvCore *core, BOOL player) {
 +    return BtlvScu_PortWaitShowWeatherWin(core->scu, player);
 +}

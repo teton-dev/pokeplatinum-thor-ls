@@ -21,7 +21,8 @@ wait 60
 touch 64 33
 wait 60
 touch 108 175
-mash B until naming timeout 6000
+# YES to "Give a nickname to the caught ...?" (BW2's Yes and No on the touch screen)
+mash A touch 128 55 until naming timeout 6000
 wait 90
 press START
 wait 30

@@ -75,6 +75,8 @@ static NNSGfdVramTransferTask sVramTransferTasks[VRAM_TRANSFER_TASKS];
 static BtlSetup *sSetup;
 static BOOL sApricornBalls; // Gen5Battle.apricornBalls
 static BOOL sBugContest; // Gen5Battle.bugContest
+static BOOL sAskNickname; // Gen5Battle.askNickname
+static BOOL sNicknameWanted; // and its answer
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
@@ -331,6 +333,8 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     // Before the bag: the Apricorn Balls' item data (pml_item.c's patch) decides whether they go in it
     sApricornBalls = battle->apricornBalls != 0;
     sBugContest = battle->bugContest != 0;
+    sAskNickname = battle->askNickname != 0;
+    sNicknameWanted = FALSE;
     sBattleBlockCount = 0;
     sPlaceCount = 0;
 
@@ -654,6 +658,7 @@ enum Gen5BattleResult Gen5_BattleEnd(Gen5Battle *battle)
             battle->items[i].count = BagSave_GetItemCountByID(sBag, battle->items[i].item, HEAPID_PORT_BATTLE);
         }
     }
+    battle->nicknameWanted = sNicknameWanted;
     // The wild Pokémon as the battle left them (a roamer keeps its HP and status)
     if (!battle->isTrainer && sSetup->party[1] != NULL) {
         if (PokeParty_GetPkmCount(sSetup->party[1]) > 0) {
@@ -824,6 +829,46 @@ enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary)
 BOOL Gen5_PortApricornBalls(void)
 {
     return sApricornBalls;
+}
+
+// After a catch: whether to ask for a nickname (btl_client.c's patch), its question, and the answer
+BOOL Gen5_PortAskNickname(void)
+{
+    return sAskNickname;
+}
+
+void Gen5_PortNicknameAnswer(BOOL yes)
+{
+    sNicknameWanted = yes;
+    printf("Gen 5: a nickname for the catch: %s\n", yes ? "yes" : "no");
+}
+
+// "Give a nickname to the / caught SPECIES?", as Platinum's and HGSS's battles ask it
+void Gen5_PortNicknameText(StrBuf *strbuf, u16 species)
+{
+    static const char kBefore[] = "Give a nickname to the";
+    static const char kCaught[] = "caught ";
+    unsigned short chars[96];
+    unsigned short name[GEN5_NAME_LENGTH];
+    int length = 0;
+
+    StrBuf *nameBuf = GFL_StrBufCreate(GEN5_NAME_LENGTH, HEAPID_PORT_BATTLE);
+    GFL_MsgDataLoadStrbuf(g_PMLSpeciesNamesResident, species, nameBuf);
+    GFL_StrBufStoreString(nameBuf, name, GEN5_NAME_LENGTH);
+    GFL_StrBufFree(nameBuf);
+    for (const char *c = kBefore; *c != '\0'; c++) {
+        chars[length++] = (unsigned char)*c;
+    }
+    chars[length++] = 0xFFFE;
+    for (const char *c = kCaught; *c != '\0'; c++) {
+        chars[length++] = (unsigned char)*c;
+    }
+    for (int i = 0; i < GEN5_NAME_LENGTH && name[i] != 0xFFFF && length < 90; i++) {
+        chars[length++] = name[i];
+    }
+    chars[length++] = '?';
+    chars[length] = 0xFFFF;
+    GFL_StrBufLoadString(strbuf, chars);
 }
 
 // The Bug-Catching Contest's last Sport Ball was thrown (and missed): the battle ends (btl_server_flow_sub.c's patch)

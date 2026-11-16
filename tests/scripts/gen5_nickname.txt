@@ -1,0 +1,31 @@
+# Gen 5 battles: the nickname question after a catch ("Give a nickname to the caught ...?", BW2's Yes and No, as
+# Platinum's battle asks it). From the turtwig fixture with a Master Ball: a wild Bidoof caught; the shot shows the
+# question; B answers No, so no naming screen opens and the Bidoof joins the party with its species' name (the log's
+# "a nickname for the catch: no" and "party" lines).
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_nickname.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+item 1 1
+wild 399 2
+until battle
+until command
+wait 60
+touch 40 180
+wait 60
+touch 192 48
+wait 60
+touch 64 33
+wait 60
+touch 108 175
+wait 900
+shot gen5-nickname-1
+wait 600
+shot gen5-nickname-2
+wait 600
+shot gen5-nickname-question
+mash B until free timeout 6000
+party
+exit 0
