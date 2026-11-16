@@ -375,3 +375,17 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (still unk_-named overlay files); left as a to-do since Gen 5 battles are this fork's primary engine. No doubles
   wild support either, so only the first wild Pokémon is covered. Still no settings UI, gray icons, or the save/
   main-menu mark — Nuzlocke mode can only be turned on through the test script for now.
+
+## Goldenrod, and the settings in Android's views (2026-11-16)
+
+- **The app is Goldenrod** (`app.goldenrod`, dev flavor `app.goldenrod.dev`, "Goldenrod dev"), with a goldenrod-spray
+  icon; it installs beside the old `org.pokeheartgold.port.dev`. On the Thor its files were copied over with adb
+  (`cp -r` from the old `Android/data/.../files` after launching the new app once; `save.bin` compared identical).
+- **Settings in Android's own views**, as in the Platinum fork (`NativeSettings.java`, `libntr_native_menus.patch`,
+  see that fork's CLAUDE.md): every page including the save editor; *Advanced > Android menus* switches back.
+- **Pages regrouped** like the Platinum fork's: Gameplay (the Japanese Game Corner), Battles (Gen 5 battles and the
+  BW2 ROM, was "Gen 5 battles"), the frame rate on Display (was Gameplay), Link play after Controls, Save editor at
+  the end with Advanced.
+- Tried on the Thor: D-pad, A, B work; the first build left the system bars showing after the settings (the game
+  lost its bottom strip) and a green focus outline round the game: fixed (immersive flags and WindowInsetsController,
+  no default focus highlight on SDL's surface).
