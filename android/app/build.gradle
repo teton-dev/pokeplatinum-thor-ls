@@ -7,7 +7,9 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'org.pokeplatinum.port'
+        // Eterna's own ID (until 2026-11 the app was org.pokeplatinum.port, "Platinum"). The Java
+        // package (namespace) stays org.pokeplatinum.port: libntr's JNI entry points are named after it.
+        applicationId 'app.eterna'
         // Android 10+: the AYN Thor ships Android 13
         minSdk 29
         targetSdk 35
@@ -22,7 +24,7 @@ android {
 
     signingConfigs {
         // A fixed key so every CI build can be installed over the previous one.
-        // Uninstalling would delete Android/data/org.pokeplatinum.port (and your saves).
+        // Uninstalling would delete Android/data/app.eterna (and your saves).
         // The key is public (committed with its password), so anyone can sign an APK that
         // installs over this app; the README tells players to install from Releases only.
         stable {
