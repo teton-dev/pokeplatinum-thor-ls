@@ -101,6 +101,8 @@ public class PlatinumActivity extends SDLActivity {
     /** The settings' views are up: the game stays full screen behind them. */
     void nativeSettingsShown() {
         keepImmersive();
+        // The focus moving into the settings brings the navigation bar in: hidden again once it has
+        getWindow().getDecorView().postDelayed(this::keepImmersive, 250);
     }
 
     /** The settings' views are gone: the game's view takes the keys again, without a focus outline. */
@@ -123,6 +125,14 @@ public class PlatinumActivity extends SDLActivity {
             | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.view.WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                controller.setSystemBarsBehavior(
+                    android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                controller.hide(android.view.WindowInsets.Type.systemBars());
+            }
+        }
     }
 
     @Override
