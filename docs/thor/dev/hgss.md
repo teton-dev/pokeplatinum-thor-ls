@@ -233,13 +233,13 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   catch data takes as an item (493): converted; a Friend Ball's catch gets friendship 200. `Gen5Battle.fishing` gives
   BW2 its fishing flag (the Lure Ball). Test `gen5_apricorn.txt`.
 - **Mom's savings** needed nothing: HGSS moves a quarter of the money won to Mom when it copies the battle's results to
-  the save (`BattleSetup_CopyResultsToSaveData`), whatever engine ran it. Not shown: HGSS's in-battle line about it.
-  Test `gen5_mom_savings.txt`.
+  the save (`BattleSetup_CopyResultsToSaveData`), whatever engine ran it. HGSS's line about it ("Sent some to Mom!"
+  under the prize line) is shown since 2026-11-15 (below). Test `gen5_mom_savings.txt`.
 - **Trainers' lines during the battle**: BW2 shows them itself (`btl_client.c`'s hints, at first hit, half HP, last
   Pokémon, last at half HP: its messages 0x11 to 0x14), read from BW2's trainer tables by number. A port trainer (from
   0x800) now has them in `Gen5Trainer.hintText`, which HGSS fills from `TRMSG_HIT_POKE_FIRST_TIME` to
   `TRMSG_LAST_POKE_HALF` (Silver, the Gym Leaders, the Elite Four and Lance have the last two); BW2's check and message
-  (`btl_client.c`, `btlv_core.c`, patched) ask the port. Platinum doesn't fill them yet. Test `gen5_trainer_lines.txt`
+  (`btl_client.c`, `btlv_core.c`, patched) ask the port. Platinum fills them too (2026-11-15). Test `gen5_trainer_lines.txt`
   (Falkner: give the test's Pokémon Swift, his birds' Sand-Attack makes anything else miss).
 
 ### The Safari Zone in Gen 5 battles (2026-11-15)
@@ -260,6 +260,38 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   gate where the player stands) and `editor safari N`.
 - Not done: arenas chosen per Safari area (each battle gets what the field gives, as any wild battle), the Nuzlocke
   catch rule there, and a check in the real Safari Zone (the tests start the battles where the player stands).
+
+### The Bug-Catching Contest, legendaries, roamers and the rest (2026-11-15, second session)
+
+- **The Bug-Catching Contest** goes to BW2's engine (`Gen5Battle_Wants` takes `BATTLE_TYPE_BUG_CONTEST`). The contest's
+  Sport Balls (`setup->safariBalls`) are the battle bag's only item; HGSS's BAG throws one, BW2's opens its bag on
+  them. A catch goes to the contest's slot (`setup->bugContestMon`, after the catch data, Pokédex and game stats; no
+  naming screen, as HGSS's), for HGSS's own "Caught ...!" and swap screen. When the last ball misses the battle ends
+  at once (`Gen5Battle.bugContest`; `btl_server_flow_sub.c`'s `UseBagItem` escapes silently when
+  `Gen5_PortContestOutOfBalls`), and `Task_BugContestEncounter` takes the player to the judging. Test commands:
+  `contest SPECIES LEVEL [BALLS]` (the contest started as the gate's `ScrCmd_BugContestAction` does, flag 0x996),
+  `check contest-balls N`, `check contest-mon SPECIES`. Tests `gen5_contest_catch.txt`, `gen5_contest_out.txt`.
+  Not checked: a whole contest from the gate in the real National Park, its arena (the field's), the timer.
+- **Legendaries and roamers:** the flag the decompilation calls `canFlee` (`SetupAndStartWildBattle`, bit 8) is
+  `BATTLE_SPECIAL_LEGENDARY`; it becomes BW2's legendary flag (its message has no "wild"). A roamer gets BW2's roaming
+  flag (its AI flees) and keeps the HP and status the battle leaves (the runtime reads the wild Pokémon back;
+  `Roamers_UpdateAfterBattle` stores them). The test runner's own wild battles are plain ones now. Test commands
+  `legendary`, `roamer SPECIES LEVEL`; tests `gen5_legendary.txt` (Lugia), `gen5_roamer.txt` (Raikou flees).
+- **Full boxes:** with the party and every box full no ball can be thrown (BW2's boxes-full flag), as in HGSS.
+- **The nickname question:** "Give a nickname to the caught ...?" with BW2's Yes and No, in the battle after the catch
+  messages (`btl_client.c`'s `ScBallThrow`, patched; BW2 asks in its field); the naming screen opens only on Yes. Not in
+  the contest. Tests touch YES at (128, 55); `gen5_nickname.txt` answers No.
+- **Mom's line:** with Mom's savings on, "Sent some to Mom!" under BW2's prize line (`Gen5Battle.momSavings`,
+  `btlv_core.c`'s `BtlvCore_PortStartMsgPrize`; a page of its own if the prize line has two lines). Seen only in the log
+  (`the prize line says some went to Mom`), not on a screenshot.
+- **Obedience:** BW2 makes another trainer's Pokémon disobey above `(badges + 1) * 10`; it now uses HGSS's levels
+  (`Gen5Battle.obeyLevel`: 10, 20 with a badge, 30 with two, 50 with the Fog Badge, 70 with the Storm Badge, all with
+  eight). The runtime logs a party Pokémon BW2 doesn't count as the player's own (ID, gender and name).
+- **Test bug found:** the runner's `give` used `OT_ID_PLAYER_ID`, which in HGSS's `CreateMon` means OT ID 0, so its
+  Pokémon were another trainer's to BW2 and disobeyed: `gen5_trainer`, `gen5_trainer_lines` and `gen5_mom_savings` had
+  been losing their battles while passing (they don't check the result). Fixed (`OT_ID_PRESET`); they win now.
+- Still to do in HGSS: Apricorn Ball throw sprites, the Battle Frontier, Pal Park, the Pokédex entry screen for a new
+  catch in BW2's battles, the PC message when a nickname is declined with a full party.
 
 ### Save editor and debug window (2026-11-15)
 
