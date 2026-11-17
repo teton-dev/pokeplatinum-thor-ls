@@ -1,0 +1,41 @@
+# Widescreen: the screens after a catch in Black 2 and White 2's engine. A wild Bidoof (a new species) caught with a
+# Master Ball, YES to the nickname question: Platinum's Pokedex entry, then its naming screen, fill the wide window
+# (their layers' edge columns continued across the sides, the 3D Pokemon and the text in the 4:3 middle). The check is
+# the shots. From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_gen5_catch.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+item 1 2
+# BAG, POKE BALLS, the Master Ball, USE
+wild 399 2
+until battle
+until command
+wait 60
+touch 40 180
+wait 60
+touch 192 48
+wait 60
+touch 64 33
+wait 60
+touch 108 175
+# The ball, the shakes, "Gotcha!", then YES to "Give a nickname to the caught ...?"
+wait 1500
+shot wide-question
+mash touch 128 55 for 40
+wait 600
+shot wide-dex-entry
+mash A until naming timeout 3000
+wait 300
+shot wide-naming
+# OK with no name: it keeps its species' name
+press START
+wait 30
+press A
+mash B until free
+shot wide-back
+party
+exit 0

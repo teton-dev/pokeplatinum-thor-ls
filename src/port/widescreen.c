@@ -15,6 +15,7 @@
 #include "overlay006/hm_cut_in.h"
 #include "applications/bag/application.h"
 #include "applications/journal_display/journal_controller.h"
+#include "applications/naming_screen.h"
 #include "applications/party_menu/main.h"
 #include "applications/pc_boxes/box_app_manager.h"
 #include "constdata/const_020F410C.h"
@@ -111,6 +112,16 @@ static BOOL Gen5SummaryShown(void)
 #endif
 }
 
+// After a catch in BW2's engine: Platinum's Pokedex entry and naming screen, run by the battle's process
+static BOOL Gen5PostBattleScreenShown(void)
+{
+#ifdef GEN5_BATTLES
+    return Gen5Battle_PostBattleScreenShown();
+#else
+    return FALSE;
+#endif
+}
+
 static BOOL Gen5MoveBgShown(void)
 {
 #ifdef GEN5_BATTLES
@@ -121,7 +132,8 @@ static BOOL Gen5MoveBgShown(void)
 }
 
 // A full-screen 2D application that fills the wide screen is running over the overworld: the Bag, the party screen, the Journal (also
-// the page that opens on loading a save) and the Town Map (and the Fly map). They are drawn for 256 pixels; their
+// the page that opens on loading a save), the Town Map (and the Fly map), the naming screen, and the Pokedex entry and
+// naming screen after a catch in BW2's engine (run by the battle's process). They are drawn for 256 pixels; their
 // layers' edge columns continue across the sides, so the backgrounds reach the edges of the window and the
 // contents (text, lists, the map) stay in the 4:3 middle
 // The layers of the wide application whose sides repeat a pixel column of the picture (its background's stripes)
@@ -132,6 +144,9 @@ static BOOL WideApplication(u8 *edgeBgs, u8 *edgeMirrorBgs)
     sStripeBgs = 0;
     *edgeBgs = 0x0F;
     *edgeMirrorBgs = 0;
+    if (Gen5PostBattleScreenShown()) {
+        return TRUE;
+    }
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
     if (fieldSystem == NULL || fieldSystem->processManager == NULL || fieldSystem->processManager->child == NULL) {
         return FALSE;
@@ -146,7 +161,7 @@ static BOOL WideApplication(u8 *edgeBgs, u8 *edgeMirrorBgs)
     }
     return init == gBagApplicationTemplate.init || init == (OverlayFunc)JournalController_Init
         || init == TownMap_Init || init == BoxAppMan_Init
-        || init == gPokemonSummaryScreenApp.init;
+        || init == gPokemonSummaryScreenApp.init || init == gNamingScreenAppTemplate.init;
 }
 
 // The HP box end cap (5x33, RGB, pure white is transparent): the enemy's box gets it at its left end, the player's
