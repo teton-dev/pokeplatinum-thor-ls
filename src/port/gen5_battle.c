@@ -80,6 +80,14 @@ BOOL Gen5Battle_MoveBgShown(void)
     return sShown && Gen5_MoveBgShown();
 }
 
+// The Pokedex entry or the naming screen after a catch is up
+static BOOL sPostBattleScreen;
+
+BOOL Gen5Battle_PostBattleScreenShown(void)
+{
+    return sPostBattleScreen;
+}
+
 void Gen5Battle_RequestNext(void)
 {
     sRequested = TRUE;
@@ -1429,6 +1437,7 @@ static BOOL Main(ApplicationManager *appMan, int *state)
             // A new species: its Pokédex entry first, as Platinum's battle shows it
             Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_EVOLUTION, 0x80000);
             Gen5DexEntry_Start(CaughtPokemon(dto), dto->pokedex, HEAP_ID_EVOLUTION);
+            sPostBattleScreen = TRUE;
             *state = STATE_DEX_ENTRY;
             return FALSE;
         }
@@ -1438,6 +1447,7 @@ static BOOL Main(ApplicationManager *appMan, int *state)
         if (Gen5DexEntry_Run()) {
             Gen5DexEntry_Free();
             Heap_Destroy(HEAP_ID_EVOLUTION);
+            sPostBattleScreen = FALSE;
             *state = STATE_NICKNAME;
         }
         return FALSE;
@@ -1459,6 +1469,7 @@ static BOOL Main(ApplicationManager *appMan, int *state)
         sNamingArgs->pcBoxes = dto->pcBoxes;
         sNamingArgs->monGender = Pokemon_GetValue(mon, MON_DATA_GENDER, NULL);
         sNamingApp = ApplicationManager_New(&gNamingScreenAppTemplate, sNamingArgs, HEAP_ID_BATTLE);
+        sPostBattleScreen = TRUE;
         *state = STATE_NAMING;
         return FALSE;
     }
@@ -1470,6 +1481,7 @@ static BOOL Main(ApplicationManager *appMan, int *state)
             Pokemon_SetValue(CaughtPokemon(dto), MON_DATA_NICKNAME_STRING_AND_FLAG, sNamingArgs->textInputStr);
             GameRecords_IncrementRecordValue(dto->records, RECORD_POKEMON_NICKNAMED);
         }
+        sPostBattleScreen = FALSE;
         NamingScreenArgs_Free(sNamingArgs);
         ApplicationManager_Free(sNamingApp);
         sNamingArgs = NULL;
