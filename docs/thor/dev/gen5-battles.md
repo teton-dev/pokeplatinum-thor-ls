@@ -1026,5 +1026,12 @@ saw them and they were pillarboxed. The bridge now says when one is up (`Gen5Bat
 3D Pokémon stays in the 4:3 middle. The field's own naming screen (`gNamingScreenAppTemplate`: the Name Rater,
 gifts) is in the list too. Its top screen is black with the name box, so nothing visible changes there. Checked on
 the desktop: `tests/scripts/widescreen_gen5_catch.txt` (shots of the entry and the naming screen). Note that
-`desktop.sh test` runs the last build: run `desktop.sh build` first. Not done: the evolution scene after a battle,
-and HGSS's contest swap screen.
+`desktop.sh test` runs the last build: run `desktop.sh build` first. Not done: HGSS's contest swap screen.
+
+- **The evolution scene after a battle** (2026-11-17), `STATE_WAIT_FOR_EVOLUTION`, is wide the same way
+  (`Gen5Battle_EvolutionShown`). Its backdrop (BG3) is a symmetrical dome of colour: its edge columns gave uneven sides
+  (its rightmost columns are dark), mirrored it showed a seam, and its 512-wide tilemap's other half isn't picture.
+  Both sides repeat its third column (`SIM_SetWidescreenBgStripe`, whose column `widescreen.c` now sets per screen).
+  The art's dark right edge shows as a thin line at the 4:3 picture's right. Test:
+  `tests/scripts/widescreen_gen5_evolution.txt` (a level 6 Wurmple beats a wild Chansey and evolves). The field's
+  evolutions (Rare Candy, trades) and those after Platinum's own battles stay 4:3 for now.
