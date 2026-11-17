@@ -80,12 +80,18 @@ BOOL Gen5Battle_MoveBgShown(void)
     return sShown && Gen5_MoveBgShown();
 }
 
-// The Pokedex entry or the naming screen after a catch is up
+// The Pokedex entry or the naming screen after a catch, or an evolution after the battle, is up
 static BOOL sPostBattleScreen;
+static BOOL sEvolutionShown;
 
 BOOL Gen5Battle_PostBattleScreenShown(void)
 {
     return sPostBattleScreen;
+}
+
+BOOL Gen5Battle_EvolutionShown(void)
+{
+    return sPostBattleScreen && sEvolutionShown;
 }
 
 void Gen5Battle_RequestNext(void)
@@ -1503,6 +1509,8 @@ static BOOL Main(ApplicationManager *appMan, int *state)
         dto->postBattleData = Evolution_Begin(dto->parties[BATTLER_PLAYER_1], mon, targetSpecies, dto->options,
             dto->visitedContestHall, dto->pokedex, dto->bag, dto->records, dto->poketch, evoType, 0x1 | 0x2,
             HEAP_ID_EVOLUTION);
+        sPostBattleScreen = TRUE;
+        sEvolutionShown = TRUE;
         *state = STATE_WAIT_FOR_EVOLUTION;
         return FALSE;
     }
@@ -1511,6 +1519,8 @@ static BOOL Main(ApplicationManager *appMan, int *state)
             Evolution_Free(dto->postBattleData);
             dto->postBattleData = NULL;
             Heap_Destroy(HEAP_ID_EVOLUTION);
+            sPostBattleScreen = FALSE;
+            sEvolutionShown = FALSE;
             *state = STATE_CHECK_EVOLUTION;
         }
         return FALSE;

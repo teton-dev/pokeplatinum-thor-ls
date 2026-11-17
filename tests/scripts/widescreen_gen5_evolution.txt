@@ -1,0 +1,30 @@
+# Widescreen: the evolution after a battle in Black 2 and White 2's engine. A level 6 Wurmple in the lead beats a
+# wild level 4 Chansey (Tackle until it's over), grows to level 7 and evolves: Platinum's evolution scene fills the
+# wide window (its layers' edge columns continued across the sides, the 3D Pokemon in the 4:3 middle). The check is
+# the shots and the log's party (species 266 or 268 in slot 0). From the turtwig fixture:
+#
+#   TEST_CONFIG='SecondaryScreen=true Widescreen=true WindowWidth=768 WindowHeight=432' \
+#       tools/docker/desktop.sh test tests/scripts/widescreen_gen5_evolution.txt --from turtwig
+
+gen5-import
+gen5-battles on
+mash A until free
+give 265 6
+lead 1
+wild 113 4
+until battle
+until command timeout 6000
+wait 30
+# FIGHT, Tackle, until the battle is over and the evolution starts
+mash A for 7000
+shot wide-evolution-1
+wait 200
+shot wide-evolution-2
+wait 200
+shot wide-evolution-3
+wait 200
+shot wide-evolution-4
+mash A until free timeout 12000
+shot wide-back
+party
+exit 0
