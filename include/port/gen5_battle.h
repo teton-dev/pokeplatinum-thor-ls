@@ -34,6 +34,8 @@ BOOL Gen5Battle_StartDebug(int species, int level);
 BOOL Gen5Battle_IsShown(void);
 // A move's full-screen background is up in it (widescreen mirrors the sides)
 BOOL Gen5Battle_MoveBgShown(void);
+// After a catch in it: Platinum's Pokedex entry or naming screen is shown (widescreen continues their sides)
+BOOL Gen5Battle_PostBattleScreenShown(void);
 
 #ifdef __cplusplus
 }

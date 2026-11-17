@@ -1016,3 +1016,15 @@ the whole battle itself, as BW2's capture demo does (`BattleClient_SetupView` st
   archive 94 (BW2's Poké Ball reds as shades of the ball's main colour, from HGSS's own sheet), which
   `btlv_effvm.c` uses with BW2's Poké Ball frames (`Gen5_SetApricornBallSprites`). An approximation: one colour each.
 - Still Platinum's: Pal Park, link and Frontier battles, `NO_RUNNING` battles.
+
+## Widescreen: the screens after a catch (2026-11-17)
+
+The Pokédex entry and the naming screen after a catch in BW2's engine run in the battle's process
+(`src/port/gen5_battle.c`, `STATE_DEX_ENTRY` and `STATE_NAMING`), not as the field's child, so `WideApplication` never
+saw them and they were pillarboxed. The bridge now says when one is up (`Gen5Battle_PostBattleScreenShown`), and
+`src/port/widescreen.c` treats it like the Bag: the four BG layers' edge columns continue across the sides and the
+3D Pokémon stays in the 4:3 middle. The field's own naming screen (`gNamingScreenAppTemplate`: the Name Rater,
+gifts) is in the list too. Its top screen is black with the name box, so nothing visible changes there. Checked on
+the desktop: `tests/scripts/widescreen_gen5_catch.txt` (shots of the entry and the naming screen). Note that
+`desktop.sh test` runs the last build: run `desktop.sh build` first. Not done: the evolution scene after a battle,
+and HGSS's contest swap screen.
