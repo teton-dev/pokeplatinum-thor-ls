@@ -122,6 +122,15 @@ static BOOL Gen5PostBattleScreenShown(void)
 #endif
 }
 
+static BOOL Gen5EvolutionShown(void)
+{
+#ifdef GEN5_BATTLES
+    return Gen5Battle_EvolutionShown();
+#else
+    return FALSE;
+#endif
+}
+
 static BOOL Gen5MoveBgShown(void)
 {
 #ifdef GEN5_BATTLES
@@ -138,13 +147,23 @@ static BOOL Gen5MoveBgShown(void)
 // contents (text, lists, the map) stay in the 4:3 middle
 // The layers of the wide application whose sides repeat a pixel column of the picture (its background's stripes)
 static u8 sStripeBgs;
+// and the column they repeat (0 to 1 across the picture)
+static float sStripeColumn = 255.0f / 256.0f;
 
 static BOOL WideApplication(u8 *edgeBgs, u8 *edgeMirrorBgs)
 {
     sStripeBgs = 0;
+    sStripeColumn = 255.0f / 256.0f;
     *edgeBgs = 0x0F;
     *edgeMirrorBgs = 0;
     if (Gen5PostBattleScreenShown()) {
+        if (Gen5EvolutionShown()) {
+            // The evolution scene's backdrop (BG3) is a dome of colour, symmetrical, whose rightmost columns are
+            // dark: both sides repeat a column near its left edge (mirrored, it showed a seam; its tilemap's other
+            // half isn't part of the picture)
+            sStripeBgs = 1 << 3;
+            sStripeColumn = 2.5f / 256.0f;
+        }
         return TRUE;
     }
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
@@ -311,7 +330,7 @@ void Widescreen_Update(void)
     }
     SIM_SetWidescreenBgEdgeExtend(edgeBgs);
     SIM_SetWidescreenBgEdgeMirror(edgeMirrorBgs);
-    SIM_SetWidescreenBgStripe(wide ? sStripeBgs : 0, 255.0f / 256.0f);
+    SIM_SetWidescreenBgStripe(wide ? sStripeBgs : 0, sStripeColumn);
     // and the party balls' bar, sprites of priority 0 (the Elite Four's and the Champion's encounter effect: its band's
     // halves, sprites of priority 2, reach the edges) that touch the picture's edges (the other priorities hold the
     // gauges, whose edge pixels would smear)

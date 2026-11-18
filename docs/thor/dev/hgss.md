@@ -208,6 +208,15 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   menu's cursor is active, `start_menu.c`) stopped at the 4:3 edges; while `StartMenu_PortBarShown` its rows are
   continued to the sides (BG edge extend). `widescreen_xmenu.txt`. Seen once on the way, unexplained: thin white
   diagonal lines across New Bark Town's 3D for a frame, with the menu open.
+- **The Bug-Catching Contest's swap screen in widescreen** (2026-11-17): the screen after a contest catch ("Caught
+  CATERPIE!", keep or swap, `BugContestSwapMon_Init`) is one of `WideApplication`'s apps now, its four layers' edge
+  columns continued. Its top screen is the sub engine (the main engine, with the Pokémon and text, is on the
+  bottom), and its picture is BG0, which libntr's shader never edge-extended (only BG1 to BG3): the sides showed the
+  backdrop's lavender. `libntr_wide_edge_bg0.patch` gives BG0 drawn as 2D the same edge, mirror and stripe handling
+  (only this screen asks for it so far). The sides continue the panel's dark-green border. Checked with
+  `gen5_contest_catch.txt` run in widescreen (`SCREEN=1920x1080` so the X display holds both windows for its
+  stillshots); `widescreen_xmenu.txt` unchanged. Not done: HGSS's Pokédex entry, naming screen and evolution after
+  a Gen 5 battle are still 4:3 (Platinum's are wide, `gen5-battles.md`), as are its other apps (Bag, party...).
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
@@ -375,6 +384,28 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (still unk_-named overlay files); left as a to-do since Gen 5 battles are this fork's primary engine. No doubles
   wild support either, so only the first wild Pokémon is covered. Still no settings UI, gray icons, or the save/
   main-menu mark — Nuzlocke mode can only be turned on through the test script for now.
+- **Settings > Challenges** (2026-11-17): Eterna's Nuzlocke mode section (pick a level, its rules, turn it on;
+  level, crit guard, turn it off for good), in `lib/port/settings_pages.cpp`. Its rules text names only what
+  Goldenrod enforces (dead Pokémon, whiting out, the catch rule, statics with Hard) and says the level cap, IVs of
+  15, item and nickname rules aren't in yet. The settings library can't see the game's headers:
+  `PORT_NUZLOCKE_MODE_GUI_ONLY` leaves `port_nuzlocke_mode.h`'s Pokémon functions out. Test command `settings PAGE`
+  (as Platinum's); `desktop.sh` passes `SIM_NATIVE_SETTINGS(_EVENTS)`; `settings_challenges.txt` turns Normal on
+  through the native recorder's events.
+- **port-common in Goldenrod; Settings > Saves** (2026-11-17): upstream's shared layer (`subprojects/port-common.wrap`,
+  the revision the Platinum fork pins, with its `port-common_nuzlocke_mode.patch`) and an HGSS adapter,
+  `lib/port/game_hgss.c` (identity, the slot and autosave settings in `sim_config_prj.ini`'s new `[Saves]` section,
+  the save summary, reload and image check, the overworld's "can save now", the game's own save). The Gear isn't
+  built yet: `port-common_gear_option.patch` adds a `gear` option, off for Goldenrod, until it has the Gear's ~60
+  `Gear_*` data adapters. Cheats, shiny hunt and the Nuzlocke helper are built but nothing calls them (their
+  adapter functions are minimal). Hooks: `SaveSlots_Init`/`SaveSync_Init` before `SaveData_New` and
+  `SaveSync_Update` in `src/main.c`; `SaveData_New` split so `SaveData_PortReload` loads another slot into the same
+  SaveData, then `SaveSync_AtStartup` and `SaveSlots_OnLoaded`; `SaveSlots_OnSaved` after `SaveGameNormal` and
+  the async write (`src/save.c`); `Autosave_FieldTick` in `FieldSystem_Control`; the main menu (L/R or the Saves
+  page switch slots, fading out and back through the save check; "SLOT n/4" in the CONTINUE box; an empty slot
+  shows the menu without CONTINUE). The Saves page and the "Saved" notice (`SIM::GUI::PrjOverlay`) are Eterna's,
+  in `lib/port/settings_pages.cpp`. Gotcha: `PlayerAvatar_IsBetweenSteps` is TRUE when the player stands on a tile.
+  Test `save_slots.txt` (the menu's slots, the page's cards, "Save now"); the APK builds. Not yet: the empty
+  slot's menu doesn't say which slot it is, and none of it has been tried on the Thor.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
