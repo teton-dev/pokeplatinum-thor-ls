@@ -438,8 +438,10 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   `FrontierScriptContext_GoToScript`), so a backward jump landed 4 GB past the script on 64-bit instead of wrapping
   as on the DS. They're `s32` now, as Platinum's (same ARM code). Goldenrod's Frontier runs on the port: `gen5_tower.txt`
   (from `new-game`) goes through the elevator to the battle room, the battle in BW2's engine ("a single facility
-  battle against trainer 48"), RUN and YES (BW2's result 3) and back to the Battle Video question. Left: Palmer's
-  test hook (Eterna's `POKEPLATINUM_TOWER_OPPONENT`), the Battle Video, doubles, the other facilities.
+  battle against trainer 48"), RUN and YES (BW2's result 3) and back to the Battle Video question. Palmer too: test
+  hook `TEST_ENV=POKEHEARTGOLD_TOWER_OPPONENT=305` (`src/frontier_opponents.c`, port only; the challenge's first
+  opponent), `gen5_tower_palmer.txt`: Tower Tycoon Palmer in the light-pools arena. Left: the Battle Video, doubles,
+  the other facilities.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
