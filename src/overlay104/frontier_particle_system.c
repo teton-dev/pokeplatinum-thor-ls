@@ -37,8 +37,15 @@ ParticleSystem *FrontierParticleSystem_NewParticleSystem(FrontierParticleSystem 
 {
     GF_ASSERT(fps->particleSys[index] == NULL);
 
+#ifdef SDK_BUILD_ARM
     void *heap = Heap_Alloc(fps->heapID, 0x4800);
     ParticleSystem *ps = ParticleSystem_New(AllocTexVram, AllocPaletteVram, heap, 0x4800, TRUE, fps->heapID);
+#else
+    // Twice the DS's, as every other particle system on the port: its arena holds 64-bit pointers and overflowed into the
+    // next heap block (the Battle Hall's first scene crashed: a NULL particle resource, the heap's free size 0)
+    void *heap = Heap_Alloc(fps->heapID, 0x4800 * 2);
+    ParticleSystem *ps = ParticleSystem_New(AllocTexVram, AllocPaletteVram, heap, 0x4800 * 2, TRUE, fps->heapID);
+#endif
     Camera *camera = ParticleSystem_GetCamera(ps);
 
     Camera_SetClipping(FX32_ONE, FX32_CONST(900), camera);
