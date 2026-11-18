@@ -384,6 +384,20 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (still unk_-named overlay files); left as a to-do since Gen 5 battles are this fork's primary engine. No doubles
   wild support either, so only the first wild Pokémon is covered. Still no settings UI, gray icons, or the save/
   main-menu mark — Nuzlocke mode can only be turned on through the test script for now.
+- **Settings > Challenges** (2026-11-17): Eterna's Nuzlocke mode section (pick a level, its rules, turn it on;
+  level, crit guard, turn it off for good), in `lib/port/settings_pages.cpp`. Its rules text names only what
+  Goldenrod enforces (dead Pokémon, whiting out, the catch rule, statics with Hard) and says the level cap, IVs of
+  15, item and nickname rules aren't in yet. The settings library can't see the game's headers:
+  `PORT_NUZLOCKE_MODE_GUI_ONLY` leaves `port_nuzlocke_mode.h`'s Pokémon functions out. Test command `settings PAGE`
+  (as Platinum's); `desktop.sh` passes `SIM_NATIVE_SETTINGS(_EVENTS)`; `settings_challenges.txt` turns Normal on
+  through the native recorder's events.
+- **The Saves page needs port-common** (scoped 2026-11-17): Eterna's slots, autosave, sync and versions are
+  upstream's `port-common` (`subprojects/port-common`), built against a game adapter (`port_game.h`; Platinum's is
+  `src/port/game_platinum.c`, ~400 lines). Goldenrod doesn't use port-common yet and upstream has no HGSS adapter.
+  To do: the wrap and meson, `lib/port/game_hgss.c`, and the hooks Platinum has (`SaveSlots_Init` and
+  `SaveSync_Init`/`_Update` in main, `SaveSync_AtStartup`/`SaveSlots_OnLoaded` on load, `SaveSlots_OnSaved` after a
+  save, `Autosave_FieldTick` in the field, the main menu's slot line and L/R switching). The Gear (port-common's
+  `gear_ui.cpp`) comes with it.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
