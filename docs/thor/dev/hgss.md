@@ -405,7 +405,17 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   shows the menu without CONTINUE). The Saves page and the "Saved" notice (`SIM::GUI::PrjOverlay`) are Eterna's,
   in `lib/port/settings_pages.cpp`. Gotcha: `PlayerAvatar_IsBetweenSteps` is TRUE when the player stands on a tile.
   Test `save_slots.txt` (the menu's slots, the page's cards, "Save now"); the APK builds. Not yet: the empty
-  slot's menu doesn't say which slot it is, and none of it has been tried on the Thor.
+  slot's menu doesn't say which slot it is (fixed: "SLOT n/4" on NEW GAME), and none of it has been tried on the Thor.
+- **The Gear in Goldenrod, first part** (2026-11-17): port-common's Gear is built (its `gear` option on again; an
+  existing build folder needs `meson configure ... -Dport-common:gear=true`, done for `build_linux` and
+  `build_android/meson`), with `lib/port/gear_hgss.c`: the party (stats, moves, IVs/EVs, EXP), the trainer card,
+  names (the save editor's caches), the species lookup (base stats, abilities, egg groups, evolutions both ways,
+  level-up moves) and the pictures (party icons, front sprites decoded from the ROM's NARCs into malloc'd buffers,
+  `UnscanPokepic` for the sprites). Empty for now: the battle tab and its menu (Goldenrod's battles are BW2's: Platinum's
+  Gear reads a Gen 4 BattleSystem), encounters and where to find a species, bosses and the level cap, map names and
+  the map, the PC tab, the Day Care, berries, renaming, TMs, egg and tutor moves. HGSS has no Pokétch: its tab is
+  hidden. *Settings > Gear*, off by default while it's partial. Test `gear.txt` (the lower window shaped as the
+  Thor's, `BottomWindowWidth=540 BottomWindowHeight=620`): the party tab with Cyndaquil and Pikachu.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
