@@ -208,6 +208,15 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   menu's cursor is active, `start_menu.c`) stopped at the 4:3 edges; while `StartMenu_PortBarShown` its rows are
   continued to the sides (BG edge extend). `widescreen_xmenu.txt`. Seen once on the way, unexplained: thin white
   diagonal lines across New Bark Town's 3D for a frame, with the menu open.
+- **The Bug-Catching Contest's swap screen in widescreen** (2026-11-17): the screen after a contest catch ("Caught
+  CATERPIE!", keep or swap, `BugContestSwapMon_Init`) is one of `WideApplication`'s apps now, its four layers' edge
+  columns continued. Its top screen is the sub engine (the main engine, with the Pokémon and text, is on the
+  bottom), and its picture is BG0, which libntr's shader never edge-extended (only BG1 to BG3): the sides showed the
+  backdrop's lavender. `libntr_wide_edge_bg0.patch` gives BG0 drawn as 2D the same edge, mirror and stripe handling
+  (only this screen asks for it so far). The sides continue the panel's dark-green border. Checked with
+  `gen5_contest_catch.txt` run in widescreen (`SCREEN=1920x1080` so the X display holds both windows for its
+  stillshots); `widescreen_xmenu.txt` unchanged. Not done: HGSS's Pokédex entry, naming screen and evolution after
+  a Gen 5 battle are still 4:3 (Platinum's are wide, `gen5-battles.md`), as are its other apps (Bag, party...).
 - Found on the way: on the port the overlay asserts (`GetOverlayLoadDestination`, `GetOverlayRamBounds`) always
   fail, and with communication set up an assert resets the game through the error screen; continuing a save hung.
   They are quiet on the port now.
