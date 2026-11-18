@@ -30,6 +30,9 @@
 #include "unk_0209BA80.h"
 
 #include "constdata/const_020EA358.h"
+#ifdef GEN5_BATTLES
+#include "port/gen5_battle.h"
+#endif
 
 FS_EXTERN_OVERLAY(battle_castle_app);
 
@@ -159,6 +162,15 @@ BOOL FrontierScrCmd_BattleCastle_StartBattle(FrontierScriptContext *ctx)
     FieldBattleDTO *dto = BattleCastle_SetupBattle(battleCastle, fieldData);
     battleCastle->dto = dto;
 
+#ifdef GEN5_BATTLES
+    // Settings > Battles > Gen 5 battles: this facility's battles in Black 2 and White 2's engine
+    if (Gen5Battle_WantsFrontier(dto)) {
+        Gen5Battle_SetFrontierUnrecorded(TRUE);
+        BattleFrontier_RunSubApp(ctx->scriptMan->frontier, &gGen5BattleApplicationTemplate, dto, 0, NULL);
+        return TRUE;
+    }
+    Gen5Battle_SetFrontierUnrecorded(FALSE);
+#endif
     BattleFrontier_RunSubApp(ctx->scriptMan->frontier, &gBattleApplicationTemplate, dto, 0, NULL);
     return TRUE;
 }
