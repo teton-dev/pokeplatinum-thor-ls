@@ -448,7 +448,14 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   New editor test commands `editor ability SLOT N` and `editor allmoves SLOT MOVE`; `gen5_tower_win.txt` wins with a
   Wonder Guard Spiritomb (a battle takes ~110000 frames: the room menu shows KEEP GOING, REST, RETIRE). The Tower's
   **doubles** too (`gen5_tower_doubles.txt`: four Pokemon, Double Battle at the attendant, RUN: a loss). Left: the
-  Tower's multi battles, the other facilities.
+  Tower's multi battles.
+  **The other facilities** (2026-11-18): the Factory, Hall, Castle and Arcade start their battles as the Tower does
+  (`frontier_cmd_*.c`: `Gen5Battle_WantsFrontier` and `SetFrontierUnrecorded`). Tests, each a forfeit of the first battle
+  (a loss, no video question): `gen5_factory.txt` (three rented Pokemon), `gen5_hall.txt` (one), `gen5_castle.txt` and
+  `gen5_arcade.txt` (three). Goldenrod's party screen ignores its first A (a wake) and the dialogue's A presses are lost
+  while scenes load, so the Factory and Castle count the yes/no prompts and lists with the `menu` event
+  (`mash A until menu`). Seen once: the Arcade run crashed in `FrontierMap_Free` (a heap block of the palette buffers),
+  and passed on the rerun; not investigated.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
