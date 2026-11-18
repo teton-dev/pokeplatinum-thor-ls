@@ -223,6 +223,9 @@ typedef struct Gen5Battle {
     // first moves and the game's two lines (BW2's text): [0] before the throw, [1] the throw
     int captureDemo;
     unsigned short demoText[2][GEN5_TEXT_LENGTH];
+    // A battle facility's (the Battle Frontier's): BW2's BTL_TYPE_FACILITY, its Battle Subway's battle (no EXP, the
+    // player may forfeit, the trainer's line at the end), with no bag
+    int facility;
 } Gen5Battle;
 
 // How a battle ended, for Platinum

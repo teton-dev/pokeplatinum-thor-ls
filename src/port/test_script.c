@@ -98,6 +98,7 @@ enum TestOp {
     OP_ITEM,
     OP_GIVE,
     OP_EGG,
+    OP_RELEASE,
     OP_LEAD,
     OP_FAINT,
     OP_DEX,
@@ -350,6 +351,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
     } else if (strcmp(words[0], "egg") == 0 && count >= 2) {
         // egg SPECIES: an egg of SPECIES into the party, as the script command that gives one makes it
         command->op = OP_EGG;
+        command->x = atoi(words[1]);
+        return TRUE;
+    } else if (strcmp(words[0], "release") == 0 && count >= 2) {
+        // release SLOT: the party Pokemon in SLOT leaves the party (to make room for give)
+        command->op = OP_RELEASE;
         command->x = atoi(words[1]);
         return TRUE;
     } else if (strcmp(words[0], "lead") == 0 && count >= 2) {
@@ -1092,6 +1098,17 @@ static u16 Step(void)
             Party_AddPokemon(party, egg);
             Heap_Free(egg);
             printf("[test] gave an egg of species %d\n", command->x);
+            Next();
+            continue;
+        }
+        case OP_RELEASE: {
+            Party *party = SaveData_GetParty(SaveData_Ptr());
+            if (command->x < 0 || command->x >= Party_GetCurrentCount(party) || Party_GetCurrentCount(party) <= 1) {
+                Fail(command, "no Pokemon in that slot, or it's the last one");
+                return 0;
+            }
+            Party_RemovePokemonBySlotIndex(party, command->x);
+            printf("[test] party slot %d released\n", command->x);
             Next();
             continue;
         }

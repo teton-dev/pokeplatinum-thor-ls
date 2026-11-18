@@ -32,6 +32,9 @@
 #include "unk_02049D08.h"
 
 #include "constdata/const_020EA358.h"
+#ifdef GEN5_BATTLES
+#include "port/gen5_battle.h"
+#endif
 
 static BOOL ov104_0223942C(FrontierScriptContext *param0);
 static u16 BattleTower_GetPartnerParam(BattleTower *battleTower, u8 param);
@@ -185,6 +188,13 @@ BOOL FrontierScrCmd_BattleTower_StartBattle(FrontierScriptContext *ctx)
     battleTower->dto = dto;
 
     Sound_SetSceneAndPlayBGM(SOUND_SCENE_BATTLE, BATTLE_TRAINER_sseq, 1);
+#ifdef GEN5_BATTLES
+    // Settings > Battles > Gen 5 battles: the Tower's single battles in Black 2 and White 2's engine
+    if (Gen5Battle_WantsFrontier(dto)) {
+        BattleFrontier_RunSubApp(ctx->scriptMan->frontier, &gGen5BattleApplicationTemplate, dto, 0, NULL);
+        return TRUE;
+    }
+#endif
     BattleFrontier_RunSubApp(ctx->scriptMan->frontier, &gBattleApplicationTemplate, dto, 0, NULL);
 
     return TRUE;
