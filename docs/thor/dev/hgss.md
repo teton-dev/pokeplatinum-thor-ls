@@ -440,8 +440,15 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (from `new-game`) goes through the elevator to the battle room, the battle in BW2's engine ("a single facility
   battle against trainer 48"), RUN and YES (BW2's result 3) and back to the Battle Video question. Palmer too: test
   hook `TEST_ENV=POKEHEARTGOLD_TOWER_OPPONENT=305` (`src/frontier_opponents.c`, port only; the challenge's first
-  opponent), `gen5_tower_palmer.txt`: Tower Tycoon Palmer in the light-pools arena. Left: the Battle Video, doubles,
-  the other facilities.
+  opponent), `gen5_tower_palmer.txt`: Tower Tycoon Palmer in the light-pools arena.
+  **2026-11-18:** no Battle Video question or RECORD entry after a Gen 5 Frontier battle (HGSS can't record BW2's
+  engine): `Gen5Battle_SetFrontierUnrecorded` is set at the Tower's battle (`FrtCmd_TowerStartBattle`),
+  `FrtCmd_CheckBattleRecordSlotValid` steps over the question and answers NO, `FrontierListMenu_AddItem` leaves out
+  RECORD (`msg_0191_00263`), the message box close tolerates the unopened box; cleared in `FrtCmd_CreateBattleRecord`.
+  New editor test commands `editor ability SLOT N` and `editor allmoves SLOT MOVE`; `gen5_tower_win.txt` wins with a
+  Wonder Guard Spiritomb (a battle takes ~110000 frames: the room menu shows KEEP GOING, REST, RETIRE). The Tower's
+  **doubles** too (`gen5_tower_doubles.txt`: four Pokemon, Double Battle at the attendant, RUN: a loss). Left: the
+  Tower's multi battles, the other facilities.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
