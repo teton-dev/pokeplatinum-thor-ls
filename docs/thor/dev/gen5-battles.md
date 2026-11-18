@@ -1059,8 +1059,8 @@ the desktop: `tests/scripts/widescreen_gen5_catch.txt` (shots of the entry and t
   Single Battle, three Pokémon entered, the save, the elevator, the first battle in BW2's engine against a
   Nidoqueen, RUN and YES, the loss. Seen on the way: BW2's switch screen after a faint and its party list work.
 - **Palmer** (2026-11-17): the Frontier Brains (`IsFrontierBrainClass`: Palmer, Thorton, Dahlia, Darach, Argenta) battle
-  in the World Tournament arena's alternate variant, the final's coloured light pools under spotlights (19, alt 1), taken
-  as the owner's "three lights" arena; regular Frontier trainers get its plain variant. Palmer is drawn with Platinum's
+  in the World Tournament arena's alternate variant, the final's coloured light pools under spotlights (19, alt 1), the
+  owner's "three lights" arena (confirmed 2026-11-17); regular Frontier trainers get its plain variant. Palmer is drawn with Platinum's
   own sprite (the bridge's art for classes BW2 lacks), and a Brain's win plays Platinum's
   `VICTORY_FRONTIER_BRAIN_sseq`. His battle music is the Tower's own: its Brain encounter effect
   (`FrontierScrCmd_PlayFrontierBrainEncounterEffect`) starts `BATTLE_FRONTIER_BRAIN_sseq` before the battle.
