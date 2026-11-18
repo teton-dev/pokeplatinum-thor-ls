@@ -1,0 +1,84 @@
+# The Battle Hall's single battles in Black 2 and White 2's engine (a facility battle, as the Tower's): gen5_tower.txt's
+# setup, the Hall's lobby, Single Battle, ONE Pokémon (Lucario; the Hall's single battle takes one, and the cursor jumps
+# to CONFIRM after it), the save, the type (NORMAL, Rank 1: the default) and its YES, the first battle (the log's "single
+# facility battle"), RUN and YES: a loss, and no Battle Video question (the log's "the question skipped"). The Hall's
+# first scene crashed on the port: the Frontier's particle system arena was the DS's size (frontier_particle_system.c).
+#
+#   SCREEN=1920x1080 tools/docker/desktop.sh test tests/scripts/gen5_hall.txt --from full100
+
+# The save opens on the journal page: A and B, a few times, until the overworld
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+gen5-import
+gen5-battles on
+release 5
+release 4
+release 3
+give 445 60
+give 448 60
+give 6 60
+# Garchomp (slot 3) gets Earthquake as its first move, then goes back to its slot
+lead 3
+teach 89 0
+lead 3
+party
+# The Battle Hall's lobby, east of the single battle attendant
+jump 563 8 9
+wait 60
+walk LEFT 1
+wait 20
+stillshot lobby
+press LEFT
+wait 20
+press A
+wait 90
+stillshot h1
+press A
+wait 90
+stillshot h2
+press A
+wait 90
+stillshot h3
+press A
+wait 90
+stillshot h4
+press A
+wait 90
+stillshot h5
+# The party screen: Lucario (the cursor starts on Palkia: DOWN twice); A shows its menu, then A is ENTER
+press DOWN
+wait 30
+press DOWN
+wait 30
+stillshot c1
+press A
+wait 150
+stillshot c2
+press A
+wait 150
+stillshot c3
+# One Pokémon for a single battle: the cursor jumps to CONFIRM
+press A
+wait 150
+stillshot c4
+# The save, the way in, the type (NORMAL, Rank 1) and its YES, the trainer's challenge, the battle
+mash A until command timeout 9000
+wait 60
+shot battle-command
+# RUN forfeits after a yes (BW2's facility battle)
+mash touch 128 175 for 20
+wait 90
+shot forfeit-ask
+mash touch 128 55 for 20
+wait 600
+shot after-battle
+mash A for 600
+shot end1
+mash A for 600
+shot end2
+exit 0
