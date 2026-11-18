@@ -145,8 +145,9 @@ BOOL Gen5Battle_WantsFrontier(const FieldBattleDTO *dto)
     if (!SIM_Config_prj_GetConfig()->gen5Battles || Gen5Rom_GameName() == NULL) {
         return FALSE;
     }
-    // The Battle Tower's single battles so far; its doubles, multi and link battles stay Platinum's
-    return dto->battleType == BATTLE_TYPE_FRONTIER_SINGLES && dto->battleStatusMask == 0;
+    // The Battle Tower's single and double battles; its multi and link battles stay Platinum's
+    return (dto->battleType == BATTLE_TYPE_FRONTIER_SINGLES || dto->battleType == BATTLE_TYPE_FRONTIER_DOUBLES)
+        && dto->battleStatusMask == 0;
 }
 
 static BOOL sFrontierUnrecorded;
