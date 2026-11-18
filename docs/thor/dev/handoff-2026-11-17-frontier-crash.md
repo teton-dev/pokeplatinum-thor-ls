@@ -1,5 +1,8 @@
 # Handoff: Goldenrod's Battle Frontier crashes after the Tower's save (2026-11-17)
 
+> **Fixed (2026-11-17):** the `u32` offsets were the cause. Read as `s32`, the Frontier runs and `gen5_tower.txt`
+> (Goldenrod) plays the Tower battle in BW2's engine to the Battle Video question. Left: "After the fix", steps 2-3.
+
 For the next session picking this up. The goal: Goldenrod's Battle Tower single battles run in BW2's engine, as
 Eterna's do. The Gen 5 bridge for it is written and committed; the Frontier itself crashes before the battle is
 reached. The fix below hasn't been tried yet.

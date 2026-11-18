@@ -432,11 +432,14 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   on the way, port bugs:** the Frontier's party selection (`FrontierFieldSystem_ReadPartySelection`) read the party
   menu's result at the DS's byte offsets (0x26, 0x27, 0x30) behind 64-bit pointers: every slot 255, "Your Pokemon
   must all be different". Fixed by reading `PartyMenuArgs`' fields (port only); the same padding trick in
-  `PartyMenuArgsSlotView` (the Union Room's battle choice) fixed too. `gen5_tower.txt` reaches the save. **Next
-  blocker:** after the save the Frontier's own scenes crash in `FrontierScriptContext_ReadHalfWord` (a bad script
-  pointer, likely another 64-bit layout issue in the Frontier's scripts or their data), so Goldenrod's Frontier has
-  never run on the port and the Gen 5 Tower battle isn't reached there yet. Likely cause and fix plan (`u32` jump
-  offsets read by the Frontier's script commands; Platinum's use `s32`): `handoff-2026-11-17-frontier-crash.md`.
+  `PartyMenuArgsSlotView` (the Union Room's battle choice) fixed too. Then the Frontier's own scenes (after the save)
+  crashed in `FrontierScriptContext_ReadHalfWord`: HGSS's Frontier script commands read their relative offsets as
+  `u32` (`FrtCmd_GoTo`, `GoToIf`, `Call`, `LoadObjectGfx`, `CreateObjects`, `CreateSprites`, the script table in
+  `FrontierScriptContext_GoToScript`), so a backward jump landed 4 GB past the script on 64-bit instead of wrapping
+  as on the DS. They're `s32` now, as Platinum's (same ARM code). Goldenrod's Frontier runs on the port: `gen5_tower.txt`
+  (from `new-game`) goes through the elevator to the battle room, the battle in BW2's engine ("a single facility
+  battle against trainer 48"), RUN and YES (BW2's result 3) and back to the Battle Video question. Left: Palmer's
+  test hook (Eterna's `POKEPLATINUM_TOWER_OPPONENT`), the Battle Video, doubles, the other facilities.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
