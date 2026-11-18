@@ -1035,3 +1035,29 @@ the desktop: `tests/scripts/widescreen_gen5_catch.txt` (shots of the entry and t
   The art's dark right edge shows as a thin line at the 4:3 picture's right. Test:
   `tests/scripts/widescreen_gen5_evolution.txt` (a level 6 Wurmple beats a wild Chansey and evolves). The field's
   evolutions (Rare Candy, trades) and those after Platinum's own battles stay 4:3 for now.
+
+## The Battle Frontier: the Battle Tower's single battles (2026-11-17)
+
+- **How it runs:** the Frontier doesn't start battles through the field: its scripts run Platinum's battle as their own
+  sub-app (`BattleFrontier_RunSubApp(..., &gBattleApplicationTemplate, dto, ...)` in `src/overlay104/frscrcmd_*.c`).
+  `FrontierScrCmd_BattleTower_StartBattle` now runs `gGen5BattleApplicationTemplate` there instead when
+  `Gen5Battle_WantsFrontier` says so: Gen 5 battles on, a BW2 ROM, and `BATTLE_TYPE_FRONTIER_SINGLES` (the Tower's
+  doubles, multi and link battles, and the other facilities, stay Platinum's for now).
+- **BW2's facility battle:** `Gen5Battle.facility` makes the setup `BTL_TYPE_FACILITY`, its Battle Subway's: no EXP
+  (`IsExpGainEnabled` is for wild and trainer battles only), RUN forfeits after a yes, and its own ending (the
+  trainer slides in and says its line). The bridge passes no bag (the Frontier allows no items) and no Nuzlocke rules,
+  gives no money, and leaves the save's bag alone.
+- **The trainers' lines:** a Frontier trainer's ID isn't a trainer-data ID: its line when beaten is the Frontier's
+  bank (`TEXT_BANK_FRONTIER_TRAINER_MESSAGES`, entry `id * 3 + 2`), or a player-made trainer's (ID 10000) easy chat
+  sentence, as `BattleMessage_PrintTrainerMessage` shows them; no mid-battle lines.
+- **The arena:** BW2's World Tournament arena (19), plain. The music is the Tower's own (its script plays
+  `BATTLE_TRAINER_sseq` before the battle).
+- **A forfeit is a loss:** BW2 reports it as fleeing, and `BATTLE_RESULT_PLAYER_FLED` has the win bit, so the Tower
+  went on to its next battle as if won; in the Frontier a run is now `BATTLE_RESULT_LOSE` (the challenge ends, and
+  the Tower asks about the Battle Video).
+- **Test:** `gen5_tower.txt` from `full100` (new test command `release SLOT` to make room for `give`): the attendant,
+  Single Battle, three Pokémon entered, the save, the elevator, the first battle in BW2's engine against a
+  Nidoqueen, RUN and YES, the loss. Seen on the way: BW2's switch screen after a faint and its party list work.
+- **Not yet:** Palmer (the Tower Tycoon) with the three-lights arena and his own music; the Battle Video after a Gen 5
+  battle (Platinum records its own battles: the Tower's question still comes, and YES may save an empty or broken
+  video); the Tower's doubles and multi battles, the Factory, Hall, Castle and Arcade; Pal Park.

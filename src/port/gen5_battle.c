@@ -59,6 +59,7 @@
 #include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #include "port/test_script.h"
+#include "easy_chat_sentence.h"
 #include "system.h"
 #include "trainer_info.h"
 
@@ -69,6 +70,8 @@ static BOOL sRequested;
 static BOOL sFailed;
 // Gen5_BattleBegin ran and Gen5_BattleEnd hasn't yet
 static BOOL sShown;
+// The battle is the Battle Frontier's (BATTLE_TYPE_FRONTIER): BW2's facility battle, no bag, no Nuzlocke rules
+static BOOL sFrontier;
 
 BOOL Gen5Battle_IsShown(void)
 {
@@ -135,6 +138,15 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     const BOOL trainer = type == BATTLE_TYPE_TRAINER || type == BATTLE_TYPE_TRAINER_DOUBLES
         || type == BATTLE_TYPE_TAG_DOUBLES || type == BATTLE_TYPE_TRAINER_WITH_AI_PARTNER;
     return trainer && (dto->battleStatusMask & ~BATTLE_STATUS_FIRST_BATTLE) == 0;
+}
+
+BOOL Gen5Battle_WantsFrontier(const FieldBattleDTO *dto)
+{
+    if (!SIM_Config_prj_GetConfig()->gen5Battles || Gen5Rom_GameName() == NULL) {
+        return FALSE;
+    }
+    // The Battle Tower's single battles so far; its doubles, multi and link battles stay Platinum's
+    return dto->battleType == BATTLE_TYPE_FRONTIER_SINGLES && dto->battleStatusMask == 0;
 }
 
 BOOL Gen5Battle_StartDebug(int species, int level)
@@ -793,7 +805,24 @@ static void TrainerToGen5Ex(FieldBattleDTO *dto, int battler, Gen5Trainer *dest,
     Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->className, 32);
 
     dest->defeatText[0] = 0xFFFF;
-    if (Trainer_HasMessageType(id, TRMSG_DEFEAT, HEAP_ID_APPLICATION)) {
+    if (dto->battleType & BATTLE_TYPE_FRONTIER) {
+        // A Frontier trainer's line when beaten, as Platinum's battle shows it (BattleMessage_PrintTrainerMessage): a
+        // player-made trainer's (10000) is its easy chat sentence, the others' the Frontier's bank, entry id * 3 + 2
+        String *line;
+        if (id == 10000) {
+            line = EasyChatSentence_ToString(&trainer->loseMsg, HEAP_ID_APPLICATION);
+        } else {
+            MessageLoader *frontierLoader = MessageLoader_Init(MSG_LOADER_LOAD_ON_DEMAND, NARC_INDEX_MSGDATA__PL_MSG,
+                TEXT_BANK_FRONTIER_TRAINER_MESSAGES, HEAP_ID_APPLICATION);
+            line = MessageLoader_GetNewString(frontierLoader, id * 3 + 2);
+            MessageLoader_Free(frontierLoader);
+        }
+        Gen5_TextToGen5(String_GetData(line), String_Length(line) + 1, dest->defeatText, GEN5_TEXT_LENGTH);
+        String_Free(line);
+        for (int k = 0; k < 4; k++) {
+            dest->hintText[k][0] = 0xFFFF;
+        }
+    } else if (Trainer_HasMessageType(id, TRMSG_DEFEAT, HEAP_ID_APPLICATION)) {
         Trainer_LoadMessage(id, TRMSG_DEFEAT, text, HEAP_ID_APPLICATION);
         Gen5_TextToGen5(String_GetData(text), String_Length(text) + 1, dest->defeatText, GEN5_TEXT_LENGTH);
     } else {
@@ -827,7 +856,7 @@ static void TrainerToGen5Ex(FieldBattleDTO *dto, int battler, Gen5Trainer *dest,
     static const int hintTypes[4] = {
         TRMSG_FIRST_DAMAGE, TRMSG_ACTIVE_BATTLER_HALF_HP, TRMSG_LAST_BATTLER, TRMSG_LAST_BATTLER_HALF_HP
     };
-    for (int k = 0; k < 4; k++) {
+    for (int k = 0; k < 4 && !(dto->battleType & BATTLE_TYPE_FRONTIER); k++) {
         dest->hintText[k][0] = 0xFFFF;
         if (!partner && Trainer_HasMessageType(id, hintTypes[k], HEAP_ID_APPLICATION)) {
             Trainer_LoadMessage(id, hintTypes[k], text, HEAP_ID_APPLICATION);
@@ -883,7 +912,11 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
     *alt = 0;
     const int trainerClass = (dto->battleType & BATTLE_TYPE_TRAINER) ? dto->trainer[BATTLER_ENEMY_1].header.trainerType : -1;
 
-    if (IsGalacticClass(trainerClass)) {
+    if (dto->battleType & BATTLE_TYPE_FRONTIER) {
+        // The Battle Frontier: BW2's World Tournament's arena, plain
+        *bg = ARENA_BG_TOURNAMENT;
+        *terrain = 0;
+    } else if (IsGalacticClass(trainerClass)) {
         // Team Galactic's own arena (src/port/gen5_galactic.c): BW2's Champion room (16) with Crobat purple and Galactic
         // blue streaks and gleaming stars, as terrain 1 of it
         *bg = 16;
@@ -1074,6 +1107,8 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     memset(&sBattle, 0, sizeof(sBattle));
     Gen5_TextToGen5(TrainerInfo_Name(trainerInfo), TRAINER_NAME_LEN + 1, sBattle.player.name, 8);
     ArenaFromDTO(dto, &sBattle.arenaBg, &sBattle.arenaTerrain, &sBattle.arenaAlt);
+    sFrontier = (dto->battleType & BATTLE_TYPE_FRONTIER) != 0;
+    sBattle.facility = sFrontier;
     printf("Gen 5: arena %d, terrain %d (Platinum's background %d, terrain %d)\n", sBattle.arenaBg, sBattle.arenaTerrain, (int)dto->background,
         (int)dto->terrain);
     {
@@ -1187,7 +1222,8 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         { dto->bag->berries, BERRY_POCKET_SIZE },
         { dto->bag->battleItems, BATTLE_ITEM_POCKET_SIZE },
     };
-    for (int p = 0; p < (int)NELEMS(pockets); p++) {
+    // The Battle Frontier allows no items: its battles have no bag
+    for (int p = 0; p < (sFrontier ? 0 : (int)NELEMS(pockets)); p++) {
         // Nuzlocke mode: Poke Balls are the only items used in battle (the rest stay in the bag as they are)
         if (NuzlockeMode_On() && pockets[p].items != dto->bag->pokeballs) {
             continue;
@@ -1200,7 +1236,10 @@ static BOOL Init(ApplicationManager *appMan, int *state)
             }
         }
     }
-    PortNuzlockeToGen5(dto);
+    // Nuzlocke mode's rules aren't the Battle Frontier's (Platinum's own battle doesn't apply them there either)
+    if (!sFrontier) {
+        PortNuzlockeToGen5(dto);
+    }
     sItemsBefore = sBattle.itemCount;
     memcpy(sItemCountsBefore, sBattle.items, sizeof(sBattle.items));
     // Seen, as Platinum's battle registers a wild Pokémon when it appears (BattleSystem_DexFlagSeen); a trainer's,
@@ -1278,6 +1317,9 @@ static void Finish(FieldBattleDTO *dto)
             printf("Gen 5: the wild Pokémon after the battle: HP %u, status %u\n", (unsigned)sBattle.wild.hp, (unsigned)value);
         }
         TrainerInfo *trainerInfo = dto->trainerInfo[BATTLER_PLAYER_1];
+        if (sFrontier) {
+            sBattle.moneyChange = 0;
+        }
         if (sBattle.moneyChange > 0) {
             TrainerInfo_GiveMoney(trainerInfo, sBattle.moneyChange);
         } else if (sBattle.moneyChange < 0) {
@@ -1295,8 +1337,9 @@ static void Finish(FieldBattleDTO *dto)
         dto->resultMask = BATTLE_RESULT_CAPTURED_MON;
         break;
     default:
-        // Ran, or failed: back to the overworld as if the player ran
-        dto->resultMask = BATTLE_RESULT_PLAYER_FLED;
+        // Ran, or failed: back to the overworld as if the player ran. In the Battle Frontier, running is forfeiting
+        // (BW2's facility battle asks first): a loss (PLAYER_FLED has the win bit, which the Frontier counts as won)
+        dto->resultMask = sFrontier && result == GEN5_BATTLE_RAN ? BATTLE_RESULT_LOSE : BATTLE_RESULT_PLAYER_FLED;
         break;
     }
 }

@@ -477,10 +477,12 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
         GFL_StrBufLoadString(sSetup->trainerLoseMsg, battle->trainer.defeatText);
         // Platinum's trainers say nothing when they win
         sSetup->trainerWinMsg = Keep(GFL_StrBufCreate(4, HEAPID_PORT_BATTLE));
-        sSetup->battleType = BTL_TYPE_TRAINER;
+        // A facility's (the Battle Frontier's) as BW2's Battle Subway's: no EXP, forfeiting, its own ending
+        sSetup->battleType = battle->facility ? BTL_TYPE_FACILITY : BTL_TYPE_TRAINER;
         sSetup->fieldSituation.bgm = SEQ_BGM_VS_TRAINER;
         sSetup->fieldSituation.winBgm = SEQ_BGM_WIN2;
-        printf("Gen 5: a %s trainer battle against trainer %u (class %u, BW2's %lu), %d Pokémon", battle->doubles ? "double" : "single",
+        printf("Gen 5: a %s %s battle against trainer %u (class %u, BW2's %lu), %d Pokémon", battle->doubles ? "double" : "single",
+            battle->facility ? "facility" : "trainer",
             battle->trainer.id, battle->trainer.platinumClass, (unsigned long)sSetup->trainers[1]->trainerClass,
             battle->trainer.partyCount);
         if (battle->hasTrainer2) {
