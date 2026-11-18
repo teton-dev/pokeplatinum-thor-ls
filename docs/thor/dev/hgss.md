@@ -391,13 +391,21 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   `PORT_NUZLOCKE_MODE_GUI_ONLY` leaves `port_nuzlocke_mode.h`'s Pokémon functions out. Test command `settings PAGE`
   (as Platinum's); `desktop.sh` passes `SIM_NATIVE_SETTINGS(_EVENTS)`; `settings_challenges.txt` turns Normal on
   through the native recorder's events.
-- **The Saves page needs port-common** (scoped 2026-11-17): Eterna's slots, autosave, sync and versions are
-  upstream's `port-common` (`subprojects/port-common`), built against a game adapter (`port_game.h`; Platinum's is
-  `src/port/game_platinum.c`, ~400 lines). Goldenrod doesn't use port-common yet and upstream has no HGSS adapter.
-  To do: the wrap and meson, `lib/port/game_hgss.c`, and the hooks Platinum has (`SaveSlots_Init` and
-  `SaveSync_Init`/`_Update` in main, `SaveSync_AtStartup`/`SaveSlots_OnLoaded` on load, `SaveSlots_OnSaved` after a
-  save, `Autosave_FieldTick` in the field, the main menu's slot line and L/R switching). The Gear (port-common's
-  `gear_ui.cpp`) comes with it.
+- **port-common in Goldenrod; Settings > Saves** (2026-11-17): upstream's shared layer (`subprojects/port-common.wrap`,
+  the revision the Platinum fork pins, with its `port-common_nuzlocke_mode.patch`) and an HGSS adapter,
+  `lib/port/game_hgss.c` (identity, the slot and autosave settings in `sim_config_prj.ini`'s new `[Saves]` section,
+  the save summary, reload and image check, the overworld's "can save now", the game's own save). The Gear isn't
+  built yet: `port-common_gear_option.patch` adds a `gear` option, off for Goldenrod, until it has the Gear's ~60
+  `Gear_*` data adapters. Cheats, shiny hunt and the Nuzlocke helper are built but nothing calls them (their
+  adapter functions are minimal). Hooks: `SaveSlots_Init`/`SaveSync_Init` before `SaveData_New` and
+  `SaveSync_Update` in `src/main.c`; `SaveData_New` split so `SaveData_PortReload` loads another slot into the same
+  SaveData, then `SaveSync_AtStartup` and `SaveSlots_OnLoaded`; `SaveSlots_OnSaved` after `SaveGameNormal` and
+  the async write (`src/save.c`); `Autosave_FieldTick` in `FieldSystem_Control`; the main menu (L/R or the Saves
+  page switch slots, fading out and back through the save check; "SLOT n/4" in the CONTINUE box; an empty slot
+  shows the menu without CONTINUE). The Saves page and the "Saved" notice (`SIM::GUI::PrjOverlay`) are Eterna's,
+  in `lib/port/settings_pages.cpp`. Gotcha: `PlayerAvatar_IsBetweenSteps` is TRUE when the player stands on a tile.
+  Test `save_slots.txt` (the menu's slots, the page's cards, "Save now"); the APK builds. Not yet: the empty
+  slot's menu doesn't say which slot it is, and none of it has been tried on the Thor.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
