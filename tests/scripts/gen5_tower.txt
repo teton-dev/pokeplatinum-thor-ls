@@ -2,8 +2,9 @@
 # the owner's finished save (the fixture full100, never committed), three of its legendaries (banned) released and a
 # Garchomp (with Earthquake), a Lucario and a Charizard given; the single battle attendant, Single Battle, the three
 # entered, the save; the first battle starts in BW2's engine (the log's "single facility battle", the World
-# Tournament's arena), RUN forfeits after a yes, and the challenge ends as a loss (the Battle Video question). The
-# check is the log ("battle ended (BW2's result 3") and the shots.
+# Tournament's arena), RUN forfeits after a yes, and the challenge ends as a loss, with no Battle Video question
+# (Platinum can't record a battle in BW2's engine). The check is the log ("battle ended (BW2's result 3", "the
+# question skipped") and the shots.
 #
 #   SCREEN=1920x1080 tools/docker/desktop.sh test tests/scripts/gen5_tower.txt --from full100
 
@@ -96,5 +97,5 @@ wait 90
 shot forfeit-ask
 mash touch 128 55 for 20
 wait 600
-shot video-question
+shot after-battle
 exit 0

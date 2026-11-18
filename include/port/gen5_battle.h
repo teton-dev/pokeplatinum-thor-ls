@@ -39,6 +39,11 @@ BOOL Gen5Battle_MoveBgShown(void);
 BOOL Gen5Battle_PostBattleScreenShown(void);
 // The Battle Tower's single battles in the Gen 5 engine (overlay104/frscrcmd_battle_tower.c): TRUE to run this one there
 BOOL Gen5Battle_WantsFrontier(const struct FieldBattleDTO *dto);
+// The last Frontier battle ran in the Gen 5 engine (set at each Tower battle, cleared when a facility starts a new
+// recording): Platinum can't record it, so the Frontier's Battle Video question and Record menu entry are skipped
+// (overlay104/frscrcmd.c, ov104_02231F74.c)
+void Gen5Battle_SetFrontierUnrecorded(BOOL unrecorded);
+BOOL Gen5Battle_FrontierUnrecorded(void);
 // Of those, the evolution scene (its backdrop, BG3, is a gradient: widescreen mirrors it across the sides)
 BOOL Gen5Battle_EvolutionShown(void);
 

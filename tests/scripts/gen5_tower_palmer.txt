@@ -98,5 +98,5 @@ wait 90
 shot forfeit-ask
 mash touch 128 55 for 20
 wait 600
-shot video-question
+shot after-battle
 exit 0

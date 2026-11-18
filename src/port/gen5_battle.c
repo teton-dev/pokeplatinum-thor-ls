@@ -149,6 +149,18 @@ BOOL Gen5Battle_WantsFrontier(const FieldBattleDTO *dto)
     return dto->battleType == BATTLE_TYPE_FRONTIER_SINGLES && dto->battleStatusMask == 0;
 }
 
+static BOOL sFrontierUnrecorded;
+
+void Gen5Battle_SetFrontierUnrecorded(BOOL unrecorded)
+{
+    sFrontierUnrecorded = unrecorded;
+}
+
+BOOL Gen5Battle_FrontierUnrecorded(void)
+{
+    return sFrontierUnrecorded;
+}
+
 BOOL Gen5Battle_StartDebug(int species, int level)
 {
     if (Gen5Rom_State() != GEN5_ROM_READY && Gen5Rom_GameName() == NULL) {

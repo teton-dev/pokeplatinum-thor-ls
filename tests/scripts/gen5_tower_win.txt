@@ -1,0 +1,101 @@
+# A won Battle Tower battle in Black 2 and White 2's engine, then the room's menu: gen5_tower.txt's challenge led by a
+# test-made Spiritomb with Wonder Guard (the `ability` command) and Dark Pulse, which wins by mashing A whatever the
+# opponent's random team. The check is the menu shot: KEEP GOING, REST, RETIRE and no RECORD (Platinum can't record a
+# battle it didn't run, so the port leaves the entry out after a Gen 5 battle, as the video question;
+# src/overlay104/ov104_02231F74.c, frscrcmd.c).
+#
+#   SCREEN=1920x1080 tools/docker/desktop.sh test tests/scripts/gen5_tower_win.txt --from full100
+
+# The save opens on the journal page: A and B, a few times, until the overworld
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+gen5-import
+gen5-battles on
+release 5
+release 4
+release 3
+give 442 60
+give 448 60
+give 6 60
+# Spiritomb (slot 3) gets Wonder Guard (Ghost and Dark: no weaknesses, so no damaging move touches it) and Dark Pulse
+# in every slot (a Disable leaves it Struggle), then goes back to its slot
+lead 3
+ability 25
+teach 399 0
+teach 399 1
+teach 399 2
+teach 399 3
+lead 3
+party
+# The Battle Tower's lobby, below the single battle attendant
+jump 326 15 7
+wait 60
+stillshot lobby
+walk UP 1
+wait 20
+press UP
+wait 20
+press A
+wait 90
+stillshot t1
+press A
+wait 90
+stillshot t2
+press A
+wait 90
+stillshot t3
+press A
+wait 90
+stillshot t4
+press A
+wait 90
+stillshot t5
+press RIGHT
+wait 15
+press DOWN
+wait 15
+press A
+wait 30
+press A
+wait 40
+press DOWN
+wait 15
+press A
+wait 30
+press A
+wait 40
+press LEFT
+wait 15
+press A
+wait 30
+press A
+wait 60
+stillshot p1
+press A
+wait 90
+stillshot p2
+press A
+wait 90
+stillshot p3
+press A
+wait 120
+stillshot p4
+press A
+wait 120
+stillshot p5
+press A
+wait 200
+stillshot p6
+mash A until command timeout 9000
+wait 60
+shot battle-command
+# Dark Pulse until the trainer's three are down, then on to the room's menu
+mash A until menu timeout 20000
+wait 60
+shot room-menu
+exit 0

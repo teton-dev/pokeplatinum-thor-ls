@@ -389,6 +389,12 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->x = atoi(words[1]);
         command->y = -1;
         return TRUE;
+    } else if (strcmp(words[0], "ability") == 0 && count == 2) {
+        // ability ABILITY: the party's first Pokemon has ABILITY (25: Wonder Guard)
+        command->op = OP_TEACH;
+        command->x = atoi(words[1]);
+        command->y = -2;
+        return TRUE;
     } else if (strcmp(words[0], "trainer") == 0 && count >= 2) {
         // A battle against trainer ID (Platinum's trainer numbers), as its encounter starts it, once the player is free
         command->op = OP_TRAINER;
@@ -1148,6 +1154,12 @@ static u16 Step(void)
             Pokemon *mon = Party_GetPokemonBySlotIndex(SaveData_GetParty(SaveData_Ptr()), 0);
             u32 move = command->x;
             u32 pp = 20;
+            if (command->y == -2) {
+                Pokemon_SetValue(mon, MON_DATA_ABILITY, &move);
+                printf("[test] the first Pokemon has ability %d\n", command->x);
+                Next();
+                continue;
+            }
             if (command->y < 0) {
                 Pokemon_SetValue(mon, MON_DATA_HELD_ITEM, &move);
                 printf("[test] the first Pokemon holds item %d\n", command->x);
