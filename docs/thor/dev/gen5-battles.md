@@ -1058,6 +1058,17 @@ the desktop: `tests/scripts/widescreen_gen5_catch.txt` (shots of the entry and t
 - **Test:** `gen5_tower.txt` from `full100` (new test command `release SLOT` to make room for `give`): the attendant,
   Single Battle, three Pokémon entered, the save, the elevator, the first battle in BW2's engine against a
   Nidoqueen, RUN and YES, the loss. Seen on the way: BW2's switch screen after a faint and its party list work.
-- **Not yet:** Palmer (the Tower Tycoon) with the three-lights arena and his own music; the Battle Video after a Gen 5
+- **Palmer** (2026-11-17): the Frontier Brains (`IsFrontierBrainClass`: Palmer, Thorton, Dahlia, Darach, Argenta) battle
+  in the World Tournament arena's alternate variant, the final's coloured light pools under spotlights (19, alt 1), taken
+  as the owner's "three lights" arena; regular Frontier trainers get its plain variant. Palmer is drawn with Platinum's
+  own sprite (the bridge's art for classes BW2 lacks), and a Brain's win plays Platinum's
+  `VICTORY_FRONTIER_BRAIN_sseq`. His battle music is the Tower's own: its Brain encounter effect
+  (`FrontierScrCmd_PlayFrontierBrainEncounterEffect`) starts `BATTLE_FRONTIER_BRAIN_sseq` before the battle.
+  `POKEPLATINUM_GEN5_ARENA` takes a third number, the variant. Test hook `POKEPLATINUM_TOWER_OPPONENT=N` (port only,
+  `BattleTower_GetTrainerIDForRoomAndOpponentNum`): a challenge's first opponent is Frontier trainer N (305 Palmer
+  Silver, 306 Gold); with it the cut-in and Brain music don't play (they are the 21st battle's script).
+  `gen5_tower_palmer.txt`: "You are challenged by Tower Tycoon Palmer!" and his Dragonite on the light pools. Not seen:
+  a real 21st battle with its cut-in, and the victory music (the test forfeits).
+- **Not yet:** the Battle Video after a Gen 5
   battle (Platinum records its own battles: the Tower's question still comes, and YES may save an empty or broken
   video); the Tower's doubles and multi battles, the Factory, Hall, Castle and Arcade; Pal Park.

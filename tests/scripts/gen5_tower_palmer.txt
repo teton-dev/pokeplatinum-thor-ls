@@ -1,0 +1,102 @@
+# Palmer, the Tower Tycoon, in Black 2 and White 2's engine: gen5_tower.txt's challenge with POKEPLATINUM_TOWER_OPPONENT=305
+# (the port's test hook in src/unk_0204AEE8.c: the challenge's first opponent is Palmer, as at the 21st battle). The
+# battle is in the World Tournament's arena with the final's coloured light pools (a Frontier Brain's) and Palmer's
+# own sprite; RUN forfeits. The check is the shots and the log ("arena 19", "class 97").
+#
+#   SCREEN=1920x1080 POKEPLATINUM_TOWER_OPPONENT=305 tools/docker/desktop.sh test tests/scripts/gen5_tower_palmer.txt --from full100
+
+# The save opens on the journal page: A and B, a few times, until the overworld
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+gen5-import
+gen5-battles on
+release 5
+release 4
+release 3
+give 445 60
+give 448 60
+give 6 60
+# Garchomp (slot 3) gets Earthquake as its first move, then goes back to its slot
+lead 3
+teach 89 0
+lead 3
+party
+# The Battle Tower's lobby, below the single battle attendant
+jump 326 15 7
+wait 60
+stillshot lobby
+walk UP 1
+wait 20
+press UP
+wait 20
+press A
+wait 90
+stillshot t1
+press A
+wait 90
+stillshot t2
+press A
+wait 90
+stillshot t3
+press A
+wait 90
+stillshot t4
+press A
+wait 90
+stillshot t5
+press RIGHT
+wait 15
+press DOWN
+wait 15
+press A
+wait 30
+press A
+wait 40
+press DOWN
+wait 15
+press A
+wait 30
+press A
+wait 40
+press LEFT
+wait 15
+press A
+wait 30
+press A
+wait 60
+stillshot p1
+press A
+wait 90
+stillshot p2
+press A
+wait 90
+stillshot p3
+press A
+wait 120
+stillshot p4
+press A
+wait 120
+stillshot p5
+press A
+wait 200
+stillshot p6
+mash A for 1500
+shot intro1
+mash A for 200
+shot intro2
+mash A until command timeout 9000
+wait 60
+shot palmer
+# RUN: in a facility's battle it forfeits (BW2's Battle Subway), after a yes
+mash touch 128 175 for 20
+wait 90
+shot forfeit-ask
+mash touch 128 55 for 20
+wait 600
+shot video-question
+exit 0
