@@ -1069,6 +1069,18 @@ the desktop: `tests/scripts/widescreen_gen5_catch.txt` (shots of the entry and t
   Silver, 306 Gold); with it the cut-in and Brain music don't play (they are the 21st battle's script).
   `gen5_tower_palmer.txt`: "You are challenged by Tower Tycoon Palmer!" and his Dragonite on the light pools. Not seen:
   a real 21st battle with its cut-in, and the victory music (the test forfeits).
-- **Not yet:** the Battle Video after a Gen 5
-  battle (Platinum records its own battles: the Tower's question still comes, and YES may save an empty or broken
-  video); the Tower's doubles and multi battles, the Factory, Hall, Castle and Arcade; Pal Park.
+- **No Battle Video of a Gen 5 battle** (2026-11-17): Platinum's video is its own engine's recording, so after a battle
+  in BW2's engine there's nothing to save (YES would have saved an empty video). The scripts can't change (the DS build
+  must match), so the port skips them: `Gen5Battle_SetFrontierUnrecorded` is set at each Tower battle (cleared by the
+  next Platinum battle or a new recording); then `FrontierScrCmd_70` (the video slot check before the question) steps
+  over the "CompareVar/CallIf ... ShowYesNoMenu" that follows and answers NO, the room menu leaves its RECORD entry
+  out (`FrontierMenuManager_AddListMenuEntry`, moving the menu down a line), and `Frontier_CloseMessage` tolerates the
+  message box the skipped question never opened. The log says "the question skipped". Tests: `gen5_tower.txt` (a
+  forfeit: straight to the lobby's "Thank you for playing!") and `gen5_tower_win.txt` (a win: KEEP GOING, REST,
+  RETIRE). Winning by mashing A depends on the opponent's random team (a Disable, a Shedinja), so the win test leads
+  with a Spiritomb given Wonder Guard (new test command `ability ABILITY`, on the first Pokémon) and Dark Pulse in
+  all four slots. Recording BW2's own battles (its Battle Video format) and playing them back would be a project of
+  its own.
+- **Seen on the way:** in a facility battle BW2 shows a move's PP as "16/10" (Earthquake with PP Ups): the current PP
+  is kept but the maximum drops the PP Ups, likely BW2's level-50 copy of the party. Not investigated.
+- **Not yet:** the Tower's doubles and multi battles, the Factory, Hall, Castle and Arcade; Pal Park.

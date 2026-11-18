@@ -51,6 +51,12 @@
 #include "system.h"
 #include "text.h"
 
+#ifdef GEN5_BATTLES
+#include "port/gen5_battle.h"
+
+#include "res/text/bank/menu_entries.h"
+#endif
+
 #define LIST_MENU_ENTRY_NO_ALT_TEXT 0xFF
 #define LIST_MENU_BUILDER_HEADER    0xFA
 #define LIST_MENU_MAX_DISPLAY       8
@@ -151,6 +157,13 @@ static void PrintMessage(FrontierScriptManager *scriptMan, enum Font font, int r
 void Frontier_CloseMessage(FrontierScriptManager *scriptMan)
 {
     GF_ASSERT(scriptMan->isMsgBoxOpen == TRUE);
+#ifdef GEN5_BATTLES
+    // The skipped Battle Video question (frscrcmd.c, after a Gen 5 battle) leaves the script's CloseMessage nothing
+    // to close
+    if (scriptMan->isMsgBoxOpen == FALSE) {
+        return;
+    }
+#endif
 
     Window_EraseMessageBox(&scriptMan->msgWindow, FALSE);
     Window_Remove(&scriptMan->msgWindow);
@@ -403,6 +416,17 @@ FrontierMenuManager *FrontierMenuManager_New2(FrontierScriptManager *scriptMan, 
 
 void FrontierMenuManager_AddListMenuEntry(FrontierMenuManager *menuManager, u32 entry, u32 altTextEntryID, u32 index)
 {
+#ifdef GEN5_BATTLES
+    // After a battle in the Gen 5 engine there's nothing to record (port/gen5_battle.h): no Record entry, and the
+    // menu (anchored at its top, placed for its four entries) moves down by the missing line
+    if (Gen5Battle_FrontierUnrecorded() && menuManager->msgLoader != NULL && entry == MenuEntries_Text_Record
+        && menuManager->freeMsgLoaderOnDelete) {
+        if (!menuManager->anchorBottom) {
+            menuManager->anchorY += 2;
+        }
+        return;
+    }
+#endif
     AddListMenuEntry(menuManager, entry, altTextEntryID, index);
 }
 

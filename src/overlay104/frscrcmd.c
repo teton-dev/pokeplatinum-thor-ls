@@ -50,6 +50,11 @@
 #include "overlay104/struct_ov104_0223F174_decl.h"
 #include "overlay104/struct_ov104_0223F1B4.h"
 #include "savedata/save_table.h"
+#ifdef GEN5_BATTLES
+#include <stdio.h>
+
+#include "port/gen5_battle.h"
+#endif
 
 #include "battle_frontier.h"
 #include "battle_frontier_stats.h"
@@ -1194,6 +1199,9 @@ static BOOL FrontierScrCmd_InitNewBattleRecording(FrontierScriptContext *ctx)
     FieldFrontierDTO *fieldData = BattleFrontier_GetFieldData(ctx->scriptMan->frontier);
 
     BattleRecording_New(fieldData->saveData, HEAP_ID_FIELD2, &resultCode);
+#ifdef GEN5_BATTLES
+    Gen5Battle_SetFrontierUnrecorded(FALSE);
+#endif
     return FALSE;
 }
 
@@ -1377,6 +1385,36 @@ static BOOL FrontierScrCmd_FreeBattleRecording(FrontierScriptContext *ctx)
     return FALSE;
 }
 
+#ifdef GEN5_BATTLES
+static u16 PeekHalfWord(const u8 *ptr)
+{
+    return ptr[0] | (ptr[1] << 8);
+}
+
+// After a battle in the Gen 5 engine there's no Platinum recording of it, so YES would save an empty video. The
+// question always follows this command as "CallIfEq var, 0, ask; CallIfEq var, 1, ask overwrite; ShowYesNoMenu var":
+// skip it and answer NO. Anything else is left to run as it is
+static void SkipBattleVideoQuestion(FrontierScriptContext *ctx)
+{
+    const u8 *ptr = ctx->scriptPtr;
+    u16 cmd = PeekHalfWord(ptr);
+
+    while (cmd < gFrontierScrCmdFuncsCount && gFrontierScrCmdFuncs[cmd] == FrontierScrCmd_CompareVarToValue
+        && PeekHalfWord(ptr + 6) < gFrontierScrCmdFuncsCount
+        && gFrontierScrCmdFuncs[PeekHalfWord(ptr + 6)] == FrontierScrCmd_CallIf) {
+        ptr += 6 + 2 + 1 + 4; // CompareVarToValue var, value; CallIf condition, offset
+        cmd = PeekHalfWord(ptr);
+    }
+    if (cmd >= gFrontierScrCmdFuncsCount || gFrontierScrCmdFuncs[cmd] != FrontierScrCmd_ShowYesNoMenu) {
+        printf("Gen 5: the Battle Video question isn't where it was expected: left as it is\n");
+        return;
+    }
+    *FrontierScriptContext_GetVarPointer(ctx, PeekHalfWord(ptr + 2)) = MENU_NO;
+    ctx->scriptPtr = ptr + 2 + 2 + 1; // ShowYesNoMenu var, cursor
+    printf("Gen 5: no Battle Video of a battle in BW2's engine: the question skipped\n");
+}
+#endif
+
 static BOOL FrontierScrCmd_70(FrontierScriptContext *ctx)
 {
     int v0;
@@ -1384,6 +1422,11 @@ static BOOL FrontierScrCmd_70(FrontierScriptContext *ctx)
     u16 *v2 = FrontierScriptContext_TryGetVarPointer(ctx);
 
     *v2 = sub_0202F330(fieldData->saveData, 11, &v0, 0);
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_FrontierUnrecorded()) {
+        SkipBattleVideoQuestion(ctx);
+    }
+#endif
     return FALSE;
 }
 
