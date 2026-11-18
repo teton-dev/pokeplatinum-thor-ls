@@ -900,6 +900,14 @@ static BOOL IsGymLeaderClass(int trainerClass)
         || (trainerClass >= TRAINER_CLASS_LEADER_GARDENIA && trainerClass <= TRAINER_CLASS_LEADER_VOLKNER);
 }
 
+// The Battle Frontier's Brains (Palmer, Thorton, Dahlia, Darach, Argenta)
+static BOOL IsFrontierBrainClass(int trainerClass)
+{
+    return trainerClass == TRAINER_CLASS_TOWER_TYCOON || trainerClass == TRAINER_CLASS_HALL_MATRON
+        || trainerClass == TRAINER_CLASS_FACTORY_HEAD || trainerClass == TRAINER_CLASS_ARCADE_STAR
+        || trainerClass == TRAINER_CLASS_CASTLE_VALET;
+}
+
 static BOOL IsGalacticClass(int trainerClass)
 {
     return trainerClass == TRAINER_CLASS_GALACTIC_GRUNT_MALE || trainerClass == TRAINER_CLASS_GALACTIC_GRUNT_FEMALE
@@ -913,9 +921,11 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
     const int trainerClass = (dto->battleType & BATTLE_TYPE_TRAINER) ? dto->trainer[BATTLER_ENEMY_1].header.trainerType : -1;
 
     if (dto->battleType & BATTLE_TYPE_FRONTIER) {
-        // The Battle Frontier: BW2's World Tournament's arena, plain
+        // The Battle Frontier: BW2's World Tournament's arena, plain; a Frontier Brain's with the final's coloured light
+        // pools (its alternate variant, the owner's "three lights" arena)
         *bg = ARENA_BG_TOURNAMENT;
         *terrain = 0;
+        *alt = IsFrontierBrainClass(trainerClass) ? 1 : 0;
     } else if (IsGalacticClass(trainerClass)) {
         // Team Galactic's own arena (src/port/gen5_galactic.c): BW2's Champion room (16) with Crobat purple and Galactic
         // blue streaks and gleaming stars, as terrain 1 of it
@@ -1010,7 +1020,8 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
     }
     const char *override = getenv("POKEPLATINUM_GEN5_ARENA");
     if (override != NULL) {
-        sscanf(override, "%d,%d", bg, terrain);
+        // bg,terrain[,alt] (alt: the tournament arena's variant)
+        sscanf(override, "%d,%d,%d", bg, terrain, alt);
     }
 }
 
@@ -1428,6 +1439,13 @@ static void PlayVictoryMusic(void)
             break;
         case TRAINER_CLASS_CHAMPION_CYNTHIA:
             seq = VICTORY_CHAMPION_sseq;
+            break;
+        case TRAINER_CLASS_TOWER_TYCOON:
+        case TRAINER_CLASS_HALL_MATRON:
+        case TRAINER_CLASS_FACTORY_HEAD:
+        case TRAINER_CLASS_ARCADE_STAR:
+        case TRAINER_CLASS_CASTLE_VALET:
+            seq = VICTORY_FRONTIER_BRAIN_sseq;
             break;
         case TRAINER_CLASS_COMMANDER_MARS:
         case TRAINER_CLASS_COMMANDER_JUPITER:

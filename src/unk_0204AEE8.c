@@ -2,6 +2,9 @@
 
 #include <nitro.h>
 #include <string.h>
+#ifdef SDK_PORT
+#include <stdlib.h>
+#endif
 
 #include "constants/battle_tower.h"
 #include "constants/string.h"
@@ -251,6 +254,15 @@ static const u16 sBattleTowerBossTrainerRangesPerRoom[][2] = {
 u16 BattleTower_GetTrainerIDForRoomAndOpponentNum(BattleTower *battleTower, u8 roomNum, u8 opponentNum, int challengeMode)
 {
     u16 trainerID;
+
+#ifdef SDK_PORT
+    // Tests: POKEPLATINUM_TOWER_OPPONENT=N makes a challenge's first opponent Frontier trainer N (305: Palmer, as at the
+    // 21st battle), so a test reaches a Frontier Brain without twenty wins (tests/scripts/gen5_tower_palmer.txt)
+    const char *forced = getenv("POKEPLATINUM_TOWER_OPPONENT");
+    if (forced != NULL && forced[0] != '\0' && opponentNum == 0) {
+        return (u16)atoi(forced);
+    }
+#endif
 
     if (challengeMode == BATTLE_TOWER_MODE_SINGLE) {
         if (roomNum == 2 && opponentNum == BT_OPPONENTS_COUNT - 1) { // 21st battle
