@@ -425,6 +425,17 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   shown; Goldenrod's Nuzlocke level cap could now use it). Test command `gear` logs the Area and the next boss;
   `gear_area.txt` (Route 30 at night: Rattata, Spinarak, Hoothoot...; Falkner's Pidgey 9 and Pidgeotto 13, cap 13).
   Still empty: the battle tab, where to find a species, the map, the PC tab, the Day Care, berries, the rival.
+- **The Battle Tower in Gen 5, ported from Eterna** (2026-11-17): `Gen5Battle_WantsFrontier` and the facility battle in
+  `lib/port/gen5_battle.c` (no bag, money or Nuzlocke rules; the Frontier's lines from `msg_0197_00724`, entry id * 3
+  + 2, or a player-made trainer's (0x2710) mail message; a forfeit is a loss; the World Tournament arena, light pools
+  for the Brains, whose victory music HGSS's bridge already had), launched from `FrtCmd_TowerStartBattle`. **Found
+  on the way, port bugs:** the Frontier's party selection (`FrontierFieldSystem_ReadPartySelection`) read the party
+  menu's result at the DS's byte offsets (0x26, 0x27, 0x30) behind 64-bit pointers: every slot 255, "Your Pokemon
+  must all be different". Fixed by reading `PartyMenuArgs`' fields (port only); the same padding trick in
+  `PartyMenuArgsSlotView` (the Union Room's battle choice) fixed too. `gen5_tower.txt` reaches the save. **Next
+  blocker:** after the save the Frontier's own scenes crash in `FrontierScriptContext_ReadHalfWord` (a bad script
+  pointer, likely another 64-bit layout issue in the Frontier's scripts or their data), so Goldenrod's Frontier has
+  never run on the port and the Gen 5 Tower battle isn't reached there yet.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
