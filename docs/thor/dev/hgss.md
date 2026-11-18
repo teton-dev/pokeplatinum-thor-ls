@@ -435,7 +435,8 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   `PartyMenuArgsSlotView` (the Union Room's battle choice) fixed too. `gen5_tower.txt` reaches the save. **Next
   blocker:** after the save the Frontier's own scenes crash in `FrontierScriptContext_ReadHalfWord` (a bad script
   pointer, likely another 64-bit layout issue in the Frontier's scripts or their data), so Goldenrod's Frontier has
-  never run on the port and the Gen 5 Tower battle isn't reached there yet.
+  never run on the port and the Gen 5 Tower battle isn't reached there yet. Likely cause and fix plan (`u32` jump
+  offsets read by the Frontier's script commands; Platinum's use `s32`): `handoff-2026-11-17-frontier-crash.md`.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
