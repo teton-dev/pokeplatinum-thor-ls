@@ -478,3 +478,26 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   as the main ROM: name, marts, boots to the new game); on vanilla HeartGold it reads 0 changed lists. Storm Silver
   is untested (no SoulSilver ROM here). Not done: the Gen 5 battles' and Japanese Game Corner's imported files live
   in each game's folder, so an added game imports them again.
+
+## Bugs from the owner (2026-11-18)
+
+- **Dark caves were black** (Dark Cave, and every cave that needs Flash; reported with widescreen, but black at 4:3
+  on the desktop too). HGSS's darkness isn't Platinum's circle of windows: Flash's weather fogs the whole 3D scene
+  black (fog table all 127, `WeatherTask_Flash`), and a flat model (`field_flash_darkness.c`, 160x112 with a lit hole,
+  a third of the way to the camera) is drawn translucent without fog, which on the DS clears the fog flag of the
+  pixels under it (a translucent polygon ANDs it). libntr fogs each polygon in its fragment shader as it draws it, so
+  nothing could un-fog. The port draws it without the fog (`FLASH_FOG`, `weather_manager.c`): the model moved toward
+  the camera (1.25x the near plane, scaled down as much, so the same screen area with nothing of the map in front),
+  and an opaque black frame around it in its plane, a tenth into the model's box at the sides and the top (its dark
+  edges don't fill the box there) and far past the wide screen's edges. The scene is wide in these caves now
+  (`WeatherLayers`, `lib/port/widescreen.c`). Test `widescreen_dark_cave.txt`. Not tried: after using Flash (the
+  model at 4x), on the Thor. A general fix would be fog as a final pass in libntr with the DS's fog-flag rule
+  (the edge-marking pass's attribute output could carry the flag).
+- **Nuzlocke's "You've already used your catch for this area!"** ran off BW2's message window: HGSS's copy lost
+  Eterna's line break (and its 0xFFFE conversion). Now on two lines as in Eterna (`PortNuzlockeToGen5`). Test
+  `gen5_nuzlocke_refused.txt`.
+- **The catching tutorial showed Bianca**: BW2's capture demo's effect script (0x23c) sets its own demonstrator (class
+  38, Bianca) on the player's side with its SetTrainer command. `gen5/patches/src/ov168/btlv_effvm.c.patch` puts the
+  battle's player there in the capture demo (Lyra, or Ethan when the player is Lyra). Test `gen5_tutorial_back.txt`.
+  Shared `gen5/`: Eterna's tutorial plays BW2's demo too (`BATTLE_TYPE_CATCH_TUTORIAL`), so it gets the same
+  change (Dawn or Lucas instead of Bianca); not yet run there.
