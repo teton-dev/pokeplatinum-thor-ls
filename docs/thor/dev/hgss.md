@@ -416,6 +416,15 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   the map, the PC tab, the Day Care, berries, renaming, TMs, egg and tutor moves. HGSS has no Pokétch: its tab is
   hidden. *Settings > Gear*, off by default while it's partial. Test `gear.txt` (the lower window shaped as the
   Thor's, `BottomWindowWidth=540 BottomWindowHeight=620`): the party tab with Cyndaquil and Pikachu.
+- **The Gear in Goldenrod, second part** (2026-11-17): the Area tab from the map's own encounter table
+  (`WildEncounters_ReadFromNarc`: grass for the time of day, morning/day/night, surfing, the three rods, a mass
+  outbreak when the radio reports one there; rock smash, Hoenn/Sinnoh sounds and the night fishing slot aren't
+  shown), location names (the map sections', msg 0279), and the bosses: Johto's eight leaders, Will, Koga, Bruno,
+  Karen and Lance, Kanto's leaders in a usual order, then Red, their teams from the trainer data (custom moves, or the
+  last four learned by level), beaten by their badge or the Hall of Fame. The level cap is the next boss's ace (only
+  shown; Goldenrod's Nuzlocke level cap could now use it). Test command `gear` logs the Area and the next boss;
+  `gear_area.txt` (Route 30 at night: Rattata, Spinarak, Hoothoot...; Falkner's Pidgey 9 and Pidgeotto 13, cap 13).
+  Still empty: the battle tab, where to find a species, the map, the PC tab, the Day Care, berries, the rival.
 
 ## Goldenrod, and the settings in Android's views (2026-11-16)
 
