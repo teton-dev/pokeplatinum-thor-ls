@@ -1,0 +1,114 @@
+# The Battle Factory's single battles in Black 2 and White 2's engine (a facility battle, as the Tower's): gen5_tower.txt's
+# setup, the Factory's lobby, Single Battle, Level 50, the save, three rented Pokémon (the first A on the rental screen is
+# ignored; then A, DOWN to RENT, A, and RIGHT to the next ball), the first battle (the log's "single facility battle"),
+# RUN and YES: a loss, and no Battle Video question (the log's "the question skipped"), then the save and the lobby.
+#
+#   SCREEN=1920x1080 tools/docker/desktop.sh test tests/scripts/gen5_factory.txt --from full100
+
+# The save opens on the journal page: A and B, a few times, until the overworld
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+gen5-import
+gen5-battles on
+release 5
+release 4
+release 3
+give 445 60
+give 448 60
+give 6 60
+# Garchomp (slot 3) gets Earthquake as its first move, then goes back to its slot
+lead 3
+teach 89 0
+lead 3
+party
+# The Battle Factory's lobby, below the single battle attendant
+jump 562 21 8
+wait 60
+walk UP 1
+wait 20
+stillshot lobby
+press UP
+wait 20
+press A
+wait 90
+stillshot f1
+press A
+wait 90
+stillshot f2
+press A
+wait 90
+stillshot f3
+press A
+wait 90
+stillshot f4
+press A
+wait 90
+stillshot f5
+press A
+wait 90
+stillshot f6
+press A
+wait 90
+stillshot f7
+press A
+wait 90
+stillshot f8
+press A
+wait 90
+stillshot f9
+press A
+wait 90
+stillshot f10
+press A
+wait 90
+stillshot f11
+wait 200
+# The first A on the rental screen is ignored; then each rental: A (menu), DOWN (RENT), A, and RIGHT to the next
+press A
+wait 100
+press A
+wait 100
+press DOWN
+wait 40
+press A
+wait 150
+stillshot r1
+press RIGHT
+wait 60
+press A
+wait 100
+press DOWN
+wait 40
+press A
+wait 150
+stillshot r2
+press RIGHT
+wait 60
+press A
+wait 100
+press DOWN
+wait 40
+press A
+wait 150
+stillshot r3
+# "Are you OK with the chosen 3 Pokémon?" YES, the way in, the trainer's challenge, the battle
+mash A until command timeout 9000
+wait 60
+shot battle-command
+# RUN forfeits after a yes (BW2's facility battle)
+mash touch 128 175 for 20
+wait 90
+shot forfeit-ask
+mash touch 128 55 for 20
+wait 600
+shot after-battle
+mash A for 600
+shot end1
+mash A for 600
+shot end2
+exit 0
