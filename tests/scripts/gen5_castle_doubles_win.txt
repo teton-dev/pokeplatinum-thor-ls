@@ -1,0 +1,105 @@
+# A won Battle Castle DOUBLE battle in Black 2 and White 2's engine: gen5_castle.txt's setup with a test-made Wonder Guard
+# Spiritomb (see gen5_tower_win.txt), so mashing A wins whatever the opponent's team. The check is the log's "battle
+# ended" and the shot after.
+#
+#   SCREEN=1920x1080 tools/docker/desktop.sh test tests/scripts/gen5_castle_doubles_win.txt --from full100
+
+# The save opens on the journal page: A and B, a few times, until the overworld
+mash A for 300
+shot s1
+mash A for 300
+shot s2
+mash B for 300
+shot s3
+mash A until free timeout 3000
+gen5-import
+gen5-battles on
+release 5
+release 4
+release 3
+release 2
+give 445 60
+give 442 60
+give 6 60
+give 149 60
+# Spiritomb (slot 4: the party screen's Lucario slot) gets Wonder Guard (Ghost and Dark: no weaknesses, so no damaging
+# move touches it) and Dark Pulse in every slot, then goes back to its slot
+lead 3
+ability 25
+teach 399 0
+teach 399 1
+teach 399 2
+teach 399 3
+lead 3
+party
+# The Battle Castle's lobby, east of the single battle attendant
+jump 564 7 9
+wait 60
+walk LEFT 1
+wait 20
+stillshot lobby
+press LEFT
+wait 20
+press A
+wait 90
+press A
+wait 90
+press A
+wait 90
+press DOWN
+wait 15
+press A
+wait 90
+press A
+wait 200
+stillshot party
+# The party screen (two columns): Spiritomb (first, so it leads), Garchomp, Charizard (the Castle takes three in doubles too, then the cursor jumps to CONFIRM); each A shows its menu,
+# then A is ENTER
+press DOWN
+wait 30
+press RIGHT
+wait 30
+press A
+wait 150
+press A
+wait 150
+press LEFT
+wait 60
+press A
+wait 150
+press A
+wait 150
+press DOWN
+wait 60
+press A
+wait 150
+press A
+wait 150
+stillshot picked
+# CONFIRM, the save (menu), its overwrite (menu), the Castle's list (SELF, OPPONENT, BATTLE: BATTLE)
+press A
+wait 150
+mash A until menu timeout 3000
+wait 30
+stillshot save1
+mash A until menu timeout 3000
+wait 30
+stillshot save2
+mash A until menu timeout 3000
+wait 30
+stillshot list
+press DOWN
+wait 40
+press DOWN
+wait 40
+stillshot battle-entry
+press A
+wait 120
+mash A until command timeout 9000
+wait 60
+shot battle-command
+# Dark Pulse until the trainer's Pokémon are down, then on to the next menu
+mash A until menu timeout 60000
+wait 60
+shot after-win
+exit 0
