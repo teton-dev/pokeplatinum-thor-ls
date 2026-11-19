@@ -350,9 +350,11 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->y = atoi(words[2]);
         return TRUE;
     } else if (strcmp(words[0], "egg") == 0 && count >= 2) {
-        // egg SPECIES: an egg of SPECIES into the party, as the script command that gives one makes it
+        // egg SPECIES [hatch]: an egg of SPECIES into the party, as the script command that gives one makes it; hatch:
+        // the party's first egg hatches at once, as the field's step count does it
         command->op = OP_EGG;
         command->x = atoi(words[1]);
+        command->y = count >= 3 && strcmp(words[2], "hatch") == 0;
         return TRUE;
     } else if (strcmp(words[0], "release") == 0 && count >= 2) {
         // release SLOT: the party Pokemon in SLOT leaves the party (to make room for give)
@@ -1109,9 +1111,17 @@ static u16 Step(void)
             Pokemon *egg = Pokemon_New(HEAP_ID_APPLICATION);
             Pokemon_Init(egg);
             Egg_CreateEgg(egg, command->x, 1, SaveData_GetTrainerInfo(save), 3, 0);
+            if (command->y) {
+                u32 cycles = 0; // the party's first egg to hatch is the one with no cycle left
+                Pokemon_SetValue(egg, MON_DATA_FRIENDSHIP, &cycles);
+            }
             Party_AddPokemon(party, egg);
             Heap_Free(egg);
             printf("[test] gave an egg of species %d\n", command->x);
+            if (command->y) {
+                GUI_CreateMon_StartEggHatch();
+                printf("[test] the egg hatches\n");
+            }
             Next();
             continue;
         }

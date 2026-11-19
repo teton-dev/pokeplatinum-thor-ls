@@ -1,0 +1,11 @@
+# Nuzlocke mode: a hatched Pokémon must be named. From nuz-normal: an egg that hatches at once (the test command `egg
+# SPECIES hatch`); "Would you like to nickname?" dismissed with B (NO) opens the naming screen all the same, which takes no
+# blank name.
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_egg.txt --from nuz-normal
+mash A until free
+egg 440 hatch
+mash B until naming timeout 20000
+wait 60
+shot hatch-naming
+exit 0

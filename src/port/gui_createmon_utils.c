@@ -18,10 +18,15 @@
 #include "system_flags.h"
 #include "field/field_system.h"
 #include "field_task.h"
+#include "egg_hatch.h"
+#include "overlay005/daycare.h"
+#include "save_player.h"
+#include "field_bgm.h"
 #include "heap.h"
 #include "overlay006/wild_encounters.h"
 #include "port/debug_field.h"
 #include "unk_020528D0.h"
+#include "unk_0203D1B8.h"
 
 #include <stdlib.h>
 
@@ -221,5 +226,36 @@ int GUI_CreateMon_StartSafariEncounter(int speciesNo, int level, int balls)
     FieldBattleDTO_Init(dto, fieldSystem);
     CreateWildMon_Scripted(fieldSystem, speciesNo, level, dto);
     Encounter_NewVsWild(fieldSystem, dto);
+    return TRUE;
+}
+
+static BOOL FieldTask_HatchEgg(FieldTask *task)
+{
+    // As a script's HatchEgg starts it: the party's first egg hatches (the cutscene, the nickname question)
+    int *state = FieldTask_GetState(task);
+    if ((*state)++ == 0) {
+        FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+        Pokemon *eggMon = Party_GetFirstEgg(SaveData_GetParty(fieldSystem->saveData));
+        if (eggMon == NULL) {
+            return TRUE;
+        }
+        EggHatchArgs *args = Heap_AllocAtEnd(HEAP_ID_FIELD2, sizeof(EggHatchArgs));
+        args->mon = eggMon;
+        args->options = SaveData_GetOptions(fieldSystem->saveData);
+        args->trainerInfo = SaveData_GetTrainerInfo(fieldSystem->saveData);
+        args->bgmID = FieldBGM_GetEffective(fieldSystem, fieldSystem->location->mapHeaderID);
+        EggHatch_HatchEgg(task, args);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+int GUI_CreateMon_StartEggHatch(void)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (fieldSystem == NULL || FieldSystem_IsRunningTask(fieldSystem)) {
+        return FALSE;
+    }
+    FieldSystem_CreateTask(fieldSystem, FieldTask_HatchEgg, NULL);
     return TRUE;
 }
