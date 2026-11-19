@@ -384,6 +384,40 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (still unk_-named overlay files); left as a to-do since Gen 5 battles are this fork's primary engine. No doubles
   wild support either, so only the first wild Pokémon is covered. Still no settings UI, gray icons, or the save/
   main-menu mark — Nuzlocke mode can only be turned on through the test script for now.
+- **Nuzlocke mode, the rest of Eterna's features** (2026-11-18, `~/pokeheartgold-thor-ls` `thor-android`): the alpha mark
+  on the save screens and the main menu, the rules, gray icons on the party menu, and the Gear's books.
+  - **The mark** (`lib/port/nuzlocke_mark.c`, `port_nuzlocke_mark.h`: the same 16x16 pixels, red = font palette color 3):
+    the X menu's SAVE is the *touch save app* (`src/touch_save_app.c`, `Field_SaveStatsPrinter_*TouchSave` in
+    `src/field/save_stats_printer.c`), whose orange backdrop is a bitmap with room for five lines: a game without the
+    Pokédex has a blank line there (the Pokédex's), which takes the mark, NUZLOCKE and the level; with the Pokédex, the
+    mark alone at the title's left. The field's own save prompt (`Field_SaveStatsPrinter_New`, used by scripts) is a
+    framed window and grows by a line and two tiles. The main menu's CONTINUE (`src/application/main_menu/
+    main_menu.c`) has the line (a sixth one, the box 12 tiles tall, with a Pokédex) and red frames: palettes 5 and 6
+    are red copies of 2 and 3, and the focused frame's color cycle runs in red too. Tests `nuzlocke_marks.txt`
+    (`--keep nuz-normal`) and `nuzlocke_marks_menu.txt` (shots).
+  - **The rules**: IVs of 15 (`CreateBoxMon`, `CreateMonWithFixedIVs`); the level cap is the next boss's ace, Hard its
+    weakest (`Gear_LevelCap`, new `Gear_LevelCapLow` in `gear_hgss.c`) and Rare Candy refuses at it
+    (`CanUseItemOnPokemon`/`UseItemOnPokemon`: also a dead Pokémon takes no item); BW2's battles get only the Poké
+    Ball pocket and no trainer items (`lib/port/gen5_battle.c`), and the nickname question is skipped (`askNickname`
+    false: BW2's flow goes to the naming screen, in Eterna too), which refuses a blank name (`naming_screen.c`).
+    Gifts that offer a nickname are asked again on No, found by their message: every script message goes through
+    `ovFieldMain_ReadAndExpandMsgDataViaBuffer`, which asks `NuzlockeMode_NoteScriptMessage` whether it contains
+    "nickname", and `NativeScript_WaitYesNo` then repeats the question (Eterna matches each gift's message by its
+    text bank and id; here it's the English text). Eggs' hatch nicknames aren't covered. The crit guard works in BW2's
+    engine only. Test `nuzlocke_rules.txt` (the new `editor allivs|cap|faint|dead|use`), `gen5_nuzlocke_refused.txt`
+    (now names the Pidgey).
+  - **Gray icons**: the party menu only (`party_menu_sprites.c`): `ObjPlttTransfer_PortReserveFreeSlots` (new) hands a
+    free OBJ palette slot, `NuzlockeGray_Sprite` copies the icon's palette there in gray and points the sprite at it.
+    **Findings:** a sprite's palette override is an absolute slot, not relative to its proxy's location; the palette
+    reaches the hardware a frame after the sprite is made and is changed by fades, so the copies are redone every
+    frame (`NuzlockeGray_Update`, in `main.c`'s loop); the party menu's second icon sprite is on the sub screen, with
+    the sub palettes. Not done: the PC boxes (the hook is the same, in `PCBox_LoadMonIcon`: written and not tried, since
+    no test reaches a PC yet), the Summary screen, the other screens with icons. BW2's battle list takes `Gen5Pokemon.dead`
+    from the bridge, shared with Eterna, and was not looked at. Test `nuzlocke_gray.txt`.
+  - **The Gear** shows the books: the core is Eterna's version 3 (`lib/port/nuzlocke_mode.c`, a death log, the area's
+    encounter), `lib/port/nuzlocke_gear.c` answers port-common's Nuzlocke API (the wrap's patch was already the same),
+    the adapter logs a death with its name and area. Test `nuzlocke_gear.txt` (the `nuzlocke state` command logs the
+    Gear's lines). The Settings page has Eterna's rules text.
 - **Settings > Challenges** (2026-11-17): Eterna's Nuzlocke mode section (pick a level, its rules, turn it on;
   level, crit guard, turn it off for good), in `lib/port/settings_pages.cpp`. Its rules text names only what
   Goldenrod enforces (dead Pokémon, whiting out, the catch rule, statics with Hard) and says the level cap, IVs of
