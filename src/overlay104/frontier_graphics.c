@@ -152,7 +152,13 @@ FrontierGraphics *FrontierGraphics_New(BattleFrontier *frontier)
     PaletteData_SetAutoTransparent(graphics->plttData, TRUE);
     PaletteData_AllocBuffer(graphics->plttData, PLTTBUF_MAIN_BG, PALETTE_SIZE_BYTES * 16, HEAP_ID_94);
     PaletteData_AllocBuffer(graphics->plttData, PLTTBUF_SUB_BG, PALETTE_SIZE_BYTES * 16, HEAP_ID_94);
+#ifdef SDK_PORT
+    // The Battle Arcade fades all 256 colors of this buffer (frscrcmd_battle_arcade.c), 64 bytes past the DS's: into the
+    // next heap block's header (the same flaky crash on Goldenrod's twin, when the graphics are freed). Full size here
+    PaletteData_AllocBuffer(graphics->plttData, PLTTBUF_MAIN_OBJ, PALETTE_SIZE_BYTES * 16, HEAP_ID_94);
+#else
     PaletteData_AllocBuffer(graphics->plttData, PLTTBUF_MAIN_OBJ, PALETTE_SIZE_BYTES * 16 - 64, HEAP_ID_94);
+#endif
     PaletteData_AllocBuffer(graphics->plttData, PLTTBUF_SUB_OBJ, PALETTE_SIZE_BYTES * 16, HEAP_ID_94);
 
     graphics->bgConfig = BgConfig_New(HEAP_ID_94);
