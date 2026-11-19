@@ -384,6 +384,14 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   (still unk_-named overlay files); left as a to-do since Gen 5 battles are this fork's primary engine. No doubles
   wild support either, so only the first wild Pokémon is covered. Still no settings UI, gray icons, or the save/
   main-menu mark — Nuzlocke mode can only be turned on through the test script for now.
+- **The Battle Arcade's flaky crash, and the PP "16/10"** (2026-11-18): Goldenrod's Arcade test crashed about one run in
+  three in `FrontierMap_Free` (a `Heap_Free` of a palette buffer, in expheap's `RemoveMBlock`): the Arcade's command 44
+  fades all 0x100 colors of the map's main OBJ buffer (`PaletteData_BlendPalette`, `frontier_cmd_arcade.c`), which
+  `FrontierMap_Init` allocates 0x1C0 bytes long, so 64 bytes ran into the next heap block's header. Eterna has the same
+  (`frscrcmd_battle_arcade.c` fading 16 * 16 colors of a buffer `PALETTE_SIZE_BYTES * 16 - 64` long, in
+  `frontier_graphics.c`). Both buffers are full size on the port (`#ifdef SDK_PORT`). The PP "16/10" in the Tower's
+  battle was the test command `teach` (it sets the move's PP to 20 whatever it was): the bridge hands BW2 the PP Ups
+  intact (a Garchomp with Earthquake and 3 PP Ups: 26/16 in the FIGHT menu, 26 being `teach`'s 20 plus the ups' 6).
 - **Nuzlocke mode, the rest of Eterna's features** (2026-11-18, `~/pokeheartgold-thor-ls` `thor-android`): the alpha mark
   on the save screens and the main menu, the rules, gray icons on the party menu, and the Gear's books.
   - **The mark** (`lib/port/nuzlocke_mark.c`, `port_nuzlocke_mark.h`: the same 16x16 pixels, red = font palette color 3):
