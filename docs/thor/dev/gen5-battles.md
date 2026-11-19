@@ -770,7 +770,17 @@ libntr's vertex shader had W fixed at 1, so textures and colours were interpolat
 perspective-correct as on the DS; large polygons warp. Fix: each vertex carries its clip-space W
 (`libntr_g3_perspective.patch`), the shader outputs `(xyz*w, w)`, and the fog depth is recovered as screen-linear in the
 fragment shader (`coordsW`; GLSL ES has no `noperspective`). Checked on the Thor: wild battle, no shader errors, sky and
-ground correct. Open: the stat raising and lowering particles look a bit off (not investigated).
+ground correct. Open: the stat raising and lowering particles look a bit off (see "The 3D layer's alpha", below).
+
+## The 3D layer's alpha (2026-11-14)
+
+Stat-lowering particles and soft-edged effects (Hydro Pump's stream) had black or grey fringes. Cause: libntr blended
+translucent polygons into the 3D buffer (cleared to alpha 0) with `SRC_ALPHA, ONE_MINUS_SRC_ALPHA` on all four
+channels, so a translucent pixel over an empty one stored `(a*c, a*a)`, and the 2D compositor then used that alpha as
+the blend factor against the BGs a second time (`bg0as3d`): darkened twice. Fix (`libntr_3d_premultiplied.patch`): the
+alpha blends as `ONE, ONE_MINUS_SRC_ALPHA` (coverage, so the layer is premultiplied) and `g2_fragment.glsl` divides the
+colour by the alpha when it reads the 3D layer. Checked on the desktop (Growl's and Withdraw's particles: soft edges,
+no dark fringe); not yet on the Thor. The clipping of some stat particles (not seen on the desktop) isn't investigated.
 
 ## Merging the sessions' work (2026-11-11)
 
@@ -1083,4 +1093,17 @@ the desktop: `tests/scripts/widescreen_gen5_catch.txt` (shots of the entry and t
   its own.
 - **Seen on the way:** in a facility battle BW2 shows a move's PP as "16/10" (Earthquake with PP Ups): the current PP
   is kept but the maximum drops the PP Ups, likely BW2's level-50 copy of the party. Not investigated.
-- **Not yet:** the Tower's doubles and multi battles, the Factory, Hall, Castle and Arcade; Pal Park.
+- **The Tower's doubles** (2026-11-18): `Gen5Battle_WantsFrontier` also takes `BATTLE_TYPE_FRONTIER_DOUBLES`; the bridge's
+  double trainer battle needed nothing more (the log says "a double facility battle"). Test: `gen5_tower_doubles.txt`
+  (four Pokémon, Double Battle, RUN: a loss, the video question skipped). A won doubles battle isn't tested.
+- **The other facilities** (2026-11-18): the Factory, Hall, Castle and Arcade start their battles as the Tower does
+  (`frscrcmd_battle_*.c`: the same `Gen5Battle_WantsFrontier` and `SetFrontierUnrecorded`; singles and doubles). Tests:
+  `gen5_factory.txt` (three rented Pokémon: the rental screen ignores its first A, then A, DOWN to RENT, A, RIGHT),
+  `gen5_hall.txt` (one Pokémon, the type NORMAL Rank 1), `gen5_castle.txt` (three; the menu SELF/OPPONENT/BATTLE/PASS),
+  `gen5_arcade.txt` (three; the game board's roulette); each forfeits the first battle (a loss, no video question).
+  **Port bug found:** the Hall crashed in its first scene: `FrontierParticleSystem_NewParticleSystem` gave its particle
+  arena the DS's 0x4800 bytes (every other particle system on the port has twice that), which overflowed into the
+  heap's next block (a NULL resource, the heap's free size 0): now `0x4800 * 2` off the DS. The Arcade's roulette effects
+  other than those that change the Pokémon (weather, status) aren't carried into BW2's engine yet; the Factory's
+  and Castle's multi battles stay Platinum's.
+- **Not yet:** the Tower's multi battles, the Factory, Hall, Castle and Arcade; Pal Park.
