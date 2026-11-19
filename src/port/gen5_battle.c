@@ -1210,7 +1210,8 @@ static BOOL Init(ApplicationManager *appMan, int *state)
         if (sBattle.captureDemo) {
             CaptureDemoTextToGen5(dto);
         }
-        sBattle.askNickname = !sBattle.safari && !sBattle.captureDemo;
+        // Nuzlocke mode: no question, a catch must be named (BW2's flow skips it and the naming screen follows)
+        sBattle.askNickname = !sBattle.safari && !sBattle.captureDemo && !NuzlockeMode_On();
         // With a full party, the line about the PC a catch with no nickname goes to
         PcTextToGen5(dto, Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0), sBattle.pcText[0]);
         if (Party_GetCurrentCount(dto->parties[BATTLER_ENEMY_2]) > 0) {
