@@ -201,6 +201,12 @@ static u32 FrontierPokemon_Init(FrontierPokemon *mon, u16 narcIdx, u32 otID, u32
         }
     }
 
+#ifdef SDK_PORT
+    // The DS's divider doesn't trap on a division by zero (and a Pokémon with no EV flags gets no EVs anyway)
+    if (evs == 0) {
+        evs = 1;
+    }
+#endif
     if (MAX_EVS_ALL_STATS / evs > MAX_EVS_SINGLE_STAT) {
         evs = MAX_EVS_SINGLE_STAT;
     } else {
