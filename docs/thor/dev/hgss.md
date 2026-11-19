@@ -557,3 +557,27 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   battle's player there in the capture demo (Lyra, or Ethan when the player is Lyra). Test `gen5_tutorial_back.txt`.
   Shared `gen5/`: Eterna's tutorial plays BW2's demo too (`BATTLE_TYPE_CATCH_TUTORIAL`), so it gets the same
   change (Dawn or Lucas instead of Bianca); not yet run there.
+
+- **Nuzlocke, the PC and the Summary; the Frontier's menus; weather; hatching** (2026-11-18, second pass):
+  - *PC box and Summary icons are gray for dead Pokémon* in Goldenrod (`pc_box_sprites.c`, `pokemon_summary.c`;
+    `NuzlockeGray_SpriteInSlots` for the Summary, whose sub screen has no free OBJ palette slot: it borrows 10 and 11, ribbon
+    palettes the sub screen doesn't draw). New test command `debug pc` opens the PC box from anywhere; `nuzlocke_gray_pc.txt`.
+  - *Two real port bugs the PC test found.* `PCBox_DrawBoxThumbnailMons` read a 64-bit pointer through a `u32` (opening the PC
+    crashed). `CopyBoxPokemonToPokemon` / `Pokemon_FromBoxPokemon` set HP 0 while the party half still read as garbage, so
+    Nuzlocke mode marked every Pokémon taken out of the PC dead (both games; now `sPortCopyingBoxMon`).
+  - *RECORD after a Gen 5 battle in every facility's menu*, not only the Tower's: Eterna matches each scene bank's Record entry
+    (`ov104_02231F74.c`), Goldenrod tells it by its text (`frontier_script_ui.c`). Won-battle tests: `gen5_hall_win.txt`,
+    `gen5_castle_win.txt`, `gen5_arcade_win.txt` (12 minutes: `TEST_LIMIT=1800`), `gen5_hall_doubles_win.txt`,
+    `gen5_castle_doubles_win.txt` (Eterna), and Goldenrod's hall/castle/arcade. Not done: Factory (rentals can't be edited).
+    The Hall's double battle takes two Pokémon *of a kind*; the Castle takes three in both modes.
+  - *A division by zero* in the Frontier's opponent generator (`FrontierPokemon_Init`, `ov104_0223A0C4.c`): the DS divider doesn't
+    trap, x86 does. The Hall's double battle crashed, also with Platinum's own engine.
+  - *The Tower's multi room is link-only* (the AI-partner mode `BATTLE_TOWER_MODE_MULTI` has no counter), so there is no solo
+    multi battle to port; the other facilities' multis are link-only as well.
+  - *Weather*: a Gen 5 battle starts in the field's weather (rain, hail for snow, sandstorm, harsh sun), so the Battle
+    Arcade's roulette and the routes' weather arrive in BW2's engine (`env.weather`; `gen5_weather.txt`, `weather N` /
+    `debug weather N`). Fog and Trick Room have no BW2 equivalent and start nothing. Status conditions already crossed.
+  - *Hatching under Nuzlocke mode*: the nickname question's NO opens the naming screen too (it takes no blank name), in both
+    games (`nuzlocke_egg.txt`, test command `egg SPECIES hatch`, Eterna only; Goldenrod's change is untested in the game).
+  - Left: Pal Park in BW2's engine (a Safari-like task with Park Balls), HGSS's own battle engine's Nuzlocke crit guard and
+    item rules (Gen 5 battles are the primary engine), the Factory's won battle and doubles, Arcade Trick Room/fog.
