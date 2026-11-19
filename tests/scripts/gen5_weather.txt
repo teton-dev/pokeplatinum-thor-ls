@@ -1,47 +1,28 @@
-# Gen 5 battles: the weather stays on the arena (the weather's particles go on between the moves and the turns) and
-# its ability bar shows at each turn's end ("Rain: 4 turns remaining", on the side of the Pokémon that set it, in the
-# weather's colors). Turtwig learns Rain Dance (WEATHER below: 240 Rain Dance, 241 Sunny Day, 258 Hail, 201
-# Sandstorm) and uses it against a wild Magikarp, which only splashes; then Tackle, and run away: the weather's
-# particles are freed with the battle (the check is the shots: the bar at w_bar_*, the rain at w_rain_*). From the
-# turtwig fixture:
+# A battle starts in the weather the field is in (Platinum's does; the Battle Arcade's roulette sets one too): rain (2) and a
+# sandstorm (10), in BW2's engine. The check is the log ("Gen 5: ... weather") and the shots: the weather's message at the
+# start and its animation.
 #
 #   tools/docker/desktop.sh test tests/scripts/gen5_weather.txt --from turtwig
 
 gen5-import
 gen5-battles on
 mash A until free
-learn 240
-wild 129 5
+weather 2
+wild 399 5
 until battle
-until command timeout 6000
-wait 30
-# Turn 1: FIGHT, the first move
-touch 128 95
-wait 30
-touch 64 54
-wait 400
-shot w_bar_0
-wait 40
-shot w_bar_1
-wait 40
-shot w_bar_2
-until command timeout 3000
-wait 25
-shot w_rain_0
-wait 50
-shot w_rain_1
-# Turn 2: FIGHT, the second move (Tackle): the rain still falls after a move
-touch 128 95
-wait 30
-touch 192 54
-wait 300
-shot w_move
-until command timeout 3000
-wait 25
-shot w_rain_2
-# RUN
-touch 128 178
+until command
 wait 60
+shot rain-command
+touch 128 178
 mash B touch 128 178 until free
-shot w_back
+weather 10
+wild 399 5
+until battle
+mash B for 200
+shot sand-start
+until command
+wait 60
+shot sand-command
+touch 128 178
+mash B touch 128 178 until free
 exit 0

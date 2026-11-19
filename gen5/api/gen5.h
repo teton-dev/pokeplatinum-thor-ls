@@ -149,6 +149,7 @@ typedef struct Gen5Battle {
     int arenaBg; // BW2's battle background (the field environment's bgType) and terrain: where the battle is
     int arenaTerrain;
     int arenaAlt; // The tournament arena's alternate variant (BtlSetup.unkDD_6, which the World Tournament's final uses)
+    int weather; // The weather the battle starts in (BW2's BTL_WEATHER_*: 0 none, 1 sun, 2 rain, 3 hail, 4 sandstorm), lasting
     int hour; // The time of day (the clock's: Platinum's morning, day, evening and night follow it), which lights the arena
     int minute;
     int zone; // The BW2 zone whose lights the arena takes (its daylight over the day)

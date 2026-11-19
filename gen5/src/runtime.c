@@ -435,6 +435,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     sSetup->fieldSituation.env.zoneId = battle->zone;
     sSetup->fieldSituation.env.bgType = battle->arenaBg;
     sSetup->fieldSituation.env.terrain = battle->arenaTerrain;
+    sSetup->fieldSituation.env.weather = (u8)battle->weather;
     sSetup->unkDD_6 = battle->arenaAlt;
     sSetup->badgeCount = battle->player.badges;
     if (battle->fishing) {

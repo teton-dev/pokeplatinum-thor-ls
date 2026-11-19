@@ -11,6 +11,7 @@
 
 #include "constants/battle.h"
 #include "constants/battle/condition.h"
+#include "constants/overworld_weather.h"
 #include "constants/charcode.h"
 #include "constants/species.h"
 #include "constants/string.h"
@@ -149,6 +150,28 @@ BOOL Gen5Battle_WantsFrontier(const FieldBattleDTO *dto)
     // battle types); their multi and link battles stay Platinum's
     return (dto->battleType == BATTLE_TYPE_FRONTIER_SINGLES || dto->battleType == BATTLE_TYPE_FRONTIER_DOUBLES)
         && dto->battleStatusMask == 0;
+}
+
+// The weather a battle starts in: the route's or town's (Platinum's battle starts in it too), or the Battle Arcade's
+// roulette's. BW2 has no fog and no way to start in Trick Room: those two start nothing
+static int WeatherToGen5(int weather)
+{
+    switch (weather) {
+    case OVERWORLD_WEATHER_RAINING:
+    case OVERWORLD_WEATHER_HEAVY_RAIN:
+    case OVERWORLD_WEATHER_THUNDERSTORM:
+        return 2;
+    case OVERWORLD_WEATHER_SNOWING:
+    case OVERWORLD_WEATHER_HEAVY_SNOW:
+    case OVERWORLD_WEATHER_BLIZZARD:
+        return 3;
+    case OVERWORLD_WEATHER_SANDSTORM:
+        return 4;
+    case OVERWORLD_WEATHER_HARSH_SUN:
+        return 1;
+    default:
+        return 0;
+    }
 }
 
 static BOOL sFrontierUnrecorded;
@@ -1132,6 +1155,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     memset(&sBattle, 0, sizeof(sBattle));
     Gen5_TextToGen5(TrainerInfo_Name(trainerInfo), TRAINER_NAME_LEN + 1, sBattle.player.name, 8);
     ArenaFromDTO(dto, &sBattle.arenaBg, &sBattle.arenaTerrain, &sBattle.arenaAlt);
+    sBattle.weather = WeatherToGen5(dto->fieldWeather);
     sFrontier = (dto->battleType & BATTLE_TYPE_FRONTIER) != 0;
     sBattle.facility = sFrontier;
     printf("Gen 5: arena %d, terrain %d (Platinum's background %d, terrain %d)\n", sBattle.arenaBg, sBattle.arenaTerrain, (int)dto->background,
