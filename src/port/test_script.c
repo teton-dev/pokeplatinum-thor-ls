@@ -14,6 +14,7 @@
 #include "applications/party_menu/main.h"
 #include "field_move_tasks.h"
 #include "field_system.h"
+#include "field_overworld_state.h"
 #include "game_options.h"
 #include "clear_game.h"
 #include "save_player.h"
@@ -394,6 +395,13 @@ static BOOL ParseLine(char *text, int line, TestCommand *command)
         command->op = OP_TEACH;
         command->x = atoi(words[1]);
         command->y = -2;
+        return TRUE;
+    } else if (strcmp(words[0], "weather") == 0 && count == 2) {
+        // weather N: the overworld's weather (OVERWORLD_WEATHER_*: 2 rain, 5 snow, 10 sandstorm, 1001 sun), which the
+        // next battle starts in
+        command->op = OP_TEACH;
+        command->x = atoi(words[1]);
+        command->y = -3;
         return TRUE;
     } else if (strcmp(words[0], "trainer") == 0 && count >= 2) {
         // A battle against trainer ID (Platinum's trainer numbers), as its encounter starts it, once the player is free
@@ -1157,6 +1165,12 @@ static u16 Step(void)
             if (command->y == -2) {
                 Pokemon_SetValue(mon, MON_DATA_ABILITY, &move);
                 printf("[test] the first Pokemon has ability %d\n", command->x);
+                Next();
+                continue;
+            }
+            if (command->y == -3) {
+                FieldOverworldState_SetWeather(SaveData_GetFieldOverworldState(SaveData_Ptr()), (u16)command->x);
+                printf("[test] the weather is %d\n", command->x);
                 Next();
                 continue;
             }
