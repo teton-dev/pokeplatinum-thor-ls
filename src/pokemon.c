@@ -1268,6 +1268,10 @@ static u32 BoxPokemon_GetDataInternal(BoxPokemon *boxMon, enum PokemonDataParam 
     return result;
 }
 
+#ifdef SDK_PORT
+static BOOL sPortCopyingBoxMon;
+#endif
+
 void Pokemon_SetValue(Pokemon *mon, enum PokemonDataParam param, const void *value)
 {
 #ifdef SDK_PORT
@@ -1299,7 +1303,7 @@ void Pokemon_SetValue(Pokemon *mon, enum PokemonDataParam param, const void *val
         Pokemon_EncryptData(&mon->box.dataBlocks, sizeof(PokemonDataBlock) * 4, mon->box.checksum);
     }
 #ifdef SDK_PORT
-    if (param == MON_DATA_HP) {
+    if (param == MON_DATA_HP && !sPortCopyingBoxMon) {
         NuzlockeMode_OnHPSet(mon, portHP);
     }
 #endif
@@ -4091,6 +4095,11 @@ static BOOL Pokemon_HasMove(Pokemon *mon, u16 moveID)
 void Pokemon_FromBoxPokemon(BoxPokemon *boxMon, Pokemon *mon)
 {
     u32 zero = 0;
+#ifdef SDK_PORT
+    // Not a faint: the party half is cleared here, and until it is, its (encrypted, zeroed) stats read as garbage, so
+    // the HP of 0 would look like a faint of a Pokemon with stats (and Nuzlocke mode would mark it dead)
+    sPortCopyingBoxMon = TRUE;
+#endif
 
     mon->box = *boxMon;
     if (mon->box.boxDecrypted) {
@@ -4100,6 +4109,9 @@ void Pokemon_FromBoxPokemon(BoxPokemon *boxMon, Pokemon *mon)
     Pokemon_SetValue(mon, MON_DATA_STATUS, &zero);
     Pokemon_SetValue(mon, MON_DATA_HP, &zero);
     Pokemon_SetValue(mon, MON_DATA_MAX_HP, &zero);
+#ifdef SDK_PORT
+    sPortCopyingBoxMon = FALSE;
+#endif
 
     Mail *mail = Mail_New(HEAP_ID_SYSTEM);
     Pokemon_SetValue(mon, MON_DATA_MAIL, mail);
