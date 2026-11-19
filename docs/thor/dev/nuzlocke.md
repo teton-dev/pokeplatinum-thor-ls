@@ -94,7 +94,7 @@ mode from the records in the loaded slot's save image (milestone 5), so `SaveSlo
 6. ~~**Scripted tests**~~ (`tests/scripts`): a Nuzlocke fixture; a faint then a Center visit (still 0 HP); a whiteout
    (mode off, can't be turned on); a second encounter on a used route (ball refused); the same with a shiny; the
    level cap in both engines (done, below, with the starter's nickname).
-7. **HGSS**: the shared part moved out (as `gen5/` will be), HGSS's hooks (its first Poké Balls come from Elm's aide;
+7. **HGSS** (2026-11-18: done in Goldenrod but for the gray icons beyond the party menu, see hgss.md, "Nuzlocke mode, the rest of Eterna's features"): the shared part moved out (as `gen5/` will be), HGSS's hooks (its first Poké Balls come from Elm's aide;
    Kanto's gyms after Johto's eight, then Red).
 
 ## Milestone 1: the state and the switch (done, 2026-11-13)
