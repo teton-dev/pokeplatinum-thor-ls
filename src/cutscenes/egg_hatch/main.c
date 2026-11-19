@@ -21,6 +21,10 @@
 #include "sprite_system.h"
 #include "text.h"
 
+#ifdef SDK_PORT
+#include "port/nuzlocke_mode.h"
+#endif
+
 #include "res/graphics/egg_hatch/egg_particles.naix"
 #include "res/text/bank/egg_hatch.h"
 
@@ -46,6 +50,17 @@ enum EggManaphyEmitter {
     EMITTER_MANAPHY_RING,
     EMITTER_MANAPHY_GLOW_EGG,
 };
+
+#ifdef SDK_PORT
+// Nuzlocke mode: a hatched Pokémon must be named (the answer NO still opens the naming screen, which takes no blank name)
+static BOOL NuzlockeHatchMustBeNamed(void)
+{
+    return NuzlockeMode_On();
+}
+#else
+#define NuzlockeHatchMustBeNamed() FALSE
+#endif
+
 
 static BOOL
 EggHatchCutscene_Normal(EggHatchCutscene *eggHatch);
@@ -175,7 +190,7 @@ static BOOL EggHatchCutscene_Normal(EggHatchCutscene *eggHatch)
 
         switch (input) {
         case MENU_CANCEL:
-            eggHatch->app->nicknameMon = FALSE;
+            eggHatch->app->nicknameMon = NuzlockeHatchMustBeNamed();
             eggHatch->state++;
             break;
         case MENU_NOTHING_CHOSEN:
@@ -184,7 +199,7 @@ static BOOL EggHatchCutscene_Normal(EggHatchCutscene *eggHatch)
             if (input == MENU_YES) {
                 eggHatch->app->nicknameMon = TRUE;
             } else {
-                eggHatch->app->nicknameMon = FALSE;
+                eggHatch->app->nicknameMon = NuzlockeHatchMustBeNamed();
             }
 
             eggHatch->state++;
@@ -316,7 +331,7 @@ static BOOL EggHatchCutscene_Manaphy(EggHatchCutscene *eggHatch)
 
         switch (input) {
         case MENU_CANCEL:
-            eggHatch->app->nicknameMon = FALSE;
+            eggHatch->app->nicknameMon = NuzlockeHatchMustBeNamed();
             eggHatch->state++;
             break;
         case MENU_NOTHING_CHOSEN:
@@ -325,7 +340,7 @@ static BOOL EggHatchCutscene_Manaphy(EggHatchCutscene *eggHatch)
             if (input == MENU_YES) {
                 eggHatch->app->nicknameMon = TRUE;
             } else {
-                eggHatch->app->nicknameMon = FALSE;
+                eggHatch->app->nicknameMon = NuzlockeHatchMustBeNamed();
             }
 
             eggHatch->state++;

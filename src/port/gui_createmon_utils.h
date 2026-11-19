@@ -28,6 +28,8 @@ int GUI_CreateMon_StartLegendaryBattle(int speciesNo, int level, int kind);
 int GUI_CreateMon_StartRoamerEncounter(int speciesNo, int level);
 // The catching tutorial (Route 202's: the counterpart catches a Bidoof)
 int GUI_CreateMon_StartCatchingTutorial(void);
+// The party's first egg hatches (the test command )
+int GUI_CreateMon_StartEggHatch(void);
 
 #ifdef __cplusplus
 }
