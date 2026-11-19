@@ -55,6 +55,12 @@
 #include "port/gen5_battle.h"
 
 #include "res/text/bank/menu_entries.h"
+#ifdef GEN5_BATTLES
+#include "res/text/bank/battle_arcade_scene.h"
+#include "res/text/bank/battle_castle_scene.h"
+#include "res/text/bank/battle_factory_scene.h"
+#include "res/text/bank/battle_hall_scene.h"
+#endif
 #endif
 
 #define LIST_MENU_ENTRY_NO_ALT_TEXT 0xFF
@@ -418,13 +424,22 @@ void FrontierMenuManager_AddListMenuEntry(FrontierMenuManager *menuManager, u32 
 {
 #ifdef GEN5_BATTLES
     // After a battle in the Gen 5 engine there's nothing to record (port/gen5_battle.h): no Record entry, and the
-    // menu (anchored at its top, placed for its four entries) moves down by the missing line
-    if (Gen5Battle_FrontierUnrecorded() && menuManager->msgLoader != NULL && entry == MenuEntries_Text_Record
-        && menuManager->freeMsgLoaderOnDelete) {
-        if (!menuManager->anchorBottom) {
-            menuManager->anchorY += 2;
+    // menu (anchored at its top, placed for its four entries) moves down by the missing line. The Tower's menus use
+    // the menu entries' text bank (and free it with the menu); the other facilities' own scene banks have their own
+    // Record entry
+    if (Gen5Battle_FrontierUnrecorded() && menuManager->msgLoader != NULL) {
+        const u16 bank = menuManager->msgLoader->bankID;
+        BOOL isRecord = menuManager->freeMsgLoaderOnDelete && entry == MenuEntries_Text_Record;
+        isRecord = isRecord || (bank == TEXT_BANK_BATTLE_HALL_SCENE && entry == BattleHallScene_Text_RecordOption);
+        isRecord = isRecord || (bank == TEXT_BANK_BATTLE_CASTLE_SCENE && entry == BattleCastleScene_Text_RecordOption);
+        isRecord = isRecord || (bank == TEXT_BANK_BATTLE_FACTORY_SCENE && entry == BattleFactoryScene_Text_RecordOption);
+        isRecord = isRecord || (bank == TEXT_BANK_BATTLE_ARCADE_SCENE && entry == BattleArcadeScene_Text_RecordOption);
+        if (isRecord) {
+            if (!menuManager->anchorBottom) {
+                menuManager->anchorY += 2;
+            }
+            return;
         }
-        return;
     }
 #endif
     AddListMenuEntry(menuManager, entry, altTextEntryID, index);
