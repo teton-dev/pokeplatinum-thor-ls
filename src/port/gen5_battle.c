@@ -1313,6 +1313,7 @@ static BOOL Init(ApplicationManager *appMan, int *state)
     } else {
         SetVBlankCallback(VBlank, NULL);
         sShown = TRUE;
+        SIM_SetBattleActive(TRUE); // Settings > Controls > Battle speed
         // BW2's shadows are translucent quads that overlap: the DS doesn't blend polygons of one ID over each other
         SIM_SetTranslucentPolygonIdRule(TRUE);
     }
@@ -1324,6 +1325,7 @@ static void Finish(FieldBattleDTO *dto)
 {
     SetVBlankCallback(NULL, NULL);
     sShown = FALSE;
+    SIM_SetBattleActive(FALSE);
     SIM_SetTranslucentPolygonIdRule(FALSE);
     Gen5_SetWidescreen(1.0f);
     const enum Gen5BattleResult result = sFailed ? GEN5_BATTLE_FAILED : Gen5_BattleEnd(&sBattle);

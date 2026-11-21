@@ -240,6 +240,9 @@ clouds.
   goes; 4x by default), whether the button works while held or switches it on and off,
   and which button it is. `>> 4x` shows in the top-right corner while it's on. Music
   keeps its normal tempo.
+* **Battle speed** (*Settings > Controls*: Off, 1.5x, 2x, 3x or 4x; off by default): battles, Platinum's and the Gen 5
+  engine's alike, run at this speed all the time, whether fast-forward is on or not. It replaces the fast-forward speed
+  while a battle is on (so R2 doesn't go faster in one), and `>> 2x` shows in the corner. Link battles are left alone.
 * Battles, menus and other scenes that run at 30 frames a second only draw the frames
   they show (half the drawing). *Settings > Gameplay > Draw every DS frame* draws the
   in-between ones too, should anything flicker.

@@ -1,0 +1,139 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -192,6 +192,11 @@
+ // and off by it (FastForwardToggle), or by the game (SIM_SetFastForward, e.g. a button
+ // in its own UI).
+ BOOL SIM_IsFastForwarding(void);
++// Battle speed (Settings > Controls > Battle speed: 1.5x, 2x, 3x or 4x, or off): while the game says a battle is
++// running (SIM_SetBattleActive), the game runs at that speed, whether or not fast-forward is on, and it replaces
++// fast-forward's speed. SIM_BattleSpeedTenths is the speed in effect now, in tenths (0: none).
++void SIM_SetBattleActive(BOOL active);
++int SIM_BattleSpeedTenths(void);
+ // Test mode (TestMode=true in sim_config.ini, or LIBNTR_TEST_MODE=1): for test rigs. DS frames run
+ // as fast as they go (or TestModeSpeed times the DS's speed at most), a frame is shown every
+ // TestModePresentMs (default 500; 0: never), audio goes to SDL's dummy driver unless SDL_AUDIODRIVER
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -80,6 +80,7 @@
+     u8 capFrameRate; /* Should the frame rate be capped to 60 fps? */
+     u8 perfOverlay; /* Show the frame timings over the game */
+     u8 fastForwardSpeed; /* Fast-forward: times the normal speed (0: as fast as it goes) */
++    u8 battleSpeed; /* Battle speed, in tenths of the normal speed (15, 20, 30, 40; 0: off): see SIM_SetBattleActive */
+     u8 fastForwardToggle; /* Fast-forward button: TRUE switches it on and off, FALSE works while held */
+     u8 testMode; /* Test rigs: vblanks as fast as they go, a frame shown every testModePresentMs, dummy audio */
+     u32 testModePresentMs; /* Test mode: show a frame this often (0: never) */
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -139,6 +139,16 @@
+   return (sFastForwardHeld || sFastForwardOn) ? TRUE : FALSE;
+ }
+ 
++static bool sBattleActive = false;
++
++extern "C" void SIM_SetBattleActive(BOOL active) {
++  sBattleActive = active != FALSE;
++}
++
++extern "C" int SIM_BattleSpeedTenths(void) {
++  return sBattleActive ? (int)s_SIM_config.battleSpeed : 0;
++}
++
+ extern "C" void SIM_SetFastForward(BOOL on) {
+   sFastForwardOn = on != FALSE;
+ }
+@@ -1803,7 +1813,7 @@
+     const bool paused = SIM::GUI::IsGameLogicPaused();
+     // Test mode runs like an unlimited fast-forward that shows a frame every TestModePresentMs
+     const bool testMode = SIM_IsTestMode() != FALSE;
+-    const bool fastForward = (SIM_IsFastForwarding() || testMode) && !paused;
++    const bool fastForward = (SIM_IsFastForwarding() || testMode || SIM_BattleSpeedTenths() > 0) && !paused;
+     if (fastForward != sFastForwardSwap) {
+       // Fast-forward doesn't wait for the display's refresh
+       sFastForwardSwap = fastForward;
+@@ -2444,6 +2454,11 @@
+       if (testMode) {
+         if (s_SIM_config.testModeSpeed > 0) {
+           PaceVBlank(16666667ull / s_SIM_config.testModeSpeed); // TestModeSpeed: a cap for scripts
++        }
++      } else if (SIM_BattleSpeedTenths() > 0) {
++        // The battle speed replaces fast-forward's
++        if (s_SIM_config.capFrameRate) {
++          PaceVBlank(16666667ull * 10ull / (u64)SIM_BattleSpeedTenths());
+         }
+       } else if (s_SIM_config.fastForwardSpeed > 0 && s_SIM_config.capFrameRate) {
+         PaceVBlank(16666667ull / s_SIM_config.fastForwardSpeed);
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -452,6 +452,20 @@
+   }
+   if (Choice("Speed", "Max runs the game as fast as the device can.", &speed, kSpeeds, 6)) {
+     config->fastForwardSpeed = (u8)kSpeedValues[speed];
++    SaveConfig();
++  }
++  static const char *const kBattleSpeeds[] = { "Off", "1.5x", "2x", "3x", "4x" };
++  static const int kBattleSpeedValues[] = { 0, 15, 20, 30, 40 };
++  int battleSpeed = 0;
++  for (int i = 0; i < 5; i++) {
++    if (kBattleSpeedValues[i] == config->battleSpeed) {
++      battleSpeed = i;
++    }
++  }
++  if (Choice("Battle speed", "Battles run at this speed all the time, in place of the fast-forward speed above. "
++             "Off: battles run at the normal speed, or at the fast-forward speed while it is on.", &battleSpeed,
++             kBattleSpeeds, 5)) {
++    config->battleSpeed = (u8)kBattleSpeedValues[battleSpeed];
+     SaveConfig();
+   }
+   static const char *const kModes[] = { "Hold", "Press on, press off" };
+--- a/libraries/sim/src/sim_gui.cpp
++++ b/libraries/sim/src/sim_gui.cpp
+@@ -97,12 +97,19 @@
+ 
+ // Fast-forward is on: a mark in the top-right corner of the main window
+ static void FastForwardIndicator() {
+-    if (!SIM_IsFastForwarding()) {
++    const int battleTenths = SIM_BattleSpeedTenths();
++    if (!SIM_IsFastForwarding() && battleTenths == 0) {
+         return;
+     }
+     char text[32];
+     const int speed = SIM_GetConfigPtr()->fastForwardSpeed;
+-    if (speed > 0) {
++    if (battleTenths > 0) {
++        if (battleTenths % 10 == 0) {
++            snprintf(text, sizeof(text), ">> %dx", battleTenths / 10);
++        } else {
++            snprintf(text, sizeof(text), ">> %d.%dx", battleTenths / 10, battleTenths % 10);
++        }
++    } else if (speed > 0) {
+         snprintf(text, sizeof(text), ">> %dx", speed);
+     } else {
+         snprintf(text, sizeof(text), ">> max");
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -128,6 +128,9 @@
+     if(MATCH("General", "FastForwardSpeed")) {
+         config->fastForwardSpeed = atoi(value);
+     }
++    if(MATCH("General", "BattleSpeed")) {
++        config->battleSpeed = atoi(value);
++    }
+     if(MATCH("General", "FastForwardToggle")) {
+         config->fastForwardToggle = StringToBool(value);
+     }
+@@ -461,6 +464,7 @@
+     aConfig->dumpTextures = FALSE;
+     aConfig->edgeMarking = TRUE;
+     aConfig->fastForwardSpeed = 4;
++    aConfig->battleSpeed = 0;
+     aConfig->fastForwardToggle = FALSE;
+     aConfig->testMode = FALSE;
+     aConfig->testModePresentMs = 500;
+@@ -579,6 +583,7 @@
+     fprintf(configFile, "CapFrameRate=%s\n", BoolToString(aConfig->capFrameRate));
+     fprintf(configFile, "PerfOverlay=%s\n", BoolToString(aConfig->perfOverlay));
+     fprintf(configFile, "FastForwardSpeed=%d\n", aConfig->fastForwardSpeed);
++    fprintf(configFile, "BattleSpeed=%d\n", aConfig->battleSpeed);
+     fprintf(configFile, "FastForwardToggle=%s\n", BoolToString(aConfig->fastForwardToggle));
+     fprintf(configFile, "TestMode=%s\n", BoolToString(aConfig->testMode));
+     fprintf(configFile, "TestModePresentMs=%u\n", aConfig->testModePresentMs);

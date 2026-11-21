@@ -50,7 +50,7 @@ The pages, in order: **Games**, **Saves** (your game); **Gameplay**, **Battles**
 * **GBA slot**: a Ruby, Sapphire, Emerald, FireRed or LeafGreen save in the DS's GBA
   slot (see [Features](features.md#gba-slot-pal-park-and-dual-slot-pokemon)).
 * **Link play**: host or join another device for trades and battles (see [Link play](link-play.md)).
-* **Sound**, **Controls** (fast-forward speed and button; *Left stick as D-pad*, on by
+* **Sound**, **Controls** (fast-forward speed and button, *Battle speed*; *Left stick as D-pad*, on by
   default: the stick moves you and the menu cursors like the D-pad, one direction at a time,
   and the D-pad keeps working; remap buttons: tap a control, press the button).
 * **Gear**, **Cheats** (see [The Gear](gear.md) and [Cheats](cheats-and-save-editor.md#cheats)).
