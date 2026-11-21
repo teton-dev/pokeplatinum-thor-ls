@@ -4,12 +4,15 @@
 #include <string.h>
 
 #ifdef SDK_PORT
+#include <simulator/sim.h>
+
 #include "port/test_script.h"
 #endif
 #ifdef GEN5_BATTLES
 #include "port/gen5_battle.h"
 #endif
 
+#include "constants/battle.h"
 #include "constants/heap.h"
 #include "generated/game_records.h"
 #include "generated/pokemon_contest_ranks.h"
@@ -224,6 +227,11 @@ static u8 sub_0203E484(SaveData *saveData, u8 slotMachineID);
 
 static BOOL ApplicationInit_Battle(ApplicationManager *appMan, int *state)
 {
+#ifdef SDK_PORT
+    // Settings > Controls > Battle speed (not for link battles: both sides count frames)
+    const FieldBattleDTO *dto = ApplicationManager_Args(appMan);
+    SIM_SetBattleActive((dto->battleType & BATTLE_TYPE_LINK) ? FALSE : TRUE);
+#endif
     return TRUE;
 }
 
@@ -238,6 +246,9 @@ static BOOL ApplicationMain_Battle(ApplicationManager *appMan, int *state)
 
 static BOOL ApplicationExit_Battle(ApplicationManager *appMan, int *state)
 {
+#ifdef SDK_PORT
+    SIM_SetBattleActive(FALSE);
+#endif
     return TRUE;
 }
 
