@@ -1,0 +1,288 @@
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -61,6 +61,10 @@
+     u8 widescreen; /* The top screen as wide as the display where the game allows (SIM_SetWidescreenScene) */
+     u8 texturePacks; /* Replace 3D textures with the packs' (simulator/sim_texture_packs.h) */
+     u8 dumpTextures; /* Save the 3D textures the game uses as PNGs */
++    s8 colorSaturation; /* Display colour adjustment, -25 to +25 (0: none) */
++    s8 colorVibrance;
++    s8 colorContrast;
++    s8 colorWhitePoint;
+     u8 edgeMarking; /* Draw the DS's 3D outlines (edge marking) where the game turns them on */
+     u32 windowWidth; /* Initial width of the window. If set to 0, will use the default width for the screen layout */
+     u32 windowHeight; /* Initial height of the window. If set to 0, will use default height for the screen layout */
+--- a/include/simulator/sim_ui.hpp
++++ b/include/simulator/sim_ui.hpp
+@@ -48,6 +48,9 @@
+             bool enabled = true);
+ bool Stepper(const char *label, const char *help, int *value, int min, int max, int step, const char *format,
+              bool enabled = true);
++// A slider from min to max, dragged along its track (format shows the value)
++bool Slider(const char *label, const char *help, int *value, int min, int max, const char *format,
++            bool enabled = true);
+ bool Button(const char *label, const char *help = nullptr, bool primary = false, bool enabled = true);
+ // A two-line card (title, subtitle); selected draws it highlighted
+ bool Card(const char *title, const char *subtitle, bool selected = false, bool enabled = true);
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -64,6 +64,18 @@
+     }
+     if(MATCH("General", "DumpTextures")) {
+         config->dumpTextures = StringToBool(value);
++    }
++    if(MATCH("General", "ColorSaturation")) {
++        config->colorSaturation = (s8)atoi(value);
++    }
++    if(MATCH("General", "ColorVibrance")) {
++        config->colorVibrance = (s8)atoi(value);
++    }
++    if(MATCH("General", "ColorContrast")) {
++        config->colorContrast = (s8)atoi(value);
++    }
++    if(MATCH("General", "ColorWhitePoint")) {
++        config->colorWhitePoint = (s8)atoi(value);
+     }
+     if(MATCH("General", "EdgeMarking")) {
+         config->edgeMarking = StringToBool(value);
+@@ -459,13 +471,17 @@
+     aConfig->capFrameRate = TRUE;
+     aConfig->perfOverlay = FALSE;
+     aConfig->antiAliasing = 0;
+-    aConfig->widescreen = FALSE;
++    aConfig->widescreen = TRUE;
+     aConfig->texturePacks = TRUE;
+     aConfig->dumpTextures = FALSE;
+     aConfig->edgeMarking = TRUE;
++    aConfig->colorSaturation = 0;
++    aConfig->colorVibrance = 0;
++    aConfig->colorContrast = 0;
++    aConfig->colorWhitePoint = 0;
+     aConfig->fastForwardSpeed = 4;
+     aConfig->battleSpeed = 0;
+-    aConfig->fastForwardToggle = FALSE;
++    aConfig->fastForwardToggle = TRUE;
+     aConfig->testMode = FALSE;
+     aConfig->testModePresentMs = 500;
+     aConfig->testModeSpeed = 0;
+@@ -557,6 +573,10 @@
+     fprintf(configFile, "TexturePacks=%s\n", BoolToString(aConfig->texturePacks));
+     fprintf(configFile, "DumpTextures=%s\n", BoolToString(aConfig->dumpTextures));
+     fprintf(configFile, "EdgeMarking=%s\n", BoolToString(aConfig->edgeMarking));
++    fprintf(configFile, "ColorSaturation=%d\n", aConfig->colorSaturation);
++    fprintf(configFile, "ColorVibrance=%d\n", aConfig->colorVibrance);
++    fprintf(configFile, "ColorContrast=%d\n", aConfig->colorContrast);
++    fprintf(configFile, "ColorWhitePoint=%d\n", aConfig->colorWhitePoint);
+     fprintf(configFile, "WindowHeight=%d\n", aConfig->windowHeight);
+     fprintf(configFile, "WindowWidth=%d\n", aConfig->windowWidth);
+     fprintf(configFile, "FullScreen=%s\n", BoolToString(aConfig->fullScreen));
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -40,6 +40,7 @@
+ //uniform float inAlpha;
+ uniform float inMasterBrightFactor;
+ uniform int inMasterBrightMode;
++uniform vec4 inColorAdjust; // saturation, vibrance, contrast, white point: -1..1
+ out vec4 color;
+ void main()
+ {
+@@ -195,6 +196,18 @@
+         color = backdropColor;
+     }
+     
++    if(inColorAdjust != vec4(0.0)) {
++        float luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));
++        // Vibrance: saturation that favours the dull colours (the more saturated a colour is, the less it changes)
++        float chroma = max(color.r, max(color.g, color.b)) - min(color.r, min(color.g, color.b));
++        float sat = 1.0 + inColorAdjust.x * 0.5 + inColorAdjust.y * 0.5 * (1.0 - chroma);
++        color.rgb = clamp(vec3(luma) + (color.rgb - vec3(luma)) * sat, 0.0, 1.0);
++        // Contrast around mid grey
++        color.rgb = clamp((color.rgb - 0.5) * (1.0 + inColorAdjust.z * 0.5) + 0.5, 0.0, 1.0);
++        // White point: the level white is drawn at (lower: whites are greyer, so a washed out screen is toned down)
++        color.rgb = clamp(color.rgb * (1.0 + inColorAdjust.w * 0.25), 0.0, 1.0);
++    }
++
+     if(inMasterBrightMode == 1) {
+         // brightness up
+         color.r = color.r + ((1.0 - color.r) * (inMasterBrightFactor/16.0));
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -1449,6 +1449,15 @@
+       glGetUniformLocation(g2shaderProgramID, "inMasterBrightMode"),
+       masterBrightMode);
+ 
++  // Settings > Display > Colour: saturation, vibrance and contrast, -25..+25 (shader: before the master brightness)
++  glProgramUniform4f(
++      g2shaderProgramID,
++      glGetUniformLocation(g2shaderProgramID, "inColorAdjust"),
++      (float)s_SIM_config.colorSaturation / 25.0f,
++      (float)s_SIM_config.colorVibrance / 25.0f,
++      (float)s_SIM_config.colorContrast / 25.0f,
++      (float)s_SIM_config.colorWhitePoint / 25.0f);
++
+   glBindVertexArray(g2vertexArray);
+   glBindBuffer(GL_ARRAY_BUFFER, g2vertexBuffer);
+   DrawScreenQuad();
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -232,11 +232,50 @@
+     char text[64];
+     snprintf(text, sizeof(text), "%d saved so far.", SIM_TexturePacks_DumpedCount());
+     Note(text);
++  }
++}
++
++bool sColorBalance = false; // Display > Color Balance is open
++
++void DrawColorBalance() {
++  SIM_config_type *config = SIM_GetConfigPtr();
++  if (BackButton("Display")) {
++    sColorBalance = false;
++    RequestFocus();
++    return;
++  }
++  Section("Color Balance");
++  int saturation = config->colorSaturation, vibrance = config->colorVibrance, contrast = config->colorContrast,
++      whitePoint = config->colorWhitePoint;
++  bool changed = false;
++  changed |= Slider("Saturation", "How vivid the colors are. Lower looks greyer, higher more colorful.", &saturation,
++                    -25, 25, "%+d");
++  changed |= Slider("Vibrance", "Like saturation, but it lifts dull colors more than the ones that are already vivid.",
++                    &vibrance, -25, 25, "%+d");
++  changed |= Slider("Contrast", "The difference between dark and bright. Higher darkens the darks and brightens the "
++                    "lights.", &contrast, -25, 25, "%+d");
++  changed |= Slider("White point", "How bright white is. Lower tones down a washed out or too bright picture, "
++                    "higher brightens it.", &whitePoint, -25, 25, "%+d");
++  if (changed) {
++    config->colorSaturation = (s8)saturation;
++    config->colorVibrance = (s8)vibrance;
++    config->colorContrast = (s8)contrast;
++    config->colorWhitePoint = (s8)whitePoint;
++    SaveConfig();
++  }
++  const bool custom = saturation != 0 || vibrance != 0 || contrast != 0 || whitePoint != 0;
++  if (Button("Reset to default", "Back to the colors the game draws.", false, custom)) {
++    config->colorSaturation = config->colorVibrance = config->colorContrast = config->colorWhitePoint = 0;
++    SaveConfig();
+   }
+ }
+ 
+ void DrawDisplay() {
+   SIM_config_type *config = SIM_GetConfigPtr();
++  if (sColorBalance) {
++    DrawColorBalance();
++    return;
++  }
+ 
+   bool matchScreen = config->internalResolutionScale == 0;
+   if (Toggle("3D at the screen's sharpness", "3D scenes are drawn at least as sharp as the screen shows them, "
+@@ -266,6 +305,12 @@
+     }
+   }
+ 
++  if (Button("Color Balance", "Saturation, vibrance, contrast and white point. On a device with two screens "
++             "this page shows on the lower one, so the game stays in view on the top.")) {
++    sColorBalance = true;
++    RequestFocus();
++  }
++
+   bool outlines = config->edgeMarking != 0;
+   if (Toggle("DS outlines", "The outlines the DS draws around some 3D models (edge marking), where the game "
+              "asks for them.", &outlines)) {
+@@ -623,6 +668,7 @@
+ 
+ void Open(const char *page) {
+   EnsurePages();
++  sColorBalance = false;
+   sOpen = true;
+   sShowList = true;
+   sNativeSuspended = false;
+--- a/libraries/sim/src/sim_ui.cpp
++++ b/libraries/sim/src/sim_ui.cpp
+@@ -884,7 +884,87 @@
+   Text(draw, BoldFont(), S(17.0f),
+        ImVec2(controls.x + buttonW + (valueW - size.x) * 0.5f, controls.y + (buttonH - size.y) * 0.5f),
+        enabled ? kText : kTextOff, text);
++
++  EndRow(pos, width, height);
++  return changed;
++}
++
++bool Slider(const char *label, const char *help, int *value, int min, int max, const char *format, bool enabled) {
++  if (sRec.active) {
++    const unsigned id = RecId(label, "slider");
++    bool changed = false;
++    if (RecEvent("step", id, label) && enabled) {
++      const int v = sRec.event.value < min ? min : (sRec.event.value > max ? max : sRec.event.value);
++      changed = v != *value;
++      *value = v;
++    }
++    char text[48];
++    snprintf(text, sizeof(text), format, *value);
++    RecBegin("slider", id);
++    RecStr("label", Shown(label));
++    RecStr("help", help);
++    RecInt("value", *value);
++    RecInt("min", min);
++    RecInt("max", max);
++    RecStr("text", text);
++    RecBool("en", enabled);
++    RecEnd();
++    return changed;
++  }
++  ImDrawList *draw = ImGui::GetWindowDrawList();
++  const float width = ImGui::GetContentRegionAvail().x;
++  const float pad = S(14.0f);
++  char text[48];
++  snprintf(text, sizeof(text), format, *value);
++  const ImVec2 valueSize = Measure(BoldFont(), S(17.0f), text);
++  const float textWidth = width - pad * 3 - valueSize.x;
++  const float textHeight = RowText(draw, ImVec2(0, 0), textWidth, label, help, enabled, true);
++  const float trackH = S(40.0f);
++  const float height = textHeight + pad * 2 + trackH;
++  ImVec2 pos = ImGui::GetCursorScreenPos();
++
++  draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), kPanel, S(kRounding));
++  RowText(draw, ImVec2(pos.x + pad, pos.y + pad), textWidth, label, help, enabled, false);
++  Text(draw, BoldFont(), S(17.0f), ImVec2(pos.x + width - pad - valueSize.x, pos.y + pad), enabled ? kText : kTextOff,
++       text);
+ 
++  // The track: drag (or tap) anywhere along it; the arrows nudge it when it has the pad's cursor
++  const float knobR = S(11.0f);
++  const float x0 = pos.x + pad + knobR, x1 = pos.x + width - pad - knobR;
++  const float cy = pos.y + pad + textHeight + trackH * 0.5f;
++  ImVec2 areaPos(pos.x + pad, cy - trackH * 0.5f);
++  ImGui::SetCursorScreenPos(areaPos);
++  ImGui::PushID(label);
++  InvisibleItem("##slider", ImVec2(width - pad * 2, trackH), enabled);
++  ImGui::PopID();
++  bool changed = false;
++  if (enabled && ImGui::IsItemActive() && x1 > x0) {
++    float f = (ImGui::GetIO().MousePos.x - x0) / (x1 - x0);
++    f = f < 0.0f ? 0.0f : (f > 1.0f ? 1.0f : f);
++    const int v = min + (int)(f * (float)(max - min) + 0.5f);
++    if (v != *value) {
++      *value = v;
++      changed = true;
++    }
++  }
++  if (enabled && ImGui::IsItemFocused()) {
++    if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow) && *value > min) {
++      (*value)--;
++      changed = true;
++    }
++    if (ImGui::IsKeyPressed(ImGuiKey_RightArrow) && *value < max) {
++      (*value)++;
++      changed = true;
++    }
++  }
++  const float f = max > min ? (float)(*value - min) / (float)(max - min) : 0.0f;
++  const float kx = x0 + (x1 - x0) * f;
++  const float trackThick = S(4.0f);
++  draw->AddRectFilled(ImVec2(x0, cy - trackThick * 0.5f), ImVec2(x1, cy + trackThick * 0.5f), kBackground, trackThick);
++  draw->AddRectFilled(ImVec2(x0, cy - trackThick * 0.5f), ImVec2(kx, cy + trackThick * 0.5f),
++                      enabled ? kAccent : kTextOff, trackThick);
++  draw->AddCircleFilled(ImVec2(kx, cy), knobR, enabled ? (ImGui::IsItemActive() ? kAccentPressed : kAccent) : kTextOff);
++  FocusRing(areaPos, ImVec2(areaPos.x + width - pad * 2, areaPos.y + trackH));
+   EndRow(pos, width, height);
+   return changed;
+ }
