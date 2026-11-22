@@ -116,13 +116,20 @@ public class PlatinumActivity extends SDLActivity {
             }
             addContentView(nativeSettings, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
+            if (!show) {
+                // Closing moved it out of the bottom screen's window mid-fade: the fade's end never hid it, and the
+                // old page stayed over the game on the top screen with nothing listening to it
+                nativeSettings.animate().cancel();
+                nativeSettings.setVisibility(View.GONE);
+                nativeSettings.setAlpha(1f);
+            }
         }
     }
 
     /** The bottom screen's display went away with the settings on it: back over the game. */
     void settingsOrphaned() {
         if (nativeSettings != null && nativeSettings.getParent() == null) {
-            placeSettings(false);
+            placeSettings(nativeSettings.isOpen());
         }
     }
 
