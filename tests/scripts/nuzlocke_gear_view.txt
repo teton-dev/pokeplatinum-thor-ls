@@ -1,0 +1,25 @@
+# The Gear's Area and Map tabs with Nuzlocke mode: Jubilife City with a run-from Starly, as Normal then Hard. The script
+# ends by waiting, so that the lower window (TEST_CONFIG='SecondaryScreen=true BottomWindowWidth=540 BottomWindowHeight=620')
+# can be looked at and tapped by hand (desktop.sh shot / click on a run's container).
+#
+#   TEST_CONFIG='SecondaryScreen=true BottomWindowWidth=540 BottomWindowHeight=620' \
+#     tools/docker/desktop.sh test tests/scripts/nuzlocke_gear_view.txt --from nuz-normal
+
+gen5-import
+gen5-battles off
+mash A until free
+item 4 10
+wait 40
+fly 3 180 777
+until free timeout 3000
+wait 90
+wild 396 2
+until battle
+until command
+wait 60
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+nuzlocke state
+gen5-battles on
+wait 400000
+exit 0

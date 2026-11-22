@@ -71,6 +71,15 @@ void NuzlockeMode_OnWildBattleEnd(BOOL captured);
 BOOL NuzlockeMode_BallsReceived(void);
 int NuzlockeMode_AreaState(u16 location, u16 *species); // NuzlockeAreaState
 BOOL NuzlockeMode_CatchRuleStarted(void); // Normal or Hard, and the save has had Poke Balls
+// What the Gear shows for an area: the catch rule's view of it (Hard: a missed first encounter fails the area)
+enum NuzlockeAreaStatus {
+    NUZLOCKE_STATUS_NONE = 0, // the rule isn't on (Off, Simple, no Poke Balls yet)
+    NUZLOCKE_STATUS_AVAILABLE, // nothing met yet (or the encounter is going on): a catch is available
+    NUZLOCKE_STATUS_LIMITED,   // missed (Normal): only *species may be caught
+    NUZLOCKE_STATUS_FAILED,    // missed (Hard): nothing can be caught here; *species is what was missed
+    NUZLOCKE_STATUS_CAUGHT,    // caught: *species
+};
+int NuzlockeMode_AreaStatus(u16 location, u16 *species);
 #define NUZLOCKE_CATCH_REFUSED_TEXT "You've already used your catch for this area!"
 
 // The dead flag on a Pokemon (set when it faints with the mode on; keeps its HP at 0 for good).

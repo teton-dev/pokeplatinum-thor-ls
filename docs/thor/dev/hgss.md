@@ -467,6 +467,15 @@ through gdb). The APK runs on the Thor (first launch and the ROM import done by 
   shown; Goldenrod's Nuzlocke level cap could now use it). Test command `gear` logs the Area and the next boss;
   `gear_area.txt` (Route 30 at night: Rattata, Spinarak, Hoothoot...; Falkner's Pidgey 9 and Pidgeotto 13, cap 13).
   Still empty: the battle tab, where to find a species, the map, the PC tab, the Day Care, berries, the rival.
+- **The Gear's Nuzlocke catch status and Goldenrod's map** (2026-11-21): the Area and Map tabs show each area's catch (green
+  "Catch available", yellow "Limited to X", red "Catch failed" on Hard, blue "Catch complete", with the Pokémon's picture,
+  Gen 5's when Gen 5 battles are on), as Eterna's (`docs/thor/dev/nuzlocke.md`, "The Gear's catch status"). Hard now fails an
+  area whose first Pokémon got away (`NuzlockeMode_CatchAllowed`, both games). New here: `NuzlockeMode_AreaStatus`,
+  `lib/port/gen5_sprite.c` (the Gen 5 pictures) and `lib/port/gear_map_hgss.c`, **the Gear's map** (it was an empty stub): the
+  land data's terrain around the map, walkable ground by a flood from the player, the warps and people, each block's map
+  section as its location, so a tap shows that area's catch. Items on the map (balls, hidden items) aren't read yet. The
+  patch `port-common_nuzlocke_mode.patch` is Eterna's, copied. Test `nuzlocke_gear_view.txt` (it waits, so the Gear's window can
+  be looked at; the header has the commands).
 - **The Battle Tower in Gen 5, ported from Eterna** (2026-11-17): `Gen5Battle_WantsFrontier` and the facility battle in
   `lib/port/gen5_battle.c` (no bag, money or Nuzlocke rules; the Frontier's lines from `msg_0197_00724`, entry id * 3
   + 2, or a player-made trainer's (0x2710) mail message; a forfeit is a loss; the World Tournament arena, light pools

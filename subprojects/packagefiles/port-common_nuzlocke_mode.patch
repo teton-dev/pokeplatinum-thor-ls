@@ -1,6 +1,412 @@
+diff --git a/include/port/gear_map.h b/include/port/gear_map.h
+index dcaa378..c8199df 100644
+--- a/include/port/gear_map.h
++++ b/include/port/gear_map.h
+@@ -24,6 +24,9 @@ extern "C" {
+ #endif
+ 
+ #define GEAR_MAP_MAX_ITEMS 64
++#define GEAR_MAP_BLOCK_TILES 32 // a map block's side, in tiles
++#define GEAR_MAP_MAX_BLOCKS 12  // most blocks across the tiles cover
++#define GEAR_MAP_NO_LABEL 0xFFFF
+ #define GEAR_MAP_MAX_WARPS 64
+ 
+ enum GearMapTile {
+@@ -79,6 +82,13 @@ typedef struct GearMap {
+     GearMapItem items[GEAR_MAP_MAX_ITEMS];
+     int warpCount;
+     s16 warps[GEAR_MAP_MAX_WARPS][2]; // x, z
++    // teton-dev: where each part of the map is called (the Gear's Nuzlocke catches are by location name). The
++    // tiles are blocksX x blocksZ blocks of GEAR_MAP_BLOCK_TILES tiles; a block's label is its map's location name
++    // ID (GEAR_MAP_NO_LABEL: no land there). A warp's label is where it leads.
++    int blocksX;
++    int blocksZ;
++    u16 blockLabels[GEAR_MAP_MAX_BLOCKS * GEAR_MAP_MAX_BLOCKS]; // row by row
++    u16 warpLabels[GEAR_MAP_MAX_WARPS];
+ } GearMap;
+ 
+ // The map, refreshed (its tiles only when the area changes)
+diff --git a/include/port/nuzlocke.h b/include/port/nuzlocke.h
+index 7869639..405c63d 100644
+--- a/include/port/nuzlocke.h
++++ b/include/port/nuzlocke.h
+@@ -7,6 +7,8 @@
+ // caught), whether it was caught or missed, and which Pokemon fainted (died), optionally
+ // sending them to the PC after the battle. The Gear shows it all; nothing is stopped by
+ // force. Kept beside the save slot (save_slotN.nuzlocke), like the shiny-hunt counters.
++// teton-dev: a game with its own Nuzlocke mode gives the Gear that mode's books instead (PortGame_NuzlockeModeRun,
++// nuzlocke.c), while the mode is on.
+ 
+ #include <nitro/types.h>
+ 
+@@ -54,12 +56,28 @@ enum NuzlockeEncounter {
+ };
+ 
+ BOOL Nuzlocke_Enabled(void);
++// What the catch rule says of an area (a location name ID), for the Gear: the colours of the Area and Map tabs
++enum NuzlockeCatchStatus {
++    NUZLOCKE_CATCH_NONE = 0,   // no rule here (Simple, no Poke Balls yet, the mode is off)
++    NUZLOCKE_CATCH_AVAILABLE,  // the first encounter is still to come: green
++    NUZLOCKE_CATCH_LIMITED,    // it got away: only *species may be caught: yellow
++    NUZLOCKE_CATCH_FAILED,     // it got away (Hard): nothing can be caught: red
++    NUZLOCKE_CATCH_CAUGHT,     // caught *species: blue
++};
++int Nuzlocke_AreaStatus(u16 location, u16 *species); // NuzlockeCatchStatus; *species for all but NONE and AVAILABLE
++BOOL Nuzlocke_CatchRule(void);                    // areas count (the game's mode: Normal or Hard, once it has balls)
+ const NuzlockeRun *Nuzlocke_Get(void);
+ const NuzlockeArea *Nuzlocke_Area(u16 location); // NULL: still open
+ int Nuzlocke_CurrentEncounter(void);              // NuzlockeEncounter
+ BOOL Nuzlocke_IsDead(u32 personality);
+ void Nuzlocke_Reset(void);                        // starts a new run's books
+ 
++// Gen 5 pictures for the Gear's Nuzlocke status (Gen 5 battles on and a Black 2/White 2 ROM imported): the game's
++// answers, weak here (FALSE: use the game's own sprites)
++#define GEAR_GEN5_FRONT_SIZE 96
++BOOL PortGame_GearGen5Sprites(void);
++BOOL PortGame_GearGen5Front(u16 species, u8 form, BOOL female, BOOL shiny, u32 *rgba); // 96x96 RGBA
++
+ // Game hooks (Platinum: src/encounter.c)
+ struct Party;
+ void Nuzlocke_OnBattleStart(u32 battleType, struct Party *wildParty);
+diff --git a/src/gear_ui.cpp b/src/gear_ui.cpp
+index 7550acf..04b1d4a 100644
+--- a/src/gear_ui.cpp
++++ b/src/gear_ui.cpp
+@@ -54,6 +54,7 @@ constexpr ImU32 kTextDim = IM_COL32(140, 152, 170, 255);
+ constexpr ImU32 kGood = IM_COL32(88, 200, 120, 255);
+ constexpr ImU32 kWarn = IM_COL32(236, 196, 70, 255);
+ constexpr ImU32 kBad = IM_COL32(232, 88, 80, 255);
++constexpr ImU32 kCaught = IM_COL32(100, 160, 255, 255); // Nuzlocke: catch complete
+ constexpr ImU32 kBarBack = IM_COL32(18, 22, 30, 255);
+ 
+ // Standard type colors, by the game's type numbers (TYPE_MYSTERY is "???")
+@@ -362,12 +363,14 @@ const char *GenderSymbol(u8 gender) {
+ // per frame: a long list fills in over a few frames instead of stalling one.
+ struct Picture {
+   unsigned int texture = 0; // 0: not there (no such sprite)
++  float u0 = 0.0f, v0 = 0.0f, u1 = 1.0f, v1 = 1.0f; // the part to draw (Gen 5's sprites are cropped to their pixels)
+ };
+ std::unordered_map<u64, Picture> sPictures;
+ int sPictureLoadsThisFrame = 0;
+ constexpr int kPictureLoadsPerFrame = 12;
+ 
+-enum PictureKind { PICTURE_ICON = 1, PICTURE_FRONT = 2 };
++// The front sprites also come grayed (Nuzlocke: missed) and as Gen 5's (80x80 as well)
++enum PictureKind { PICTURE_ICON = 1, PICTURE_FRONT = 2, PICTURE_FRONT_GRAY = 3, PICTURE_GEN5 = 4, PICTURE_GEN5_GRAY = 5 };
+ 
+ // The texture, or 0 when there is none (yet)
+ unsigned int PictureTexture(PictureKind kind, u16 species, u8 form, bool egg, bool shiny, u8 gender, u32 personality) {
+@@ -375,7 +378,7 @@ unsigned int PictureTexture(PictureKind kind, u16 species, u8 form, bool egg, bo
+     return 0;
+   }
+   // Personality only changes Spinda's front sprite
+-  const u32 spots = kind == PICTURE_FRONT && species == 327 ? personality : 0;
++  const u32 spots = (kind == PICTURE_FRONT || kind == PICTURE_FRONT_GRAY) && species == 327 ? personality : 0;
+   const u64 key = ((u64)kind << 60) | ((u64)(egg ? 1 : 0) << 59) | ((u64)(shiny ? 1 : 0) << 58) | ((u64)(gender & 3) << 56)
+                   | ((u64)form << 48) | ((u64)species << 32) | spots;
+   auto found = sPictures.find(key);
+@@ -394,15 +397,66 @@ unsigned int PictureTexture(PictureKind kind, u16 species, u8 form, bool egg, bo
+       picture.texture = SIM_UI_CreateImage(GEAR_ICON_WIDTH, GEAR_ICON_HEIGHT, pixels);
+     }
+   } else {
+-    static u32 pixels[GEAR_FRONT_SIZE * GEAR_FRONT_SIZE];
+-    if (GearSprites_Front(species, gender, form, shiny ? TRUE : FALSE, egg ? TRUE : FALSE, personality, pixels)) {
+-      picture.texture = SIM_UI_CreateImage(GEAR_FRONT_SIZE, GEAR_FRONT_SIZE, pixels);
++    // Gen 5's are 96x96 (Nuzlocke.h), the game's own 80x80
++    static u32 pixels[GEAR_GEN5_FRONT_SIZE * GEAR_GEN5_FRONT_SIZE];
++    const bool gen5 = kind == PICTURE_GEN5 || kind == PICTURE_GEN5_GRAY;
++    const int side = gen5 ? GEAR_GEN5_FRONT_SIZE : GEAR_FRONT_SIZE;
++    const bool gray = kind == PICTURE_FRONT_GRAY || kind == PICTURE_GEN5_GRAY;
++    const bool got = gen5 ? PortGame_GearGen5Front(species, form, gender == GEAR_GENDER_FEMALE ? TRUE : FALSE,
++                                                   shiny ? TRUE : FALSE, pixels) != FALSE
++                          : GearSprites_Front(species, gender, form, shiny ? TRUE : FALSE, egg ? TRUE : FALSE, personality,
++                                              pixels) != FALSE;
++    if (got) {
++      if (gray) {
++        // Missed: drained of colour, a little faded (bytes R, G, B, A)
++        for (int i = 0; i < side * side; i++) {
++          u8 *c = reinterpret_cast<u8 *>(&pixels[i]);
++          const u8 luma = (u8)((c[0] * 77 + c[1] * 150 + c[2] * 29) >> 8);
++          c[0] = c[1] = c[2] = (u8)(luma * 0.8f + 30.0f);
++          c[3] = (u8)(c[3] * 0.85f);
++        }
++      }
++      if (gen5) {
++        // A square around the sprite's own pixels: BW2's sprites sit in a 96x96 frame with a wide margin
++        int x0 = side, y0 = side, x1 = -1, y1 = -1;
++        for (int y = 0; y < side; y++) {
++          for (int x = 0; x < side; x++) {
++            if (reinterpret_cast<const u8 *>(&pixels[y * side + x])[3] != 0) {
++              x0 = std::min(x0, x);
++              x1 = std::max(x1, x);
++              y0 = std::min(y0, y);
++              y1 = std::max(y1, y);
++            }
++          }
++        }
++        if (x1 >= 0) {
++          const int extent = std::max(x1 - x0, y1 - y0) + 3; // a pixel of margin around
++          const int left = std::clamp((x0 + x1 + 1 - extent) / 2, 0, side - std::min(extent, side));
++          const int top = std::clamp((y0 + y1 + 1 - extent) / 2, 0, side - std::min(extent, side));
++          const int span = std::min(extent, side);
++          picture.u0 = (float)left / side;
++          picture.v0 = (float)top / side;
++          picture.u1 = (float)(left + span) / side;
++          picture.v1 = (float)(top + span) / side;
++        }
++      }
++      picture.texture = SIM_UI_CreateImage(side, side, pixels);
+     }
+   }
+   sPictures[key] = picture;
+   return picture.texture;
+ }
+ 
++// The part of a picture's texture to draw (all of it, but for Gen 5's sprites)
++const Picture *PictureOf(PictureKind kind, u16 species, u8 form, bool egg, bool shiny, u8 gender, u32 personality) {
++  PictureTexture(kind, species, form, egg, shiny, gender, personality);
++  const u32 spots = (kind == PICTURE_FRONT || kind == PICTURE_FRONT_GRAY) && species == 327 ? personality : 0;
++  const u64 key = ((u64)kind << 60) | ((u64)(egg ? 1 : 0) << 59) | ((u64)(shiny ? 1 : 0) << 58) | ((u64)(gender & 3) << 56)
++                  | ((u64)form << 48) | ((u64)species << 32) | spots;
++  auto found = sPictures.find(key);
++  return found != sPictures.end() ? &found->second : nullptr;
++}
++
+ // A size for pixel art: a whole multiple of its pixels when that's close to the wanted size
+ float PixelSize(float wanted, float pixels) {
+   const float whole = std::floor(wanted / pixels + 0.001f) * pixels;
+@@ -1057,22 +1111,93 @@ const char *NuzlockeResultWord(int result) {
+   return result == NUZLOCKE_CAUGHT ? "caught" : (result == NUZLOCKE_MISSED ? "missed" : "in battle");
+ }
+ 
+-// The area's encounter: still open, or what it was
++// What an area's catch status says, and in what colour: green "Catch available", yellow "Limited to X", red
++// "Catch failed" (Hard) and blue "Catch complete"
++struct CatchLook {
++  const char *headline;
++  ImU32 color;
++  const char *detail;
++};
++
++CatchLook CatchLookOf(int status, const char *species, char *buffer, size_t size) {
++  switch (status) {
++  case NUZLOCKE_CATCH_AVAILABLE:
++    return { "Catch available", kGood, "The first wild Pokemon you meet here counts." };
++  case NUZLOCKE_CATCH_LIMITED:
++    snprintf(buffer, size, "Limited to %s", species);
++    return { buffer, kWarn, "It got away: only that species may be caught here." };
++  case NUZLOCKE_CATCH_FAILED:
++    return { "Catch failed", kBad, "The first one got away: nothing more to catch here." };
++  case NUZLOCKE_CATCH_CAUGHT:
++    return { "Catch complete", kCaught, "Caught here." };
++  default:
++    return { "", kTextDim, "" };
++  }
++}
++
++// A Pokemon's picture for the Nuzlocke status: its Gen 5 sprite when Gen 5 battles are on and the ROM is imported
++// (else the game's own), in colour when caught and grayed out when missed
++void DrawCatchSprite(ImDrawList *draw, ImVec2 pos, float size, u16 species, bool gray) {
++  if (PortGame_GearGen5Sprites()) {
++    const Picture *picture = PictureOf(gray ? PICTURE_GEN5_GRAY : PICTURE_GEN5, species, 0, false, false, 0, 0);
++    if (picture != nullptr && picture->texture != 0) {
++      pos = ImVec2(std::floor(pos.x), std::floor(pos.y));
++      draw->AddImage(ImTextureRef((ImTextureID)(intptr_t)picture->texture), pos, ImVec2(pos.x + size, pos.y + size),
++                     ImVec2(picture->u0, picture->v0), ImVec2(picture->u1, picture->v1));
++      return;
++    }
++  }
++  const unsigned int texture = PictureTexture(gray ? PICTURE_FRONT_GRAY : PICTURE_FRONT, species, 0, false, false, 0, 0);
++  if (texture != 0) {
++    pos = ImVec2(std::floor(pos.x), std::floor(pos.y));
++    draw->AddImage(ImTextureRef((ImTextureID)(intptr_t)texture), pos, ImVec2(pos.x + size, pos.y + size));
++  }
++}
++
++// An area's status: its picture (caught: in colour; missed: grayed out) beside the headline and what it means
++void DrawCatchStatus(u16 location, float pictureSize, const char *areaName) {
++  u16 species = 0;
++  const int status = Nuzlocke_AreaStatus(location, &species);
++  if (status == NUZLOCKE_CATCH_NONE) {
++    return;
++  }
++  char buffer[48];
++  const CatchLook look = CatchLookOf(status, species != 0 ? Gear_SpeciesName(species) : "", buffer, sizeof(buffer));
++  const bool hasPicture = species != 0 && status != NUZLOCKE_CATCH_AVAILABLE;
++  const float size = hasPicture ? S(pictureSize) : 0.0f;
++  ImVec2 pos = ImGui::GetCursorScreenPos();
++  if (areaName != nullptr) {
++    TextAt(ImGui::GetWindowDrawList(), sBold, S(17.0f), pos, kText, areaName);
++    pos.y += S(24.0f);
++  }
++  ImDrawList *draw = ImGui::GetWindowDrawList();
++  if (hasPicture) {
++    DrawCatchSprite(draw, pos, size, species, status != NUZLOCKE_CATCH_CAUGHT);
++  }
++  const float textX = pos.x + (hasPicture ? size + S(8.0f) : 0.0f);
++  const float lineY = pos.y + (hasPicture ? size * 0.16f : 0.0f);
++  TextAt(draw, sBold, S(18.0f), ImVec2(textX, lineY), look.color, look.headline);
++  char detail[96];
++  if (status == NUZLOCKE_CATCH_CAUGHT || status == NUZLOCKE_CATCH_FAILED) {
++    snprintf(detail, sizeof(detail), status == NUZLOCKE_CATCH_CAUGHT ? "%s, caught here." : "%s got away.",
++             Gear_SpeciesName(species));
++  } else {
++    snprintf(detail, sizeof(detail), "%s", look.detail);
++  }
++  TextAt(draw, sRegular, S(14.0f), ImVec2(textX, lineY + S(24.0f)), kTextDim, detail);
++  ImGui::Dummy(ImVec2(0, (hasPicture ? size : S(46.0f)) + (areaName != nullptr ? S(24.0f) : 0.0f)));
++}
++
++// The current area's catch
+ void DrawNuzlockeArea() {
+-  if (!Nuzlocke_Enabled()) {
++  if (!Nuzlocke_Enabled() || !Nuzlocke_CatchRule()) {
+     return;
+   }
+   const int label = Gear_CurrentLocationLabel();
+   if (label < 0) {
+     return;
+   }
+-  const NuzlockeArea *area = Nuzlocke_Area((u16)label);
+-  if (area == nullptr) {
+-    ImGui::TextColored(ImColor(kGood), "Nuzlocke: this area's first encounter is still to come");
+-  } else {
+-    ImGui::TextColored(ImColor(area->result == NUZLOCKE_CAUGHT ? kText : kTextDim), "Nuzlocke: this area's encounter was %s, %s",
+-                       Gear_SpeciesName(area->species), NuzlockeResultWord(area->result));
+-  }
++  DrawCatchStatus((u16)label, 64.0f, nullptr);
+ }
+ 
+ // The run: areas used, and who died
+@@ -1190,7 +1315,7 @@ void DrawArea() {
+   DrawHunt();
+ 
+   if (Discovery() == GEAR_DISCOVERY_VANILLA) {
+-    ImGui::TextDisabled("The encounter guide is off (Settings > Discovery).");
++    ImGui::TextDisabled("The encounter guide is off (Settings > Gear).");
+     return;
+   }
+   if (!sArea.hasEncounters) {
+@@ -3117,7 +3242,7 @@ void DrawBosses() {
+       ImGui::TextColored(ImColor(kTextDim), " %s's %s", next->name, Gear_SpeciesName(next->aceSpecies));
+     }
+     if (GearConfig().hardLevelCap) {
+-      ImGui::TextColored(ImColor(kTextDim), "Enforced: no EXP past it (Settings > Gameplay)");
++      ImGui::TextColored(ImColor(kTextDim), "Enforced: no EXP past it (Settings > Challenges)");
+     }
+     for (int i = 0; i < sPartyCount; i++) {
+       if (!sParty[i].isEgg && sParty[i].level > sLevelCap) {
+@@ -3200,6 +3325,7 @@ struct MapView {
+   bool follow = true;
+   bool zoomed = false; // the player zoomed on this map (otherwise the zoom fits the map)
+   int selected = -1; // item index, or -1
++  int areaLabel = -1; // Nuzlocke: the location name the player tapped (-1: the player's own)
+   ImVec2 viewMin, viewMax; // last frame's view rectangle (screen)
+ };
+ MapView sMapView;
+@@ -3386,7 +3512,11 @@ void DrawMap() {
+     view.follow = true;
+     view.zoomed = false;
+     view.selected = -1;
++    view.areaLabel = -1;
+   }
++  // Nuzlocke's catch rule: tapping a part of the map shows its area's catch, in a card under the map
++  const bool nuzlocke = Nuzlocke_Enabled() && Nuzlocke_CatchRule();
++  const float cardHeight = nuzlocke ? S(84.0f) : 0.0f;
+ 
+   // Which items show: the hidden ones and what's in the balls with the guide on
+   const bool guide = Discovery() != GEAR_DISCOVERY_VANILLA;
+@@ -3425,9 +3555,9 @@ void DrawMap() {
+   // Gear it's scrolled to)
+   const float available = ImGui::GetContentRegionAvail().y;
+   const float keyHeight = S(30.0f);
+-  float height = available - keyHeight - S(30.0f) * (float)(shownCount < 3 ? shownCount : 3) - S(8.0f);
++  float height = available - keyHeight - cardHeight - S(30.0f) * (float)(shownCount < 3 ? shownCount : 3) - S(8.0f);
+   if (height < available * 0.6f) {
+-    height = available - S(4.0f);
++    height = available - cardHeight - S(4.0f);
+   }
+   height = height < S(110.0f) ? S(110.0f) : height;
+   const ImVec2 viewMax(origin.x + width, origin.y + height);
+@@ -3488,6 +3618,21 @@ void DrawMap() {
+       }
+     }
+     view.selected = best;
++    if (nuzlocke && best < 0) {
++      // Not an item: the part of the map (its location) that was tapped; a warp is where it leads
++      const int tx = (int)std::floor(view.centerX + (io.MousePos.x - middle.x) / zoom);
++      const int tz = (int)std::floor(view.centerZ + (io.MousePos.y - middle.y) / zoom);
++      if (tx >= 0 && tx < map->width && tz >= 0 && tz < map->height
++          && (map->tiles[tz * map->width + tx] & GEAR_MAP_TILE_MASK) != GEAR_MAP_VOID) {
++        u16 label = map->blockLabels[(tz / GEAR_MAP_BLOCK_TILES) * map->blocksX + tx / GEAR_MAP_BLOCK_TILES];
++        for (int i = 0; i < map->warpCount; i++) {
++          if (map->warps[i][0] == tx && map->warps[i][1] == tz && map->warpLabels[i] != GEAR_MAP_NO_LABEL) {
++            label = map->warpLabels[i];
++          }
++        }
++        view.areaLabel = label == GEAR_MAP_NO_LABEL ? -1 : (int)label;
++      }
++    }
+   }
+ 
+   draw->PushClipRect(origin, viewMax, true);
+@@ -3495,6 +3640,34 @@ void DrawMap() {
+   if (view.texture != 0) {
+     draw->AddImage((ImTextureID)(intptr_t)view.texture, toScreen(0.0f, 0.0f), toScreen((float)map->width, (float)map->height));
+   }
++  // Nuzlocke: the tapped area's land, in its catch colour
++  const int shownLabel = view.areaLabel >= 0 ? view.areaLabel : Gear_CurrentLocationLabel();
++  if (nuzlocke && shownLabel >= 0) {
++    const int status = Nuzlocke_AreaStatus((u16)shownLabel, nullptr);
++    const ImU32 base = status == NUZLOCKE_CATCH_AVAILABLE ? kGood
++        : (status == NUZLOCKE_CATCH_LIMITED ? kWarn : (status == NUZLOCKE_CATCH_FAILED ? kBad : kCaught));
++    const ImU32 fill = (base & 0x00FFFFFFu) | (60u << 24);
++    const ImU32 edge = (base & 0x00FFFFFFu) | (230u << 24);
++    auto inArea = [&](int bx, int bz) {
++      return bx >= 0 && bz >= 0 && bx < map->blocksX && bz < map->blocksZ
++          && map->blockLabels[bz * map->blocksX + bx] == shownLabel;
++    };
++    const float block = (float)GEAR_MAP_BLOCK_TILES;
++    for (int bz = 0; bz < map->blocksZ; bz++) {
++      for (int bx = 0; bx < map->blocksX; bx++) {
++        if (!inArea(bx, bz)) {
++          continue;
++        }
++        const ImVec2 a = toScreen(bx * block, bz * block), b = toScreen((bx + 1) * block, (bz + 1) * block);
++        draw->AddRectFilled(a, b, fill);
++        const float thick = S(2.5f);
++        if (!inArea(bx, bz - 1)) draw->AddLine(a, ImVec2(b.x, a.y), edge, thick);
++        if (!inArea(bx, bz + 1)) draw->AddLine(ImVec2(a.x, b.y), b, edge, thick);
++        if (!inArea(bx - 1, bz)) draw->AddLine(a, ImVec2(a.x, b.y), edge, thick);
++        if (!inArea(bx + 1, bz)) draw->AddLine(ImVec2(b.x, a.y), b, edge, thick);
++      }
++    }
++  }
+   // Warps
+   for (int i = 0; i < map->warpCount; i++) {
+     const ImVec2 a = toScreen(map->warps[i][0] + 0.15f, map->warps[i][1] + 0.15f);
+@@ -3591,6 +3764,16 @@ void DrawMap() {
+   }
+   ImGui::SetCursorScreenPos(ImVec2(origin.x, viewMax.y + S(4.0f)));
+ 
++  // Nuzlocke: the catch of the area tapped (the player's own to begin with)
++  if (nuzlocke && shownLabel >= 0) {
++    const float cardTop = ImGui::GetCursorScreenPos().y;
++    char name[96];
++    snprintf(name, sizeof(name), "%s%s", Gear_LocationLabelName(shownLabel),
++             shownLabel == Gear_CurrentLocationLabel() ? "  (you are here)" : "");
++    DrawCatchStatus((u16)shownLabel, 52.0f, name);
++    ImGui::SetCursorScreenPos(ImVec2(origin.x, cardTop + cardHeight));
++  }
++
+   // What the marks are
+   {
+     const ImVec2 at = ImGui::GetCursorScreenPos();
+diff --git a/src/nuzlocke.c b/src/nuzlocke.c
+index 261590d..7bdb8a3 100644
 --- a/src/nuzlocke.c
 +++ b/src/nuzlocke.c
-@@ -22,11 +22,38 @@
+@@ -22,11 +22,60 @@ static PortNuzlockeConfig Config(void)
      return config;
  }
  
@@ -8,7 +414,7 @@
 +// teton-dev: the game's own Nuzlocke mode (per save, enforced) hands the Gear its books in this API's shapes; NULL
 +// while the mode is off. The helper's settings and battle hooks stay as they were (the game may have retired them).
 +const NuzlockeRun *__attribute__((weak)) PortGame_NuzlockeModeRun(void)
- {
++{
 +    return NULL;
 +}
 +
@@ -22,8 +428,30 @@
 +    return FALSE;
 +}
 +
-+static BOOL HelperOn(void)
++int __attribute__((weak)) PortGame_NuzlockeModeAreaStatus(u16 location, u16 *species)
 +{
++    (void)location;
++    (void)species;
++    return NUZLOCKE_CATCH_NONE;
++}
++
++BOOL __attribute__((weak)) PortGame_GearGen5Sprites(void)
++{
++    return FALSE;
++}
++
++BOOL __attribute__((weak)) PortGame_GearGen5Front(u16 species, u8 form, BOOL female, BOOL shiny, u32 *rgba)
++{
++    (void)species;
++    (void)form;
++    (void)female;
++    (void)shiny;
++    (void)rgba;
++    return FALSE;
++}
++
++static BOOL HelperOn(void)
+ {
      return Config().enabled;
  }
  
@@ -40,7 +468,7 @@
  static void FilePath(int slot, char *out, size_t size)
  {
      snprintf(out, size, "save_slot%d.nuzlocke", slot + 1);
-@@ -99,6 +126,10 @@
+@@ -99,6 +148,10 @@ static void EnsureLoaded(void)
  
  const NuzlockeRun *Nuzlocke_Get(void)
  {
@@ -51,7 +479,7 @@
      EnsureLoaded();
      return &sRun;
  }
-@@ -115,17 +146,38 @@
+@@ -115,17 +168,56 @@ static NuzlockeArea *FindArea(u16 location)
  
  const NuzlockeArea *Nuzlocke_Area(u16 location)
  {
@@ -68,6 +496,24 @@
      return FindArea(location);
  }
  
++int Nuzlocke_AreaStatus(u16 location, u16 *species)
++{
++    // The game's mode answers from its own books (cheap, unlike Nuzlocke_Get's rebuilt copy)
++    const int status = PortGame_NuzlockeModeAreaStatus(location, species);
++    if (status != NUZLOCKE_CATCH_NONE || !HelperOn()) {
++        return status;
++    }
++    const NuzlockeArea *area = Nuzlocke_Area(location);
++    if (area == NULL) {
++        return NUZLOCKE_CATCH_AVAILABLE;
++    }
++    if (species != NULL) {
++        *species = area->species;
++    }
++    return area->result == NUZLOCKE_CAUGHT ? NUZLOCKE_CATCH_CAUGHT
++        : (area->result == NUZLOCKE_MISSED ? NUZLOCKE_CATCH_LIMITED : NUZLOCKE_CATCH_AVAILABLE);
++}
++
  int Nuzlocke_CurrentEncounter(void)
  {
 -    return Nuzlocke_Enabled() ? sCurrent : NUZLOCKE_ENC_NONE;
@@ -91,7 +537,7 @@
      EnsureLoaded();
      for (int i = 0; i < sRun.deathCount; i++) {
          if (sRun.deaths[i].personality == personality) {
-@@ -150,7 +202,7 @@
+@@ -150,7 +242,7 @@ static u16 CurrentLocation(void)
  void Nuzlocke_OnBattleStart(u32 battleType, struct Party *wildParty)
  {
      sCurrent = NUZLOCKE_ENC_NONE;
@@ -100,7 +546,7 @@
          || PortGame_Party_Count(wildParty) == 0) {
          return;
      }
-@@ -187,7 +239,7 @@
+@@ -187,7 +279,7 @@ void Nuzlocke_OnBattleEnd(u32 battleType, int resultMask, struct Party *playerPa
  {
      const int encounter = sCurrent;
      sCurrent = NUZLOCKE_ENC_NONE;
@@ -109,51 +555,3 @@
          return;
      }
      EnsureLoaded();
---- a/include/port/nuzlocke.h
-+++ b/include/port/nuzlocke.h
-@@ -7,6 +7,8 @@
- // caught), whether it was caught or missed, and which Pokemon fainted (died), optionally
- // sending them to the PC after the battle. The Gear shows it all; nothing is stopped by
- // force. Kept beside the save slot (save_slotN.nuzlocke), like the shiny-hunt counters.
-+// teton-dev: a game with its own Nuzlocke mode gives the Gear that mode's books instead (PortGame_NuzlockeModeRun,
-+// nuzlocke.c), while the mode is on.
- 
- #include <nitro/types.h>
- 
-@@ -54,6 +56,7 @@
- };
- 
- BOOL Nuzlocke_Enabled(void);
-+BOOL Nuzlocke_CatchRule(void);                    // areas count (the game's mode: Normal or Hard, once it has balls)
- const NuzlockeRun *Nuzlocke_Get(void);
- const NuzlockeArea *Nuzlocke_Area(u16 location); // NULL: still open
- int Nuzlocke_CurrentEncounter(void);              // NuzlockeEncounter
---- a/src/gear_ui.cpp
-+++ b/src/gear_ui.cpp
-@@ -1059,7 +1059,7 @@
- 
- // The area's encounter: still open, or what it was
- void DrawNuzlockeArea() {
--  if (!Nuzlocke_Enabled()) {
-+  if (!Nuzlocke_Enabled() || !Nuzlocke_CatchRule()) {
-     return;
-   }
-   const int label = Gear_CurrentLocationLabel();
-@@ -1190,7 +1190,7 @@
-   DrawHunt();
- 
-   if (Discovery() == GEAR_DISCOVERY_VANILLA) {
--    ImGui::TextDisabled("The encounter guide is off (Settings > Discovery).");
-+    ImGui::TextDisabled("The encounter guide is off (Settings > Gear).");
-     return;
-   }
-   if (!sArea.hasEncounters) {
-@@ -3117,7 +3117,7 @@
-       ImGui::TextColored(ImColor(kTextDim), " %s's %s", next->name, Gear_SpeciesName(next->aceSpecies));
-     }
-     if (GearConfig().hardLevelCap) {
--      ImGui::TextColored(ImColor(kTextDim), "Enforced: no EXP past it (Settings > Gameplay)");
-+      ImGui::TextColored(ImColor(kTextDim), "Enforced: no EXP past it (Settings > Challenges)");
-     }
-     for (int i = 0; i < sPartyCount; i++) {
-       if (!sParty[i].isEgg && sParty[i].level > sLevelCap) {

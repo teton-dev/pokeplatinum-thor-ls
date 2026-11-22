@@ -1,0 +1,44 @@
+# The Gear's catch status per level (Nuzlocke_AreaStatus, the Area and Map tabs' colours): from nuz-normal, a Starly run
+# from leaves the area "limited" to Starly with Normal (yellow) and "failed" with Hard (red), where a Starly is refused
+# too (the "[test] party" line still has Turtwig alone). The check is the "[test] gear catch status" lines: available, limited (396), then failed (396).
+#
+#   tools/docker/desktop.sh test tests/scripts/nuzlocke_gear_hard.txt --from nuz-normal
+
+mash A until free
+gen5-battles off
+item 4 10
+item 1 5
+wait 40
+nuzlocke state
+wild 396 2
+until battle
+until command
+wait 60
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+nuzlocke state
+shot gear_normal
+nuzlocke hard
+wait 40
+nuzlocke state
+shot gear_hard
+# With Hard the area is failed: even the Starly that got away is refused (a Master Ball knocked back, no catch)
+wild 396 2
+until battle
+until command
+wait 60
+touch 40 178
+wait 90
+touch 192 55
+wait 60
+touch 192 30
+wait 60
+touch 104 174
+wait 70
+shot hard_refused
+wait 280
+touch 128 178
+mash B touch 128 178 until free timeout 6000
+party
+nuzlocke state
+exit 0

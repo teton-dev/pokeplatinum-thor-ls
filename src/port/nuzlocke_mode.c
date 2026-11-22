@@ -511,7 +511,35 @@ BOOL NuzlockeMode_CatchAllowed(u16 species, BOOL shiny)
     if (area == NULL) {
         return TRUE; // no room left in the books
     }
-    return area->result != AREA_CAUGHT && area->species == species;
+    if (area->result == AREA_CAUGHT || area->species != species) {
+        return FALSE;
+    }
+    // Hard: the first encounter is the only chance; once it got away the area is failed
+    return !(NuzlockeMode_Level() == NUZLOCKE_HARD && area->result == AREA_MISSED);
+}
+
+// What the Gear shows for an area (a location name): the catch rule's view of it, from the same books and
+// levels CatchAllowed uses
+int NuzlockeMode_AreaStatus(u16 location, u16 *species)
+{
+    if (!NuzlockeMode_CatchRuleStarted() || !sState.loaded) {
+        return NUZLOCKE_STATUS_NONE;
+    }
+    const NuzlockeArea *area = FindArea(location);
+    if (area == NULL) {
+        return NUZLOCKE_STATUS_AVAILABLE;
+    }
+    if (species != NULL) {
+        *species = area->species;
+    }
+    switch (area->result) {
+    case AREA_CAUGHT:
+        return NUZLOCKE_STATUS_CAUGHT;
+    case AREA_MISSED:
+        return NuzlockeMode_Level() == NUZLOCKE_HARD ? NUZLOCKE_STATUS_FAILED : NUZLOCKE_STATUS_LIMITED;
+    default:
+        return NUZLOCKE_STATUS_AVAILABLE; // the encounter is going on
+    }
 }
 
 void NuzlockeMode_OnWildBattleEnd(BOOL captured)
