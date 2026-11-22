@@ -44,7 +44,9 @@ directory = libntr
 # (SIM_SetBattleActive) it runs at that speed, in place of fast-forward's
 # libntr_color_adjust.patch: Settings > Display > Color Balance (sliders: saturation, vibrance, contrast, white point, -25..+25,
 # applied to each screen before the fade; SIM::UI::Slider), and the defaults Widescreen on and Fast forward as a toggle
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch, libntr_snd_lock.patch, libntr_g3_tex_wrap.patch, libntr_wide_subtop_bgs.patch, libntr_3d_premultiplied.patch, libntr_native_menus.patch, libntr_carts_known.patch, libntr_battle_speed.patch, libntr_color_adjust.patch
+# libntr_native_menus_carts.patch: the carts UI over the settings: the native view steps aside (SuspendNative)
+# libntr_native_screens.patch: the carts UI (Add a game, the game picker, a version question) as native views too
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch, libntr_snd_lock.patch, libntr_g3_tex_wrap.patch, libntr_wide_subtop_bgs.patch, libntr_3d_premultiplied.patch, libntr_native_menus.patch, libntr_native_menus_carts.patch, libntr_carts_known.patch, libntr_battle_speed.patch, libntr_color_adjust.patch, libntr_native_screens.patch
 
 [provide]
 dependency_names = NitroSDK
