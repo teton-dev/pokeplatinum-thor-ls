@@ -419,6 +419,7 @@ public class NativeSettings extends FrameLayout {
         case "choice": return addChoice(item);
         case "stepper": return addStepper(item, false);
         case "number": return addStepper(item, true);
+        case "slider": return addSlider(item);
         case "button": return addButton(item);
         case "pair": return addPair(item);
         case "card": return addCard(item, false);
@@ -587,6 +588,68 @@ public class NativeSettings extends FrameLayout {
                 pill.setTextColor(j == value ? ON_ACCENT : (enabled ? TEXT : TEXT_OFF));
                 setUsable(pill, enabled);
             }
+        };
+        bindNow(b, item);
+        return b;
+    }
+
+    /** A slider: drag along the track; each position is sent as a "step" event, as the stepper's buttons do. */
+    private Binder addSlider(JSONObject item) {
+        LinearLayout card = card(false);
+        card.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout top = new LinearLayout(getContext());
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout texts = texts();
+        TextView label = (TextView) texts.getChildAt(0);
+        TextView help = (TextView) texts.getChildAt(1);
+        top.addView(texts, new LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
+        TextView value = text("", 18, TEXT, true);
+        value.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        value.setMinWidth(dp(64));
+        top.addView(value, new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+        card.addView(top, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+        android.widget.SeekBar bar = new android.widget.SeekBar(getContext());
+        bar.setPadding(dp(8), dp(8), dp(8), dp(8));
+        bar.setFocusable(true);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(44));
+        blp.topMargin = dp(4);
+        card.addView(bar, blp);
+        final long id = item.optLong("id");
+        final int[] current = new int[2]; // value, min
+        final boolean[] binding = new boolean[1];
+        bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && !binding[0]) {
+                    nativeEvent("step " + id + " " + (current[1] + progress));
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(android.widget.SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(android.widget.SeekBar seekBar) {
+            }
+        });
+        addRow(card);
+        focusables.put(id, bar);
+        Binder b = it -> {
+            boolean enabled = it.optBoolean("en", true);
+            setTexts(label, help, it.optString("label"), it.optString("help", null), enabled);
+            current[1] = it.optInt("min");
+            binding[0] = true;
+            bar.setMax(it.optInt("max") - current[1]);
+            if (!bar.isPressed()) {
+                bar.setProgress(it.optInt("value") - current[1]);
+            }
+            binding[0] = false;
+            current[0] = it.optInt("value");
+            value.setText(it.optString("text"));
+            value.setTextColor(enabled ? TEXT : TEXT_OFF);
+            setUsable(bar, enabled);
         };
         bindNow(b, item);
         return b;

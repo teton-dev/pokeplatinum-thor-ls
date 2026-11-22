@@ -48,6 +48,9 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("General", "FollowerPokemon")) {
         config->followerPokemon = StringToBool(value);
     }
+    if (MATCH("General", "InfiniteTMs")) {
+        config->infiniteTMs = StringToBool(value);
+    }
     if(MATCH("General", "Gen5Screens")) {
         config->gen5Screens = StringToBool(value);
     }
@@ -182,15 +185,16 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
 {
   aConfig->enable60fps = TRUE;
   aConfig->enable60fpsSpeedFix = TRUE;
-  aConfig->enable60fpsEverywhere = FALSE;
+  aConfig->enable60fpsEverywhere = TRUE;
   aConfig->drawEveryFrame = FALSE;
-  aConfig->instantText = TRUE;
-  aConfig->instantBars = TRUE;
+  aConfig->instantText = FALSE;
+  aConfig->instantBars = FALSE;
   aConfig->hmFree = TRUE;
   aConfig->hmNoBadges = FALSE;
   aConfig->hardLevelCap = FALSE;
   aConfig->repelPrompt = TRUE;
-  aConfig->followerPokemon = TRUE;
+  aConfig->followerPokemon = FALSE;
+  aConfig->infiniteTMs = FALSE;
   aConfig->gen5Battles = FALSE;
   aConfig->gen5Screens = FALSE;
   aConfig->expShareAll = FALSE;
@@ -255,6 +259,7 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "HardLevelCap=%s\n", BoolToString(aConfig->hardLevelCap));
     fprintf(configFile, "RepelPrompt=%s\n", BoolToString(aConfig->repelPrompt));
     fprintf(configFile, "FollowerPokemon=%s\n", BoolToString(aConfig->followerPokemon));
+    fprintf(configFile, "InfiniteTMs=%s\n", BoolToString(aConfig->infiniteTMs));
     fprintf(configFile, "Gen5Screens=%s\n", BoolToString(aConfig->gen5Screens));
     fprintf(configFile, "Gen5Battles=%s\n", BoolToString(aConfig->gen5Battles));
     fprintf(configFile, "ExpShareAll=%s\n", BoolToString(aConfig->expShareAll));

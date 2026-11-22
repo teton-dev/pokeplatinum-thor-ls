@@ -98,8 +98,37 @@ public class PlatinumActivity extends SDLActivity {
         }
     }
 
+    /**
+     * The settings go over the bottom screen when the device has two (the top one keeps showing the game, so colour
+     * changes are seen as they are made), and over the game otherwise.
+     */
+    private void placeSettings(boolean show) {
+        if (nativeSettings == null) {
+            return;
+        }
+        if (show && secondaryScreen != null && secondaryScreen.hostOverlay(nativeSettings)) {
+            return;
+        }
+        ViewGroup content = findViewById(android.R.id.content);
+        if (nativeSettings.getParent() != content) {
+            if (nativeSettings.getParent() instanceof ViewGroup) {
+                ((ViewGroup) nativeSettings.getParent()).removeView(nativeSettings);
+            }
+            addContentView(nativeSettings, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+    }
+
+    /** The bottom screen's display went away with the settings on it: back over the game. */
+    void settingsOrphaned() {
+        if (nativeSettings != null && nativeSettings.getParent() == null) {
+            placeSettings(false);
+        }
+    }
+
     /** The settings' views are up: the game stays full screen behind them. */
     void nativeSettingsShown() {
+        placeSettings(true);
         keepImmersive();
         // The focus moving into the settings brings the navigation bar in: hidden again once it has
         getWindow().getDecorView().postDelayed(this::keepImmersive, 250);
@@ -107,6 +136,7 @@ public class PlatinumActivity extends SDLActivity {
 
     /** The settings' views are gone: the game's view takes the keys again, without a focus outline. */
     void nativeSettingsHidden() {
+        placeSettings(false);
         keepImmersive();
         if (mSurface != null) {
             mSurface.setDefaultFocusHighlightEnabled(false);

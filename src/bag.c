@@ -13,6 +13,10 @@
 #include "item.h"
 #include "savedata.h"
 
+#ifdef SDK_PORT
+#include "port/infinite_tm.h"
+#endif
+
 #define BAG_SLOT_INVALID ((u32)(-1))
 
 #define BAG_MAX_QUANTITY_ITEM 999
@@ -182,6 +186,12 @@ BOOL Bag_TryRemoveItem(Bag *bag, u16 item, u16 count, enum HeapID heapID)
     if (slot == NULL) {
         return FALSE;
     }
+
+#ifdef SDK_PORT
+    if (InfiniteTM_Applies(item)) {
+        return TRUE; // Settings > Gameplay > Infinite TM uses: the TM stays in the bag
+    }
+#endif
 
     slot->quantity -= count;
 

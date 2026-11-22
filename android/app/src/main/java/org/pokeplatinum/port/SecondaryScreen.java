@@ -15,6 +15,7 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -40,6 +41,14 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
         this.activity = activity;
         this.displayManager = (DisplayManager) activity.getSystemService(Context.DISPLAY_SERVICE);
         displayManager.registerDisplayListener(this, new Handler(Looper.getMainLooper()));
+    }
+
+    /**
+     * Puts a view (the settings) over the bottom screen, so that the top screen stays visible while it is used
+     * (a colour change shows at once). False when there is no second display.
+     */
+    boolean hostOverlay(View view) {
+        return presentation != null && presentation.hostOverlay(view);
     }
 
     void show() {
@@ -131,6 +140,10 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
     private void dismiss() {
         if (presentation != null) {
+            presentation.releaseOverlay();
+            if (activity instanceof PlatinumActivity) {
+                ((PlatinumActivity) activity).settingsOrphaned();
+            }
             try {
                 presentation.dismiss();
             } catch (RuntimeException ignored) {
@@ -162,9 +175,32 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
     private static final class ScreenPresentation extends Presentation {
         private int touchPointerId = -1;
+        private android.widget.FrameLayout frame;
+        private View overlay;
 
         ScreenPresentation(Context context, Display display) {
             super(context, display);
+        }
+
+        boolean hostOverlay(View view) {
+            if (frame == null) {
+                return false;
+            }
+            releaseOverlay();
+            if (view.getParent() instanceof ViewGroup) {
+                ((ViewGroup) view.getParent()).removeView(view);
+            }
+            frame.addView(view, new android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            overlay = view;
+            return true;
+        }
+
+        void releaseOverlay() {
+            if (overlay != null && frame != null) {
+                frame.removeView(overlay);
+            }
+            overlay = null;
         }
 
         @Override
@@ -198,7 +234,10 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                 }
             });
             surfaceView.setOnTouchListener(this::onTouch);
-            setContentView(surfaceView);
+            frame = new android.widget.FrameLayout(getContext());
+            frame.addView(surfaceView, new android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            setContentView(frame);
             hideSystemBars();
         }
 

@@ -1,0 +1,35 @@
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -1154,7 +1154,8 @@
+   glGenBuffers(1, &g2vertexBuffer);
+ 
+   glEnable(GL_BLEND);
+-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
++  // Colour as blended, alpha accumulated as coverage: the 3D layer is premultiplied (translucent pixels over an empty one are a*c, a), and the 2D compositor divides it out
++  glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+ 
+   SDL_GL_SwapWindow(window);
+ 
+@@ -1739,7 +1740,8 @@
+   glBindVertexArray(g3EdgeVertexArray);
+   glDrawArrays(GL_TRIANGLES, 0, 3);
+ 
+-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
++  // Colour as blended, alpha accumulated as coverage: the 3D layer is premultiplied (translucent pixels over an empty one are a*c, a), and the 2D compositor divides it out
++  glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+   glBindVertexArray(vertexArray);
+   glUseProgram(g3shaderProgramID);
+   if (cullFace) {
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -63,6 +63,10 @@
+     vec4 bgc[4];
+     if (bg0as3d != 0) {
+         bgc[0] = texture(bgTexture[0], vec2(fragTexCoord.s * tex3dScaleS, fragTexCoord.t));
++        // The 3D layer is premultiplied (translucent particles over an empty pixel)
++        if (bgc[0].a > 0.0) {
++            bgc[0].rgb = min(bgc[0].rgb / bgc[0].a, vec3(1.0));
++        }
+     } else {
+         bgc[0] = inside2d ? texture(bgTexture[0], c2d) : none;
+     }

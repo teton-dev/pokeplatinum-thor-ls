@@ -44,6 +44,9 @@ using namespace SIM::UI;
 
 void SaveEditor_Draw(); // gui_save_editor.cpp
 
+// Only this one: the hack's header needs the game's headers, which this file doesn't see
+extern "C" BOOL FollowingHack_IsActive(void);
+
 namespace {
 
 void SaveConfig()
@@ -80,7 +83,8 @@ const char *NuzlockeRules(int level)
                "area (the same species again if it got away), and nothing else there once you've caught it. Shiny "
                "Pokemon can always be caught.";
     case NUZLOCKE_HARD:
-        return "Normal's rules, and: the level cap is the next gym leader's weakest Pokemon's level, static "
+        return "Normal's rules, and: if the first Pokemon you meet in an area gets away, the area is failed and "
+               "nothing can be caught there, the level cap is the next gym leader's weakest Pokemon's level, static "
                "encounters (legendaries among them) count as the area's one, and there is no crit guard.";
     }
     return "";
@@ -231,7 +235,8 @@ void DrawGen5Rom()
         Note(Gen5Rom_Status());
     }
     const bool busy = state == GEN5_ROM_IMPORTING || SIM_Files_IsBusy() != FALSE;
-    if (Button(game == nullptr ? "Add Black 2 or White 2" : "Replace it",
+    if (game == nullptr
+        && Button("Add Black 2 or White 2",
             "Your own dump of Pokemon Black 2 or White 2 (USA), unpatched: the Gen 5 battles' graphics, sounds and "
             "data come from it. Its files are extracted once; the ROM isn't kept.",
             false, !busy)) {
@@ -640,29 +645,35 @@ void DrawClock()
 void DrawGameplay()
 {
     SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
-    Section("Speed");
-    ConfigToggle("Instant text", "Messages appear at once, up to where they wait for a button.",
-        &config->instantText);
-    ConfigToggle("Instant HP and EXP bars", "Battle bars jump to their new value instead of sliding there.",
-        &config->instantBars);
     Section("Field moves");
     ConfigToggle("Field moves without HMs", "With the HM in your bag (and its badge), Cut, Fly, Surf, Strength, "
         "Rock Smash, Waterfall, Rock Climb and Defog work without teaching the move: a Pokemon that could learn "
         "it does it. Fly and the others show in that Pokemon's menu.", &config->hmFree);
-    ConfigToggle("Field moves without badges", "Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb and "
-        "Defog work before you have the badge they need. A cheat: it can take you past the story's order.",
-        &config->hmNoBadges);
     Section("Items and EXP");
     ConfigToggle("Use another Repel?", "When a Repel wears off and the bag has another, the game asks whether to use "
         "one (as in Black and White): the same kind as last time, or the weakest you have.", &config->repelPrompt);
     ConfigToggle("Exp. Share for the whole party", "As in X and Y: the Pokemon that battled each get all the EXP, "
         "and the rest of the party (not fainted) half as much.", &config->expShareAll);
+    ConfigToggle("Infinite TM uses", "TMs are not used up when taught, and the shops don't buy them. The bag "
+        "doesn't show how many you have.", &config->infiniteTMs);
     Section("Following Pokemon");
-    ConfigToggle("Following Pokemon", "As in HeartGold and SoulSilver: your first Pokemon that can battle walks "
-        "behind you. It goes back in its ball on a bike, surfing and with a partner. Talk to it to hear its cry. "
-        "Species without an overworld sprite in Platinum walk as their party icon. Off in Following Renegade "
-        "Platinum, which has followers of its own.", &config->followerPokemon);
+    // Following Platinum (in Renegade Platinum or on its own) has followers of its own: this is off then
+    const bool hackFollowers = FollowingHack_IsActive() != FALSE;
+    BOOL followers = hackFollowers ? FALSE : config->followerPokemon;
+    if (hackFollowers) {
+        ConfigToggle("Following Pokemon", "Following Platinum is installed: its followers are used instead.",
+            &followers, false);
+    } else {
+        ConfigToggle("Following Pokemon", "As in HeartGold and SoulSilver: your first Pokemon that can battle walks "
+            "behind you. It goes back in its ball on a bike, surfing and with a partner. Talk to it to hear its cry. "
+            "Species without an overworld sprite in Platinum walk as their party icon.", &config->followerPokemon);
+    }
     DrawClock();
+    Section("Speed");
+    ConfigToggle("Instant text", "Messages appear at once, up to where they wait for a button.",
+        &config->instantText);
+    ConfigToggle("Instant HP and EXP bars", "Battle bars jump to their new value instead of sliding there.",
+        &config->instantBars);
 }
 
 // --- Battles: Gen 5 battles and their ROM ------------------------------------------------------
@@ -776,6 +787,11 @@ bool ConfigChoice(const char *label, const char *help, int *setting, const int *
 void DrawCheats()
 {
     SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+
+    Section("Field moves");
+    ConfigToggle("Field moves without badges", "Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb and "
+        "Defog work before you have the badge they need. It can take you past the story's order.",
+        &config->hmNoBadges);
 
     Section("Exploring");
     ConfigToggle("Walk through walls", nullptr, &config->walkThroughWalls);
