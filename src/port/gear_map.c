@@ -17,6 +17,7 @@
 #include "port/debug_field.h"
 
 #include "location.h"
+#include "map_header.h"
 #include "map_header_data.h"
 #include "map_matrix.h"
 #include "map_tile_behavior.h"
@@ -27,7 +28,7 @@
 #include "res/field/scripts/scr_seq.naix"
 
 // At most this many blocks across (a long route shows the part around the player)
-#define MAX_BLOCKS 12
+#define MAX_BLOCKS GEAR_MAP_MAX_BLOCKS
 
 static GearMap sMap;
 static u8 *sTiles = NULL;
@@ -264,6 +265,9 @@ static void BuildTiles(FieldSystem *fieldSystem, int playerX, int playerZ)
                 NARC_ReadFromMemberByIndexPair(block, NARC_INDEX_FIELDDATA__LAND_DATA__LAND_DATA, landDataID,
                     TERRAIN_ATTRIBUTES_OFFSET, TERRAIN_ATTRIBUTES_SIZE);
             }
+            sMap.blockLabels[(bz - z0) * (x1 - x0 + 1) + (bx - x0)] = valid
+                ? (u16)MapHeader_GetMapLabelTextID(matrix->data.mapHeaderIDs[bz * width + bx])
+                : GEAR_MAP_NO_LABEL;
             for (int t = 0; t < MAP_TILES_COUNT_X * MAP_TILES_COUNT_Z; t++) {
                 const int x = (bx - x0) * MAP_TILES_COUNT_X + t % MAP_TILES_COUNT_X;
                 const int z = (bz - z0) * MAP_TILES_COUNT_Z + t / MAP_TILES_COUNT_X;
@@ -370,6 +374,8 @@ static void BuildTiles(FieldSystem *fieldSystem, int playerX, int playerZ)
     sMap.areaZ1 = areaZ1;
     sMap.width = w;
     sMap.height = h;
+    sMap.blocksX = x1 - x0 + 1;
+    sMap.blocksZ = z1 - z0 + 1;
     sMap.tilesVersion++;
 }
 
@@ -456,6 +462,7 @@ const GearMap *Gear_GetMap(void)
     for (u32 i = 0; i < events->numWarpEvents && sMap.warpCount < GEAR_MAP_MAX_WARPS; i++) {
         sMap.warps[sMap.warpCount][0] = (s16)(events->warpEvents[i].x - sOriginX);
         sMap.warps[sMap.warpCount][1] = (s16)(events->warpEvents[i].z - sOriginZ);
+        sMap.warpLabels[sMap.warpCount] = (u16)MapHeader_GetMapLabelTextID(events->warpEvents[i].destHeaderID);
         sMap.warpCount++;
     }
     return &sMap;

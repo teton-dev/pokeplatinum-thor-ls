@@ -19,6 +19,9 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `turtwig.txt` | `before-starter` | Turtwig and Barry's battle, then home: keep it as the fixture `turtwig` | ~1 min |
 | `gen5_battle.txt` | `turtwig` | a wild battle in BW2's engine, as the debug entry starts it: Tackle, run away, back on the overworld (Gen 5 builds) | ~1 min |
 | `gen5_win.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig wins (a level 1 Pichu); its experience in the log goes up (Gen 5 builds) | ~1 min |
+| `gen5_hall_win.txt` | `full100` | a won Battle Hall battle in BW2's engine (a Wonder Guard Spiritomb made by the `ability`/`teach` commands wins by mashing A); the room menu has no RECORD entry | ~4 min |
+| `gen5_castle_win.txt` | `full100` | the same for the Battle Castle | ~6 min |
+| `gen5_arcade_win.txt` | `full100` | the same for the Battle Arcade (`TEST_LIMIT=1800`) | ~12 min |
 | `gen5_wild.txt` | `turtwig` | with *Gen 5 battles* on, a wild Bidoof met as in tall grass (the test command `wild`) runs in BW2's engine; run away (Gen 5 builds) | ~1 min |
 | `lake_grass.txt` | `turtwig` | to the tall grass at Lake Verity, through Cyrus's scene: keep it as the fixture `verity-grass` | ~2 min |
 | `gen5_grass.txt` | `verity-grass` | with *Gen 5 battles* on, back and forth in the tall grass until a wild Pokémon appears, in BW2's engine; run away (Gen 5 builds) | ~1 min |
@@ -30,6 +33,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `gen5_first_battle.txt` | `before-starter` | Barry's first battle (`FIRST_BATTLE`) in BW2's engine, to the end and the script after it (Gen 5 builds) | ~1 min |
 | `fly_snowpoint.txt`, `fly_jubilife.txt` | `full100` | Fly with Arceus (the `fly` command: the HM cut-in, then the landing) to Snowpoint City and Jubilife City | ~1 min |
 | `pc.txt` | `turtwig` | a Pokémon Center's PC (Sandgem Town): the box screen shows, then back to the overworld (the check is the shot) | ~30 s |
+| `party_rename.txt` | `turtwig` | RENAME in the party menu: the entry between ITEM and CANCEL, the naming screen with the current name, then the party menu with the new one (the shots, the log's `nickname 1`) | ~20 s |
 | `gen5_loss.txt` | `turtwig` | a wild battle in BW2's engine that Turtwig loses (a level 100 Charizard): the blackout, back home (Gen 5 builds) | ~1 min |
 | `new_game_girl.txt` | nothing | `new_game.txt` with a girl: keep it as `before-starter-girl`, then `turtwig.txt --from before-starter-girl --keep turtwig-girl` | ~20 s |
 | `gen5_galactic_arena.txt` | `turtwig` | with *Gen 5 battles* on, a Galactic Grunt (trainer 296) in BW2's engine in the Team Galactic arena: the Champion room with purple and blue streaks and sparkle stars (the check is the shot) (Gen 5 builds) | ~1 min |
@@ -56,6 +60,8 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `nuzlocke_items.txt` | `nuz-normal` | Rare Candy refused at the cap, a dead Pokémon refusing Potion and Revive (`use`), Hard's cap of 12, Roark's Potions taken, and the battle bag's HP/PP pocket empty in both engines (the log and the shots; Gen 5 builds) | ~2 min |
 | `nuzlocke_crit.txt` | `nuz-normal` | 24 Razor Leafs at a level 100 Metapod with the crit guard: the log's "a critical hit guarded" lines (chance: none in 24 turns is about 4%) | ~2 min |
 | `nuzlocke_crit_gen5.txt` | `nuz-normal` | the same in BW2's engine: the log's "Gen 5: a critical hit guarded" lines (Gen 5 builds) | ~2 min |
+| `nuzlocke_gear_hard.txt` | `nuz-normal` | the Gear's catch status (`Nuzlocke_AreaStatus`): available, then limited to Starly after a run-from, then failed with Hard (the `[test] gear catch status` lines) | ~1 min |
+| `nuzlocke_gear_view.txt` | `nuz-normal` | Jubilife City with a run-from Starly (Normal): the run ends by waiting, so the Gear's Area and Map tabs can be looked at in the lower window (see the script's header for the container commands) | ~1 min + waiting |
 | `nuzlocke_gray.txt` | `nuz-normal` | a dead Bidoof in gray, the others in color: the POKéMON list in Platinum's and BW2's battles, the party menu, Bidoof's summary (its picture, the moves page's icon), the PC (party panel, picture, box) (the shots; Gen 5 builds) | ~3 min |
 | `gen5_weather.txt` | `turtwig` | the weather in BW2's engine: Rain Dance's ability bar ("Rain: 4 turns remaining", blue, from the player's side) at each turn's end, and the rain staying on the arena through the command selection and after Tackle; run away frees it (the check is the shots; `learn` 241, 258, 201 for sun, hail, sand; Gen 5 builds) | ~2 min |
 | `gen5_weather_doubles.txt` | `turtwig` | the same in a double battle (Cheryl's, as written; the other two battles in the script's comment): the bar and the rain with Empoleon beside Turtwig (the check is the shots; Gen 5 builds) | ~3 min |

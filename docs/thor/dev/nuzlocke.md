@@ -27,7 +27,9 @@ its species. If that Pokémon fled, was run from or fainted, only that species m
 again. Once something is caught in an area, no ball can be thrown there again: in both engines the ball is knocked
 back as a trainer does it, with "You've already used your catch for this area!". **Shinies can always be caught.**
 
-**Hard** is Normal with the cap at the next gym leader's *weakest* Pokémon, and no crit guard.
+**Hard** is Normal with the cap at the next gym leader's *weakest* Pokémon, and no crit guard. Since 2026-11-21 its catch
+rule is also stricter: if the area's first Pokémon gets away, the area is **failed** and nothing can be caught there (Normal
+still allows that species again).
 
 ## What is already there
 
@@ -328,6 +330,34 @@ nothing. Now it shows the mode's:
 - **Test**: `nuzlocke_gear.txt` (from `nuz-normal`) logs what the Gear's API returns (`nuzlocke state` prints `gear`
   lines): a faint logged with its area and dead, a run-from Starly as the area's missed encounter. The other Nuzlocke
   tests pass with version 3 records. HGSS has no Gear, so its copy of the mode keeps version 2.
+
+## The Gear's catch status on the Area and Map tabs (2026-11-21)
+
+The Area tab says what the area's catch is, and the Map tab says it for any part of the map the player taps.
+- **One function decides, game side**: `NuzlockeMode_AreaStatus(location, &species)` (`nuzlocke_mode.c`, both games), from the
+  books and the level `NuzlockeMode_CatchAllowed` uses, so the display can't drift from what the ball does. It returns
+  `NONE` (Off, Simple, or no Poké Balls yet: the Gear shows nothing, as decided with the owner), `AVAILABLE` (nothing met yet,
+  or the first encounter is going on), `LIMITED` (Normal, it got away: only that species may be caught), `FAILED` (Hard, it
+  got away) and `CAUGHT`. port-common has `Nuzlocke_AreaStatus` (the `NUZLOCKE_CATCH_*` values) asking a weak
+  `PortGame_NuzlockeModeAreaStatus` that `nuzlocke_gear.c` answers.
+- **Colours** (port-common's `gear_ui.cpp`, `DrawCatchStatus`): green "Catch available", yellow "Limited to *Species*", red
+  "Catch failed", blue "Catch complete". The caught Pokémon's picture is in colour, a missed one's is grayed out.
+- **Pictures**: the Gen 5 sprite (BW2's `a/0/0/4`, `src/port/gen5_sprite.c`: the LZ11 NCGR made one 96x96 image as pokebw2's
+  `PokeGra_CellCharsToImage` does, 16 colours from the NCLR, shiny palette at +19; cropped to its pixels for drawing) when Gen 5
+  battles are on and a BW2 ROM is imported (`PortGame_GearGen5Sprites`), else the game's own front sprite.
+- **Map tab**: `GearMap` got `blockLabels` (each 32x32-tile block's location name ID) and `warpLabels` (where a warp leads),
+  filled by `gear_map.c` (and Goldenrod's new `lib/port/gear_map_hgss.c`). A tap that isn't on an item picks the block's
+  location (a warp tile: its destination's); the card under the map shows that area's status (the player's own to begin with)
+  and the area's blocks are outlined in the status colour. Locations are shared by maps with the same name (Route 30's two
+  maps, say), so they highlight together.
+- **Goldenrod's map** is new (it was an empty stub): terrain from the land data's attributes, a flood from the player, the
+  warps and the people for where one can walk, neighbouring maps dimmed. Items (balls, hidden items) aren't read yet.
+- **Tests**: `nuzlocke_gear_hard.txt` (the status lines: available, limited, then failed with Hard; the Gear's other tests
+  still pass), `nuzlocke_gear_view.txt` in both games (the run ends by waiting, so that the Gear's window can be looked at over
+  the container's display; the header says how).
+- **Not done**: tapping a place that isn't on the current map (the Gear's map is the current map and its neighbours, not a
+  world map); a place's status when the area has several maps with different names inside it (a cave's floors); Goldenrod's map
+  items; the Gen 5 sprite of a form (the species' is used).
 
 ## Decisions
 

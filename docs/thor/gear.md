@@ -97,6 +97,13 @@ Pokegear and Kanto Gear:
   map's events, what each ball's script gives) and the save's flags, so Renegade
   Platinum's moved and changed items show as they are. With *Discovery* on *Vanilla*,
   balls show as "An item" and hidden items stay hidden.
+* **Nuzlocke catches** (Nuzlocke mode on Normal or Hard, once you have Poké Balls): the Area tab and the Map tab say
+  what each area's catch is. Green **Catch available**: the first wild Pokémon you meet there counts. Yellow
+  **Limited to *Species***: it got away, and only that species may be caught there (Normal). Red **Catch failed**: it
+  got away on Hard, so nothing can be caught there. Blue **Catch complete**: you caught it. The Pokémon's picture shows
+  beside it, in colour when caught and grayed out when missed; it's the Gen 5 sprite when Gen 5 battles are on and a
+  Black 2 or White 2 ROM is imported. On the Map tab, tap a part of the map (a route, a town, a door) to see that
+  area's catch in the card under the map, with the area outlined in its colour; it starts on the area you're in.
 * **Pokétch** (once you have it): the Pokétch itself, bigger, on the whole lower panel.
   Tap its screen and its buttons as usual; the app's name is shown with it.
 * **PC**: the boxes as they are, one at a time with each Pokemon's level (shiny ones

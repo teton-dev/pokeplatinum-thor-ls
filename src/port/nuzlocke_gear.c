@@ -63,3 +63,19 @@ BOOL PortGame_NuzlockeModeCatchRule(void)
 {
     return NuzlockeMode_CatchRuleStarted();
 }
+
+int PortGame_NuzlockeModeAreaStatus(u16 location, u16 *species)
+{
+    switch (NuzlockeMode_AreaStatus(location, species)) {
+    case NUZLOCKE_STATUS_AVAILABLE:
+        return NUZLOCKE_CATCH_AVAILABLE;
+    case NUZLOCKE_STATUS_LIMITED:
+        return NUZLOCKE_CATCH_LIMITED;
+    case NUZLOCKE_STATUS_FAILED:
+        return NUZLOCKE_CATCH_FAILED;
+    case NUZLOCKE_STATUS_CAUGHT:
+        return NUZLOCKE_CATCH_CAUGHT;
+    default:
+        return NUZLOCKE_CATCH_NONE;
+    }
+}

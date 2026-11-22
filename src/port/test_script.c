@@ -1305,6 +1305,10 @@ static u16 Step(void)
                     Nuzlocke_Enabled() ? "shown" : "hidden", Nuzlocke_CatchRule() ? "on" : "off",
                     Nuzlocke_CurrentEncounter(), run->areaCount,
                     gearArea == NULL ? "open" : gearArea->result == NUZLOCKE_CAUGHT ? "caught" : "missed", run->deathCount);
+                u16 statusSpecies = 0;
+                static const char *const kStatus[] = { "none", "available", "limited", "failed", "caught" };
+                const int status = Nuzlocke_AreaStatus(location, &statusSpecies);
+                printf("[test] gear catch status: %s (species %u)\n", kStatus[status], statusSpecies);
                 for (int i = 0; i < run->deathCount; i++) {
                     printf("[test] gear death: %s, species %u, Lv %u, location %u, dead %d\n", run->deaths[i].name,
                         run->deaths[i].species, run->deaths[i].level, run->deaths[i].location,
