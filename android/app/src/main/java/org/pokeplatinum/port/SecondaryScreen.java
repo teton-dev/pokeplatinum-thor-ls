@@ -216,6 +216,24 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                         | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             }
 
+            // The panel's fastest mode of its size: the game waits on this display's vsync once a frame (the
+            // top screen's too), so at 60 Hz the two waits made 30 frames a second
+            Display shown = getDisplay();
+            if (window != null && shown != null) {
+                Display.Mode current = shown.getMode();
+                Display.Mode best = current;
+                for (Display.Mode mode : shown.getSupportedModes()) {
+                    if (mode.getPhysicalWidth() == current.getPhysicalWidth()
+                            && mode.getPhysicalHeight() == current.getPhysicalHeight()
+                            && mode.getRefreshRate() > best.getRefreshRate()) {
+                        best = mode;
+                    }
+                }
+                WindowManager.LayoutParams params = window.getAttributes();
+                params.preferredDisplayModeId = best.getModeId();
+                window.setAttributes(params);
+            }
+
             SurfaceView surfaceView = new SurfaceView(getContext());
             surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
                 @Override
