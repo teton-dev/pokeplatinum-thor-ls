@@ -84,6 +84,8 @@ public class NativeSettings extends FrameLayout {
     private final TextView pageTitle;
     private final TextView pageSummary;
     private final TextView backArrow;
+    /** A carts screen (renderScreen) is showing instead of a page. */
+    private boolean screenMode;
     private final ScrollView pageScroll;
     private final LinearLayout column;
 
@@ -176,7 +178,7 @@ public class NativeSettings extends FrameLayout {
         TextView close = text("✕", 22, TEXT_DIM, false);
         close.setGravity(Gravity.CENTER);
         close.setBackground(rowBackground(0x00000000, dp(24)));
-        close.setOnClickListener(v -> nativeEvent("close"));
+        close.setOnClickListener(v -> nativeEvent("close")); // in a carts screen libntr takes it as back
         header.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
         pane.addView(header);
 
@@ -251,6 +253,7 @@ public class NativeSettings extends FrameLayout {
         }
         open = false;
         capturing = false;
+        screenMode = false;
         animate().alpha(0f).setDuration(90).withEndAction(() -> {
             if (!open) {
                 setVisibility(GONE);
@@ -263,7 +266,58 @@ public class NativeSettings extends FrameLayout {
         return getWidth() == 0 || getWidth() >= dp(640);
     }
 
+    /**
+     * A whole screen that isn't a settings page (Add a game, the game picker, a version question: libntr's carts
+     * UI): its title and way back come with the items, and the page list is out of the way.
+     */
+    private void renderScreen(JSONObject next, JSONObject screen) throws JSONException {
+        state = next;
+        int newGen = next.getInt("gen");
+        capturing = false;
+        screenMode = true;
+        rail.setVisibility(GONE);
+        pane.setVisibility(VISIBLE);
+        backArrow.setVisibility(screen.optBoolean("back", true) ? VISIBLE : GONE);
+        pageTitle.setText(screen.optString("title"));
+        pageSummary.setVisibility(GONE);
+
+        JSONArray items = next.getJSONArray("items");
+        String newItemsKey = structure(items);
+        boolean newView = newGen != gen;
+        if (!newItemsKey.equals(itemsKey) || newView) {
+            long focused = focusedId();
+            buildItems(items);
+            itemsKey = newItemsKey;
+            if (newView) {
+                pageScroll.scrollTo(0, 0);
+                focusDefault(next.optLong("focus"));
+            } else if (focused != 0 && focusables.containsKey(focused)) {
+                focusables.get(focused).requestFocus();
+            }
+        } else {
+            for (int i = 0; i < binders.size(); i++) {
+                Binder binder = binders.get(i);
+                if (binder != null) {
+                    binder.bind(items.getJSONObject(i));
+                }
+            }
+        }
+        gen = newGen;
+    }
+
     private void render(JSONObject next) throws JSONException {
+        JSONObject screen = next.optJSONObject("screen");
+        if (screen != null) {
+            renderScreen(next, screen);
+            return;
+        }
+        if (screenMode) {
+            // Back to the settings' pages: everything is built again
+            screenMode = false;
+            itemsKey = "";
+            pagesKey = "";
+            gen = -1;
+        }
         state = next;
         JSONArray pages = next.getJSONArray("pages");
         int newPage = next.getInt("page");

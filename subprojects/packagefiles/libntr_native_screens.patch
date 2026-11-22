@@ -1,0 +1,239 @@
+--- a/include/simulator/sim_carts.h
++++ b/include/simulator/sim_carts.h
+@@ -135,6 +135,7 @@
+ BOOL SIM_Carts_PickerActive(void);
+ BOOL SIM_Carts_UIActive(void);  // the picker or the "Add a game" screen is up
+ void SIM_Carts_DrawUI(void);    // every frame, from the GUI
++BOOL SIM_Carts_DrawNativeUI(void); // the same in the platform's own views (Android): FALSE when they aren't in use
+ void SIM_Carts_Back(void);      // the settings key while they are up
+ 
+ #ifdef __cplusplus
+--- a/include/simulator/sim_settings.hpp
++++ b/include/simulator/sim_settings.hpp
+@@ -28,6 +28,11 @@
+ // view is hidden meanwhile, so its ImGui screen shows and takes the touches; the view comes back when the settings
+ // draw again (SIM::GUI::Main calls it every frame the carts UI is up)
+ void SuspendNative();
++// The carts UI in the platform's own views, over the settings or alone: draws the screen as a recording (draw is the
++// ImGui screen's own function) and sends it. FALSE when the platform's views aren't in use: draw it with ImGui then.
++bool NativeScreen(void (*draw)());
++// The carts UI is gone: its native screen is taken away, or the settings' page comes back in its place
++void NativeScreenEnded();
+ bool IsOpen();
+ void Draw(); // libntr internal: every frame while open
+ 
+--- a/include/simulator/sim_ui.hpp
++++ b/include/simulator/sim_ui.hpp
+@@ -105,6 +105,8 @@
+   std::string label;
+ };
+ void BeginNativeRecording(const NativeEvent *event, bool back);
++// After a recording: whether it was a whole screen (BeginScreen), with its title and whether it has a way back
++bool NativeScreenInfo(std::string *title, bool *backAllowed);
+ std::string EndNativeRecording(bool *eventUsed, bool *backUsed, unsigned *focusId, bool *focusRequest);
+ bool NativeRecording();
+ 
+--- a/libraries/sim/src/sim_carts.cpp
++++ b/libraries/sim/src/sim_carts.cpp
+@@ -2,6 +2,7 @@
+ #include <simulator/sim.h>
+ #include <simulator/sim_carts.h>
+ #include <simulator/sim_lifecycle.h>
++#include <simulator/sim_settings.hpp>
+ #include <simulator/sim_ui.hpp>
+ #include <simulator/simvariables.h>
+ 
+@@ -534,7 +535,9 @@
+ }
+ 
+ // The game picker and the "Add a game" screen
+-extern "C" void SIM_Carts_DrawUI(void) {
++namespace {
++
++void DrawActiveUI() {
+   if (AddOpen()) {
+     DrawAdd();
+   } else if (sPickerActive) {
+@@ -542,4 +545,15 @@
+   } else if (AskActive()) {
+     DrawAsk();
+   }
++}
++
++} // namespace
++
++extern "C" void SIM_Carts_DrawUI(void) {
++  DrawActiveUI();
+ }
++
++// Android: the same screens as the platform's own views (SIM::Settings::NativeScreen); FALSE when they aren't in use
++extern "C" BOOL SIM_Carts_DrawNativeUI(void) {
++  return SIM::Settings::NativeScreen(DrawActiveUI) ? TRUE : FALSE;
++}
+--- a/libraries/sim/src/sim_gui.cpp
++++ b/libraries/sim/src/sim_gui.cpp
+@@ -183,10 +183,13 @@
+     if (SIM_Carts_UIActive()) {
+         // The game picker, or adding a game; Android's settings view (when it was open, "Add a game" from Games) out
+         // of its way, or its ImGui screen stays hidden under it and the settings never hear another tap
+-        SIM::Settings::SuspendNative();
+-        SIM_Carts_DrawUI();
++        if (!SIM_Carts_DrawNativeUI()) {
++            SIM::Settings::SuspendNative();
++            SIM_Carts_DrawUI();
++        }
+         return;
+     }
++    SIM::Settings::NativeScreenEnded();
+     PrjOverlay();
+     if (!MenuActive()) {
+         PerfOverlay();
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -3,6 +3,7 @@
+ 
+ #include "simulator/config/sim_config.h"
+ #include "simulator/sim.h"
++#include "simulator/sim_carts.h"
+ #include "simulator/sim_display.h"
+ #include "simulator/sim_files.h"
+ #include "simulator/sim_gui.hpp"
+@@ -695,7 +696,89 @@
+     NativeHide();
+   }
+ }
++
++bool sNativeScreenOn = false; // a carts screen is showing in the platform's views
++
++bool NativeScreen(void (*draw)()) {
++  if (!sNativeScreenOn && !sNative && !NativeWanted()) {
++    return false;
++  }
++  sNativeScreenOn = true;
+ 
++  std::string text;
++  {
++    std::lock_guard<std::mutex> lock(sNativeLock);
++    if (!sNativeEvents.empty()) {
++      text = sNativeEvents.front();
++      sNativeEvents.pop_front();
++    }
++  }
++  SIM::UI::NativeEvent event;
++  bool hasEvent = false, back = false;
++  if (!text.empty()) {
++    sNativeUrgent = 3;
++    if (text == "back" || text == "close") {
++      back = true; // the view's X closes the screen as back does
++    } else if (text != "list" && text != "classic" && text.compare(0, 5, "page ") != 0) {
++      hasEvent = ParseNativeEvent(text, &event);
++    }
++  }
++
++  ImGui::SetNextWindowPos(ImVec2(-20000.0f, -20000.0f));
++  ImGui::SetNextWindowSize(ImVec2(640.0f, 480.0f));
++  ImGui::Begin("##native screen", nullptr,
++               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
++                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
++                   ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoBackground);
++  SIM::UI::BeginNativeRecording(hasEvent ? &event : nullptr, back);
++  draw();
++  bool eventUsed = false, backUsed = false, focusRequest = false;
++  unsigned focusId = 0;
++  const std::string items = SIM::UI::EndNativeRecording(&eventUsed, &backUsed, &focusId, &focusRequest);
++  ImGui::End();
++  if (!SIM_Carts_UIActive()) {
++    return true; // the screen finished itself: NativeScreenEnded follows
++  }
++  if (focusRequest) {
++    sNativeGen++;
++  }
++
++  std::string title;
++  bool backAllowed = false;
++  SIM::UI::NativeScreenInfo(&title, &backAllowed);
++  std::string escaped;
++  for (char c : title) {
++    escaped += c == '"' || c == '\\' ? std::string("\\") + c : std::string(1, c);
++  }
++  const std::string json = "{\"screen\":{\"title\":\"" + escaped + "\",\"back\":" + (backAllowed ? "true" : "false") +
++                           "},\"gen\":" + std::to_string(sNativeGen) + ",\"focus\":" + std::to_string(focusId) +
++                           ",\"items\":" + items + "}";
++  const Uint64 now = SDL_GetTicks64();
++  const bool urgent = sNativeUrgent > 0 || sNativeSent.empty();
++  if (sNativeUrgent > 0) {
++    sNativeUrgent--;
++  }
++  if (json != sNativeSent && (urgent || now - sNativeSentAt >= 250)) {
++    NativeSend(json);
++    sNativeSent = json;
++    sNativeSentAt = now;
++  }
++  return true;
++}
++
++void NativeScreenEnded() {
++  if (!sNativeScreenOn) {
++    return;
++  }
++  sNativeScreenOn = false;
++  sNativeSent.clear();
++  sNativeGen++;
++  sNativeUrgent = 3;
++  if (!sOpen || !sNative) {
++    NativeHide(); // it was alone: the view goes; with the settings open their page comes back through Draw()
++  }
++}
++
+ void Close() {
+   sOpen = false;
+   sNativeSuspended = false;
+--- a/libraries/sim/src/sim_ui.cpp
++++ b/libraries/sim/src/sim_ui.cpp
+@@ -166,6 +166,9 @@
+   unsigned focusId = 0;
+   bool focusRequest = false;
+   bool focusNext = false;
++  bool hasScreen = false;    // BeginScreen ran: a whole screen, not a settings page
++  std::string screenTitle;
++  bool screenBack = false;   // it has a way back
+   std::unordered_map<unsigned, int> seen;
+ };
+ Recorder sRec;
+@@ -300,6 +303,12 @@
+   return sRec.active;
+ }
+ 
++bool NativeScreenInfo(std::string *title, bool *backAllowed) {
++  *title = sRec.screenTitle;
++  *backAllowed = sRec.screenBack;
++  return sRec.hasScreen;
++}
++
+ float Scale() {
+   float scale = ImGui::GetIO().DisplaySize.y / 540.0f;
+   return scale < 1.0f ? 1.0f : scale;
+@@ -584,6 +593,13 @@
+ }
+ 
+ bool BeginScreen(const char *id, const char *title, const char *backLabel, float maxColumnWidth) {
++  if (sRec.active) {
++    // In the platform's own views the screen's frame is theirs: the title and the way back are sent along
++    sRec.hasScreen = true;
++    sRec.screenTitle = Shown(title);
++    sRec.screenBack = backLabel != nullptr;
++    return backLabel != nullptr && TakeBack();
++  }
+   BeginWindow(id);
+   ImGuiIO &io = ImGui::GetIO();
+   bool back = BeginPane("##pane", ImVec2(0, 0), io.DisplaySize, title, backLabel, maxColumnWidth);
+@@ -591,6 +607,9 @@
+ }
+ 
+ void EndScreen() {
++  if (sRec.active) {
++    return;
++  }
+   EndPane();
+   EndWindow();
+ }
