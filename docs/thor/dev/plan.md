@@ -50,7 +50,7 @@ enhanced graphics `enhanced-graphics.md`. The order is: Gen 5 battles (Platinum)
   `gen5_summary.txt`; the battle's shadows are fine with the same rule). Not found why: log `shadowAlpha`, the polygon IDs
   and the stencil in `G3SIM_DrawItems` for the Summary. The goal is BW2's faint shadow under the Pokémon.
 - **Eterna/Twinleaf signs** (2026-11-23): on the Duo the sign's lower plank covered the cap's top outline; the sprite depth
-  nudge went from 8 to 16 (`billboard.c`, Eterna 9100047): check it on the Duo.
+  nudge went from 8 to 16 (`billboard.c`, Eterna 9100047): confirmed on the Duo (Twinleaf's sign, 2026-11-23).
 
 ## The owner's decisions (2026-11-17)
 
