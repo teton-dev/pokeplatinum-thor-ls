@@ -31,6 +31,9 @@ typedef struct Billboard {
     const MtxFx33 *rotMatrix;
     void *callbackParam;
     BillboardCallback callback;
+#ifdef SDK_PORT
+    u8 castsShadow; // Enhanced graphics: a character sprite that casts a sun shadow (the map object has a shadow)
+#endif
     u8 draw;
     BillboardList *list;
     const BillboardAnim *anims;
@@ -134,5 +137,8 @@ NNSG3dResMdl *Billboard_GetModel2(Billboard *billboard);
 NNSG3dResTex *Billboard_GetTexture(Billboard *billboard);
 NNSG3dRenderObj *Billboard_GetRenderObj(Billboard *billboard);
 void Billboard_SetCallback(Billboard *billboard, BillboardCallback callback, void *callbackParam);
+#ifdef SDK_PORT
+void Billboard_SetCastsShadow(Billboard *billboard, BOOL casts);
+#endif
 
 #endif // POKEPLATINUM_BILLBOARD_H

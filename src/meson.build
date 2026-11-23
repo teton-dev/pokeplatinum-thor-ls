@@ -1038,6 +1038,8 @@ pokeplatinum_c += files(
     'port/hm_free.c',
     'port/infinite_tm.c',
     'port/widescreen.c',
+    'port/enhanced_graphics.c',
+    'port/camera_tilt.c',
     'port/gba_slot.c',
     'port/repel_prompt.c',
     'port/follower.c',

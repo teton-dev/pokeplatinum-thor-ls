@@ -75,6 +75,8 @@
 #ifdef SDK_PORT
 #include "constants/moves.h"
 #include "port/hm_free.h"
+#include "save_player.h"
+#include "trainer_info.h"
 #include "unk_02054884.h"
 #endif
 
@@ -1766,7 +1768,7 @@ static void sub_0207FFC8(PartyMenuApplication *application)
     u8 v1;
 
     Window_EraseMessageBox(&application->windows[32], 1);
-    v0 = Heap_Alloc(HEAP_ID_PARTY_MENU, 8);
+    v0 = Heap_Alloc(HEAP_ID_PARTY_MENU, 9); // port: 9, room for Rename
 
     switch (application->partyMenu->mode) {
     case PARTY_MENU_MODE_FIELD:
@@ -1869,6 +1871,15 @@ static u8 GetContextMenuEntriesForPartyMon(PartyMenuApplication *application, u8
             }
 
             count++;
+
+#ifdef SDK_PORT
+            // Rename, for the Pokemon the player caught (as the Name Rater allows)
+            TrainerInfo *trainerInfo = SaveData_GetTrainerInfo(application->partyMenu->fieldSystem->saveData);
+            if ((u32)Pokemon_GetValue(mon, MON_DATA_OT_ID, NULL) == TrainerInfo_ID(trainerInfo)) {
+                menuEntriesBuffer[count] = PARTY_MENU_ENTRY_RENAME;
+                count++;
+            }
+#endif
         } else {
             menuEntriesBuffer[count] = 0;
             count++;

@@ -1,0 +1,71 @@
+# Gen 5 screens: teaching a TM to a Pokemon with 4 moves (the move to forget is chosen in BW2's summary), from the
+# bag as the player does it. The check is the shots: the top and bottom screens must keep their places everywhere,
+# in the party after the summary and in the bag after the lesson. From the turtwig fixture:
+#
+#   tools/docker/desktop.sh test tests/scripts/gen5_tm_forget.txt --from turtwig
+gen5-import
+gen5-screens on
+mash A until free
+wait 30
+item 336 1
+teach 73 2
+teach 74 3
+press X
+wait 60
+press DOWN
+wait 30
+press A
+wait 200
+shot bag
+press RIGHT
+wait 30
+press RIGHT
+wait 30
+press RIGHT
+wait 60
+shot tms
+press A
+wait 60
+press A
+wait 250
+shot party
+press A
+wait 200
+shot s1
+press A
+wait 200
+shot s2
+press A
+wait 200
+shot s3
+press A
+wait 250
+shot s4
+press A
+wait 250
+shot s5
+press A
+wait 300
+shot t1
+press A
+wait 300
+shot t2
+press A
+wait 300
+shot t3
+press A
+wait 300
+shot t4
+press A
+wait 300
+shot t5
+press A
+wait 300
+shot t6
+press A
+wait 300
+shot t7
+press A
+wait 300
+shot t8
+exit 0

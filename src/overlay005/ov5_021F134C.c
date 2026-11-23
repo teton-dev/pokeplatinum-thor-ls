@@ -17,6 +17,7 @@
 
 #ifdef SDK_PORT
 #include "port/frame_rate.h"
+#include "port/enhanced_graphics.h"
 #endif
 
 typedef struct {
@@ -271,6 +272,14 @@ static void ov5_021F1604(OverworldAnimManager *param0, void *param1)
         return;
     }
 
+#ifdef SDK_PORT
+    // Enhanced graphics: the sun's shadow stands in for the blob (checked every frame, so dusk and map entry follow)
+    if (EnhancedGraphics_SunShadowsShown()) {
+        v0->unk_0C = 1;
+        return;
+    }
+#endif
+
     {
         VecFx32 v2;
 
@@ -342,6 +351,14 @@ static void ov5_021F1718(OverworldAnimManager *param0, void *param1)
         v0->unk_0C = 1;
         return;
     }
+
+#ifdef SDK_PORT
+    // Enhanced graphics: the sun's shadow stands in for the blob (checked every frame, so dusk and map entry follow)
+    if (EnhancedGraphics_SunShadowsShown()) {
+        v0->unk_0C = 1;
+        return;
+    }
+#endif
 
     {
         VecFx32 v2;

@@ -1,0 +1,222 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -130,6 +130,10 @@
+ // SIM_IsWidescreenActive(), the game widens its camera's projection by SIM_WidescreenRatio()
+ // (the 3D scene's width over the DS screen's). Both change only between frames.
+ void SIM_SetWidescreenScene(BOOL wide);
++// Enhanced graphics (Settings > Display), asked for every frame: the light the game wants over the 3D scene, from its
++// own clock and map. tintR/G/B: what the finished 3D frame is multiplied by, 0 to 255 (255: unchanged); vignette: how
++// dark the corners get, 0 to 255. All neutral (255, 255, 255, 0) draws nothing, and so does the setting off.
++void SIM_SetEnhancedScene(u8 tintR, u8 tintG, u8 tintB, u8 vignette);
+ // How a wide scene is made, asked for with SIM_SetWidescreenScene (every frame too).
+ // scale3D: the game leaves its projection 4:3 and libntr narrows the 3D instead, keeping
+ // its shapes and showing more at the sides (2D-positioned 3D sprites, say); the game's own
+--- a/include/simulator/sim_shaders.hpp
++++ b/include/simulator/sim_shaders.hpp
+@@ -10,6 +10,7 @@
+ extern const char * G3EdgeVertexShader;
+ extern const char * G3EdgeFragmentShader;
+ 
++extern const char * G3EnhancedFragmentShader;
+ extern const char * G2VertexShader;
+ extern const char * G2FragmentShader;
+ 
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -65,6 +65,7 @@
+     s8 colorVibrance;
+     s8 colorContrast;
+     s8 colorWhitePoint;
++    u8 enhancedGrading; /* Enhanced graphics: the time of day's light over the 3D scene (SIM_SetEnhancedScene) */
+     u8 edgeMarking; /* Draw the DS's 3D outlines (edge marking) where the game turns them on */
+     u32 windowWidth; /* Initial width of the window. If set to 0, will use the default width for the screen layout */
+     u32 windowHeight; /* Initial height of the window. If set to 0, will use default height for the screen layout */
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -77,6 +77,9 @@
+     if(MATCH("General", "ColorWhitePoint")) {
+         config->colorWhitePoint = (s8)atoi(value);
+     }
++    if(MATCH("General", "EnhancedGrading")) {
++        config->enhancedGrading = StringToBool(value);
++    }
+     if(MATCH("General", "EdgeMarking")) {
+         config->edgeMarking = StringToBool(value);
+     }
+@@ -475,6 +478,7 @@
+     aConfig->texturePacks = TRUE;
+     aConfig->dumpTextures = FALSE;
+     aConfig->edgeMarking = TRUE;
++    aConfig->enhancedGrading = FALSE;
+     aConfig->colorSaturation = 0;
+     aConfig->colorVibrance = 0;
+     aConfig->colorContrast = 0;
+@@ -573,6 +577,7 @@
+     fprintf(configFile, "TexturePacks=%s\n", BoolToString(aConfig->texturePacks));
+     fprintf(configFile, "DumpTextures=%s\n", BoolToString(aConfig->dumpTextures));
+     fprintf(configFile, "EdgeMarking=%s\n", BoolToString(aConfig->edgeMarking));
++    fprintf(configFile, "EnhancedGrading=%s\n", BoolToString(aConfig->enhancedGrading));
+     fprintf(configFile, "ColorSaturation=%d\n", aConfig->colorSaturation);
+     fprintf(configFile, "ColorVibrance=%d\n", aConfig->colorVibrance);
+     fprintf(configFile, "ColorContrast=%d\n", aConfig->colorContrast);
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -361,6 +361,7 @@
+ static GLuint g3EdgeFrameBuffer;
+ static GLuint g3EdgeProgramID;
+ static GLuint g3EdgeVertexArray;
++static GLuint g3EnhancedProgramID; // Enhanced graphics' grade (SIM_SetEnhancedScene), over the finished 3D frame
+ static GLuint g3EdgeSourceTextureId; // with anti-aliasing: the 3D viewport before the pass
+ static GLuint g3EdgeSourceFrameBuffer;
+ static const int kEdgeAttrTexUnit = 15;
+@@ -1150,6 +1151,14 @@
+     glProgramUniform1i(g3EdgeProgramID, glGetUniformLocation(g3EdgeProgramID, "attrTexture"), kEdgeAttrTexUnit);
+     glProgramUniform1i(g3EdgeProgramID, glGetUniformLocation(g3EdgeProgramID, "colorTexture"), kEdgeSourceTexUnit);
+     glGenVertexArrays(1, &g3EdgeVertexArray);
++
++    // Enhanced graphics' grade: the same triangle, a fragment shader of its own
++    GLuint gradeFragmentShader;
++    std::string gradeFragmentSrc = SIM::PrepareShaderSource(SIM::G3EnhancedFragmentShader);
++    const char *gradeFragmentSrcPtr = gradeFragmentSrc.c_str();
++    g3EnhancedProgramID = glCreateProgram();
++    CompileFragmentShader(gradeFragmentShader, gradeFragmentSrcPtr);
++    LinkShader(g3EnhancedProgramID, edgeVertexShader, gradeFragmentShader);
+   }
+ 
+   // Setup G2 Shader Program
+@@ -1781,6 +1790,75 @@
+   glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
+ }
+ 
++// Enhanced graphics: what the game last asked for (SIM_SetEnhancedScene)
++static u8 sEnhancedTint[3] = {255, 255, 255};
++static u8 sEnhancedVignette = 0;
++
++extern "C" void SIM_SetEnhancedScene(u8 tintR, u8 tintG, u8 tintB, u8 vignette) {
++  sEnhancedTint[0] = tintR;
++  sEnhancedTint[1] = tintG;
++  sEnhancedTint[2] = tintB;
++  sEnhancedVignette = vignette;
++}
++
++// The grade: the finished 3D frame multiplied by the scene's tint, corners darkened (g3_enhanced_fragment.glsl). One
++// pass of a single triangle that reads nothing, so it costs a blend per pixel. Once per frame drawn (a frame shown at
++// two vblanks isn't graded twice), after the edge marking, over the 3D viewport (the wide one too).
++static void G3EnhancedGrade() {
++  static u32 sLastDrawSerial = 0;
++  const u32 drawSerial = G3SIM_DrawSerial();
++  const bool drawn = drawSerial != sLastDrawSerial;
++  sLastDrawSerial = drawSerial;
++  const bool neutral = sEnhancedTint[0] == 255 && sEnhancedTint[1] == 255 && sEnhancedTint[2] == 255 &&
++                       sEnhancedVignette == 0;
++  if (!drawn || neutral || !s_SIM_config.enhancedGrading || sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0) {
++    return;
++  }
++  static GLint sLocTint = -2, sLocVignette, sLocRect;
++  if (sLocTint == -2) {
++    sLocTint = glGetUniformLocation(g3EnhancedProgramID, "tint");
++    sLocVignette = glGetUniformLocation(g3EnhancedProgramID, "vignette");
++    sLocRect = glGetUniformLocation(g3EnhancedProgramID, "viewportRect");
++  }
++  glProgramUniform3f(g3EnhancedProgramID, sLocTint, sEnhancedTint[0] / 255.0f, sEnhancedTint[1] / 255.0f,
++                     sEnhancedTint[2] / 255.0f);
++  glProgramUniform1f(g3EnhancedProgramID, sLocVignette, sEnhancedVignette / 255.0f);
++  glProgramUniform4f(g3EnhancedProgramID, sLocRect, (float)sG3Viewport[0], (float)sG3Viewport[1],
++                     (float)(sG3Viewport[0] + sG3Viewport[2]), (float)(sG3Viewport[1] + sG3Viewport[3]));
++
++  GLint viewport[4];
++  GLint vertexArray;
++  glGetIntegerv(GL_VIEWPORT, viewport);
++  glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
++  const GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
++  const GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
++
++  // The colour output alone: the second one holds the polygon IDs and depth, which this pass must not touch
++  static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glDrawBuffers(1, kBoth);
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glDisable(GL_DEPTH_TEST);
++  glDisable(GL_CULL_FACE);
++  // colour times what is there; alpha stays
++  glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
++  glUseProgram(g3EnhancedProgramID);
++  glBindVertexArray(g3EdgeVertexArray);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++
++  glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++  glBindVertexArray(vertexArray);
++  glUseProgram(g3shaderProgramID);
++  if (cullFace) {
++    glEnable(GL_CULL_FACE);
++  }
++  if (depthTest) {
++    glEnable(GL_DEPTH_TEST);
++  }
++  glDrawBuffers(sSamples == 0 ? 2 : 1, kBoth);
++  glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
++}
++
+ void *SIM_Render(void *arg) {
+ 
+   SDL_Event Event;
+@@ -1810,6 +1888,7 @@
+   G3SIM_DrawItems();
+ 
+   G3EdgeMarking();
++  G3EnhancedGrade();
+ 
+   GpuTimerEnd(); // the 3D scene's GPU time (started after the last frame)
+   GpuTimersCollect();
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -319,6 +319,13 @@
+     SaveConfig();
+   }
+ 
++  bool grading = config->enhancedGrading != 0;
++  if (Toggle("Time-of-day light", "Enhanced graphics: tints the 3D world with the light of the hour (warm mornings "
++             "and evenings, cool nights) and darkens the corners. Off: the colors the game draws.", &grading)) {
++    config->enhancedGrading = grading ? 1 : 0;
++    SaveConfig();
++  }
++
+ #ifdef SDK_BUILD_ANDROID
+   const char *secondLabel = "Bottom screen on the second display";
+   const char *secondHelp = "On dual-screen devices like the AYN Thor. Off puts both screens on this display.";
+--- a/libraries/sim/src/sim_shaders.cpp
++++ b/libraries/sim/src/sim_shaders.cpp
+@@ -24,6 +24,10 @@
+ #include "shaders/g3_edge_fragment.glsl"
+ ;
+ 
++const char * G3EnhancedFragmentShader =
++#include "shaders/g3_enhanced_fragment.glsl"
++;
++
+ const char * G2VertexShader =
+ #include "shaders/g2_vertex.glsl"
+ ;
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_enhanced_fragment.glsl
+@@ -0,0 +1,20 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' grade (SIM_SetEnhancedScene): the finished 3D frame is multiplied by the
++// scene's tint (the time of day's light) and darkened toward the corners by the vignette. It is
++// the blend that multiplies (colour * destination), so the shader reads nothing: one output per
++// pixel and no copy of the frame. The 3D layer is premultiplied, so scaling its colour is right
++// as it is; alpha is left alone (the blend keeps the destination's).
++uniform vec3 tint;
++uniform float vignette; // 0 to 1: how dark the corners get
++uniform vec4 viewportRect; // x0, y0, x1, y1 in framebuffer pixels
++out vec4 color;
++
++void main()
++{
++    vec2 uv = (gl_FragCoord.xy - viewportRect.xy) / (viewportRect.zw - viewportRect.xy) - 0.5;
++    float edge = dot(uv, uv) * 2.0; // 0 in the middle, 1 in the corners
++    color = vec4(tint * (1.0 - vignette * edge * edge), 1.0);
++}
++)""

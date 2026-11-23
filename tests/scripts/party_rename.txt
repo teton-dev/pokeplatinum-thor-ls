@@ -1,0 +1,60 @@
+# Rename in the party menu (port): the start menu's POKéMON, Turtwig's menu shows RENAME between ITEM and CANCEL
+# (the shot), the naming screen opens with "TURTWIG" to edit, its name erased and "AA" typed, then the party menu
+# again with the new name (the shot) and the log's "party" lines. From the turtwig fixture:
+#
+#   tools/docker/desktop.sh test tests/scripts/party_rename.txt --from turtwig
+mash A until free
+wait 30
+press X
+wait 30
+# POKéMON is the first entry without the Pokédex
+press A
+wait 120
+press A
+wait 60
+shot rename-menu
+press DOWN
+wait 4
+press DOWN
+wait 4
+press DOWN
+wait 4
+press A
+until naming timeout 600
+wait 120
+shot rename-naming
+press B
+wait 12
+press B
+wait 12
+press B
+wait 12
+press B
+wait 12
+press B
+wait 12
+press B
+wait 12
+press B
+wait 12
+press B
+wait 12
+press B
+wait 12
+press A
+wait 6
+press A
+wait 6
+shot rename-typed
+press START
+wait 10
+press A
+wait 300
+shot rename-party
+press B
+wait 120
+press B
+wait 60
+mash B until free timeout 600
+party
+exit 0

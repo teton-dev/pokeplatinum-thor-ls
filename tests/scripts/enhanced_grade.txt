@@ -1,0 +1,11 @@
+# Enhanced graphics' time-of-day light on the outdoor overworld (Route 201 (Lake Verity is a cave by its map type, so it gets no light)). The hour is fixed with
+# POKEPLATINUM_ENHANCED_HOUR; run it for several, and once without EnhancedGrading to compare (the check is the shots):
+#
+#   for h in 3 7.5 12 18 21; do POKEPLATINUM_ENHANCED_HOUR=$h TEST_CONFIG='EnhancedGrading=true' \
+#       tools/docker/desktop.sh test tests/scripts/enhanced_grade.txt --from turtwig; \
+#       cp ~/thor-dev/test-shots/enhanced_grade/grade.png /tmp/grade-$h.png; done
+mash A until free
+jump 342 114 854
+until free timeout 3000
+wait 30
+shot grade

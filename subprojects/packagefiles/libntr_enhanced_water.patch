@@ -1,0 +1,596 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -141,6 +141,12 @@
+ // 255 how dark (0: no shadows).
+ void SIM_SetSpriteShadow(BOOL casts);
+ void SIM_SetEnhancedSun(float shearX, float shearY, u8 strength);
++// Water reflections (Settings > Display > Water reflections): polygons submitted while SIM_SetPolygonTag(1) is set are not
++// drawn but make the water mask (the tiles the game says are water, against the scene's depth); the frame's water is
++// then drawn with the scene above its shore mirrored in it. SIM_SetEnhancedWater, every frame: strength 0 to 255 how
++// much shows at the shore (0: none, and nothing is done for the mask).
++void SIM_SetPolygonTag(u8 tag);
++void SIM_SetEnhancedWater(u8 strength);
+ // How a wide scene is made, asked for with SIM_SetWidescreenScene (every frame too).
+ // scale3D: the game leaves its projection 4:3 and libntr narrows the 3D instead, keeping
+ // its shapes and showing more at the sides (2D-positioned 3D sprites, say); the game's own
+--- a/include/simulator/sim_shaders.hpp
++++ b/include/simulator/sim_shaders.hpp
+@@ -11,6 +11,9 @@
+ extern const char * G3EdgeFragmentShader;
+ 
+ extern const char * G3EnhancedFragmentShader;
++extern const char * G3WaterMaskFragmentShader;
++extern const char * G3WaterMarchFragmentShader;
++extern const char * G3WaterApplyFragmentShader;
+ extern const char * G2VertexShader;
+ extern const char * G2FragmentShader;
+ 
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -65,6 +65,7 @@
+     s8 colorVibrance;
+     s8 colorContrast;
+     s8 colorWhitePoint;
++    u8 enhancedWater; /* Enhanced graphics: the scene mirrored in water (SIM_SetEnhancedWater) */
+     u8 enhancedShadows; /* Enhanced graphics: the sun's shadows of the overworld's sprites (SIM_SetEnhancedSun) */
+     u8 enhancedGrading; /* Enhanced graphics: the time of day's light over the 3D scene (SIM_SetEnhancedScene) */
+     u8 edgeMarking; /* Draw the DS's 3D outlines (edge marking) where the game turns them on */
+--- a/include/simulator/g3_draw.h
++++ b/include/simulator/g3_draw.h
+@@ -27,6 +27,10 @@
+ #endif
+ 
+ void G3SIM_AddVtx(G3SIM_Vertex_t * vtx);
++void G3SIM_AddMaskVtx(G3SIM_Vertex_t * vtx); // Enhanced graphics' water mask: polygons submitted under SIM_SetPolygonTag
++u32 G3SIM_MaskVertCount(void);
++u32 G3SIM_DrawMask(float *bounds); // draws them with the bound program; returns the vertex count, NDC bounds x0 y0 x1 y1; empties the mask
++void G3SIM_ClearMask(void);
+ void G3SIM_AddShadowVtx(G3SIM_Vertex_t * vtx); // a sprite's sun shadow, drawn with the batch's texture (Enhanced graphics)
+ void G3SIM_DrawArray();
+ void G3SIM_DrawCleanUp();
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -77,6 +77,9 @@
+     if(MATCH("General", "ColorWhitePoint")) {
+         config->colorWhitePoint = (s8)atoi(value);
+     }
++    if(MATCH("General", "EnhancedWater")) {
++        config->enhancedWater = StringToBool(value);
++    }
+     if(MATCH("General", "EnhancedShadows")) {
+         config->enhancedShadows = StringToBool(value);
+     }
+@@ -483,6 +486,7 @@
+     aConfig->edgeMarking = TRUE;
+     aConfig->enhancedGrading = FALSE;
+     aConfig->enhancedShadows = FALSE;
++    aConfig->enhancedWater = FALSE;
+     aConfig->colorSaturation = 0;
+     aConfig->colorVibrance = 0;
+     aConfig->colorContrast = 0;
+@@ -583,6 +587,7 @@
+     fprintf(configFile, "EdgeMarking=%s\n", BoolToString(aConfig->edgeMarking));
+     fprintf(configFile, "EnhancedGrading=%s\n", BoolToString(aConfig->enhancedGrading));
+     fprintf(configFile, "EnhancedShadows=%s\n", BoolToString(aConfig->enhancedShadows));
++    fprintf(configFile, "EnhancedWater=%s\n", BoolToString(aConfig->enhancedWater));
+     fprintf(configFile, "ColorSaturation=%d\n", aConfig->colorSaturation);
+     fprintf(configFile, "ColorVibrance=%d\n", aConfig->colorVibrance);
+     fprintf(configFile, "ColorContrast=%d\n", aConfig->colorContrast);
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -6,6 +6,7 @@
+ #endif
+ 
+ #include <string>
++#include <vector>
+ #define _POSIX_C_SOURCE 199309L
+ #include <pthread.h>
+ #include <SDL2/SDL.h>
+@@ -361,6 +362,12 @@
+ static GLuint g3EdgeFrameBuffer;
+ static GLuint g3EdgeProgramID;
+ static GLuint g3EdgeVertexArray;
++// Enhanced graphics' water (SIM_SetPolygonTag): the mask of the water tiles, how far up the screen each water pixel's
++// shore is (at the DS's resolution), and a copy of the frame to mirror from
++static GLuint g3WaterMaskProgramID, g3WaterMarchProgramID, g3WaterApplyProgramID;
++static GLuint g3WaterMaskTex, g3WaterMaskFbo, g3WaterOffsetTex, g3WaterOffsetFbo, g3WaterSceneTex, g3WaterSceneFbo;
++static int sWaterMaskW, sWaterMaskH, sWaterOffsetW, sWaterOffsetH, sWaterSceneW, sWaterSceneH;
++static u8 sEnhancedWaterStrength = 0;
+ static GLuint g3EnhancedProgramID; // Enhanced graphics' grade (SIM_SetEnhancedScene), over the finished 3D frame
+ static GLuint g3EdgeSourceTextureId; // with anti-aliasing: the 3D viewport before the pass
+ static GLuint g3EdgeSourceFrameBuffer;
+@@ -1159,6 +1166,27 @@
+     g3EnhancedProgramID = glCreateProgram();
+     CompileFragmentShader(gradeFragmentShader, gradeFragmentSrcPtr);
+     LinkShader(g3EnhancedProgramID, edgeVertexShader, gradeFragmentShader);
++
++    // Enhanced graphics' water: the mask (the 3D vertex shader, so the quads are placed as the scene's are), the march
++    // and the apply (the triangle over the viewport)
++    {
++      GLuint fragment;
++      std::string src = SIM::PrepareShaderSource(SIM::G3WaterMaskFragmentShader);
++      const char *ptr = src.c_str();
++      g3WaterMaskProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3WaterMaskProgramID, myVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3WaterMarchFragmentShader);
++      ptr = src.c_str();
++      g3WaterMarchProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3WaterMarchProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3WaterApplyFragmentShader);
++      ptr = src.c_str();
++      g3WaterApplyProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3WaterApplyProgramID, edgeVertexShader, fragment);
++    }
+   }
+ 
+   // Setup G2 Shader Program
+@@ -1790,6 +1818,216 @@
+   glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
+ }
+ 
++extern "C" void SIM_SetEnhancedWater(u8 strength) {
++  sEnhancedWaterStrength = strength;
++}
++
++static GLuint WaterTexture(GLint format, int width, int height, GLenum pixelFormat) {
++  GLuint id;
++  glGenTextures(1, &id);
++  glBindTexture(GL_TEXTURE_2D, id);
++  glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, pixelFormat, GL_UNSIGNED_BYTE, NULL);
++  // Never filtered: the art's pixels stay pixels
++  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++  return id;
++}
++
++// (Re)makes a water target whose size changed: the mask the size of the 3D framebuffer, sharing its depth; the shore
++// distances one texel per DS pixel; the copy of the 3D viewport
++static void WaterResources(int fbWidth, int fbHeight, int dsWidth, int dsHeight, int vpWidth, int vpHeight) {
++  if (g3WaterMaskFbo == 0) {
++    glGenFramebuffers(1, &g3WaterMaskFbo);
++    glGenFramebuffers(1, &g3WaterOffsetFbo);
++    glGenFramebuffers(1, &g3WaterSceneFbo);
++  }
++  if (sWaterMaskW != fbWidth || sWaterMaskH != fbHeight) {
++    sWaterMaskW = fbWidth;
++    sWaterMaskH = fbHeight;
++    if (g3WaterMaskTex != 0) {
++      glDeleteTextures(1, &g3WaterMaskTex);
++    }
++    g3WaterMaskTex = WaterTexture(GL_R8, fbWidth, fbHeight, GL_RED);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3WaterMaskFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3WaterMaskTex, 0);
++    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g3RenderBufferId);
++  }
++  if (sWaterOffsetW != dsWidth || sWaterOffsetH != dsHeight) {
++    sWaterOffsetW = dsWidth;
++    sWaterOffsetH = dsHeight;
++    if (g3WaterOffsetTex != 0) {
++      glDeleteTextures(1, &g3WaterOffsetTex);
++    }
++    g3WaterOffsetTex = WaterTexture(GL_R8, dsWidth, dsHeight, GL_RED);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3WaterOffsetFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3WaterOffsetTex, 0);
++  }
++  if (sWaterSceneW != vpWidth || sWaterSceneH != vpHeight) {
++    sWaterSceneW = vpWidth;
++    sWaterSceneH = vpHeight;
++    if (g3WaterSceneTex != 0) {
++      glDeleteTextures(1, &g3WaterSceneTex);
++    }
++    g3WaterSceneTex = WaterTexture(GL_RGBA8, vpWidth, vpHeight, GL_RGBA);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3WaterSceneFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3WaterSceneTex, 0);
++  }
++}
++
++// Enhanced graphics' water: the scene above the shore mirrored in the water tiles the game marked (SIM_SetPolygonTag).
++// Three cheap steps: the mask (a few quads against the scene's depth), each water pixel's distance to the shore at
++// the DS's resolution (a short march up the screen), and, at full resolution over the water's bounds only, the mirror
++// from a copy of the frame, in whole DS pixels so the art stays crisp at any resolution. Once per frame drawn; not
++// with anti-aliasing (the mask needs the depth buffer to be one sample per pixel).
++// Uniform locations never change once linked: found once, not by name every frame
++static GLint WaterUniform(GLuint program, const char *name) {
++  struct Cached { GLuint program; const char *name; GLint location; };
++  static Cached sCache[40];
++  static int sCount = 0;
++  for (int c = 0; c < sCount; c++) {
++    if (sCache[c].program == program && sCache[c].name == name) {
++      return sCache[c].location;
++    }
++  }
++  const GLint location = glGetUniformLocation(program, name);
++  if (sCount < 40) {
++    sCache[sCount++] = {program, name, location};
++  }
++  return location;
++}
++
++static void G3EnhancedWater() {
++  static u32 sLastDrawSerial = 0;
++  const u32 drawSerial = G3SIM_DrawSerial();
++  const bool drawn = drawSerial != sLastDrawSerial;
++  sLastDrawSerial = drawSerial;
++  if (!drawn || !s_SIM_config.enhancedWater || sEnhancedWaterStrength == 0 || sSamples != 0 || sG3Viewport[2] <= 0 ||
++      sG3Viewport[3] <= 0 || G3SIM_MaskVertCount() == 0) {
++    G3SIM_ClearMask();
++    return;
++  }
++  const int dsWidth = (sG3Viewport[2] + sScale - 1) / sScale, dsHeight = (sG3Viewport[3] + sScale - 1) / sScale;
++  WaterResources(sFboWidth * sScale, SIM_NDS_SCREEN_HEIGHT * 2 * sScale, dsWidth, dsHeight, sG3Viewport[2],
++                 sG3Viewport[3]);
++
++  GLint viewport[4];
++  GLint vertexArray, depthFunc;
++  glGetIntegerv(GL_VIEWPORT, viewport);
++  glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
++  glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
++  const GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
++  const GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
++  const GLboolean blend = glIsEnabled(GL_BLEND);
++  const float xScale = sWideScale3D ? (float)SIM_NDS_SCREEN_WIDTH / (float)sWide3dWidth : 1.0f;
++
++  // 1. The mask: the water quads, kept where the scene's depth lets them show
++  glBindFramebuffer(GL_FRAMEBUFFER, g3WaterMaskFbo);
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glEnable(GL_SCISSOR_TEST);
++  glScissor(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
++  glClear(GL_COLOR_BUFFER_BIT);
++  glDisable(GL_SCISSOR_TEST);
++  glDisable(GL_BLEND);
++  glDisable(GL_CULL_FACE);
++  glEnable(GL_DEPTH_TEST);
++  glDepthFunc(GL_LEQUAL);
++  glDepthMask(GL_FALSE);
++  glProgramUniform1f(g3WaterMaskProgramID, WaterUniform(g3WaterMaskProgramID, "xScale"), xScale);
++  glUseProgram(g3WaterMaskProgramID);
++  float bounds[4];
++  G3SIM_DrawMask(bounds);
++  glDepthMask(GL_TRUE);
++  glDepthFunc(depthFunc);
++  glDisable(GL_DEPTH_TEST);
++
++  // The water's bounds in framebuffer pixels (padded a DS pixel), for the full-resolution step
++  auto toPixelX = [&](float ndc) { return sG3Viewport[0] + (int)((ndc * xScale * 0.5f + 0.5f) * sG3Viewport[2]); };
++  auto toPixelY = [&](float ndc) { return sG3Viewport[1] + (int)((ndc * 0.5f + 0.5f) * sG3Viewport[3]); };
++  int x0 = toPixelX(bounds[0]) - sScale, y0 = toPixelY(bounds[1]) - sScale;
++  int x1 = toPixelX(bounds[2]) + sScale, y1 = toPixelY(bounds[3]) + sScale;
++  x0 = x0 < sG3Viewport[0] ? sG3Viewport[0] : x0;
++  y0 = y0 < sG3Viewport[1] ? sG3Viewport[1] : y0;
++  x1 = x1 > sG3Viewport[0] + sG3Viewport[2] ? sG3Viewport[0] + sG3Viewport[2] : x1;
++  y1 = y1 > sG3Viewport[1] + sG3Viewport[3] ? sG3Viewport[1] + sG3Viewport[3] : y1;
++
++  if (x1 > x0 && y1 > y0) {
++    // 2. The distance to the shore, one fragment per DS pixel
++    glBindFramebuffer(GL_FRAMEBUFFER, g3WaterOffsetFbo);
++    glViewport(0, 0, dsWidth, dsHeight);
++    glActiveTexture(GL_TEXTURE0 + 12);
++    glBindTexture(GL_TEXTURE_2D, g3WaterMaskTex);
++    glProgramUniform1i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "maskTexture"), 12);
++    glProgramUniform2i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "origin"), sG3Viewport[0],
++                       sG3Viewport[1]);
++    glProgramUniform1i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "pixelStep"), sScale);
++    glProgramUniform2i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "dsSize"), dsWidth, dsHeight);
++    glProgramUniform1i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "maxDistance"), 40);
++    glUseProgram(g3WaterMarchProgramID);
++    glBindVertexArray(g3EdgeVertexArray);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++
++    // 3. A copy of the frame to mirror from
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, g3FrameBuffer);
++    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g3WaterSceneFbo);
++    glBlitFramebuffer(sG3Viewport[0], sG3Viewport[1], sG3Viewport[0] + sG3Viewport[2], sG3Viewport[1] + sG3Viewport[3],
++                      0, 0, sG3Viewport[2], sG3Viewport[3], GL_COLOR_BUFFER_BIT, GL_NEAREST);
++
++    // 4. The mirror, over the water's bounds, into the 3D colour alone
++    static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++    glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++    glDrawBuffers(1, kBoth);
++    glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++    glEnable(GL_SCISSOR_TEST);
++    glScissor(x0, y0, x1 - x0, y1 - y0);
++    glActiveTexture(GL_TEXTURE0 + 12);
++    glBindTexture(GL_TEXTURE_2D, g3WaterOffsetTex);
++    glActiveTexture(GL_TEXTURE0 + 13);
++    glBindTexture(GL_TEXTURE_2D, g3WaterSceneTex);
++    glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "offsetTexture"), 12);
++    glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "sceneTexture"), 13);
++    glProgramUniform2i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "origin"), sG3Viewport[0],
++                       sG3Viewport[1]);
++    glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "pixelStep"), sScale);
++    glProgramUniform2i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "dsSize"), dsWidth, dsHeight);
++    glProgramUniform1f(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "strength"),
++                       (float)sEnhancedWaterStrength / 255.0f);
++    // Whole eighths of a second: the ripple steps, it doesn't glide
++    glProgramUniform1f(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "time"),
++                       (float)(SIM_NowNs() / 125000000ull) * 0.125f);
++    glProgramUniform3f(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "waterTint"), 0.15f, 0.3f,
++                       0.55f);
++    static const int sWaterDebug = (getenv("SIM_WATER_DEBUG") != nullptr && getenv("SIM_WATER_DEBUG")[0] != 0) ? atoi(getenv("SIM_WATER_DEBUG")) : 0;
++    glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "debugMask"), sWaterDebug);
++    glEnable(GL_BLEND);
++    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
++    glUseProgram(g3WaterApplyProgramID);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++    glDisable(GL_SCISSOR_TEST);
++    glDrawBuffers(2, kBoth);
++    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++  }
++
++  glActiveTexture(GL_TEXTURE0);
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glBindVertexArray(vertexArray);
++  glUseProgram(g3shaderProgramID);
++  if (cullFace) {
++    glEnable(GL_CULL_FACE);
++  }
++  if (depthTest) {
++    glEnable(GL_DEPTH_TEST);
++  }
++  if (!blend) {
++    glDisable(GL_BLEND);
++  } else {
++    glEnable(GL_BLEND);
++  }
++  glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
++}
++
+ // Enhanced graphics: what the game last asked for (SIM_SetEnhancedScene)
+ static u8 sEnhancedTint[3] = {255, 255, 255};
+ static u8 sEnhancedVignette = 0;
+@@ -1888,6 +2126,7 @@
+   G3SIM_DrawItems();
+ 
+   G3EdgeMarking();
++  G3EnhancedWater();
+   G3EnhancedGrade();
+ 
+   GpuTimerEnd(); // the 3D scene's GPU time (started after the last frame)
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -323,6 +323,14 @@
+   if (Toggle("Time-of-day light", "Enhanced graphics: tints the 3D world with the light of the hour (warm mornings "
+              "and evenings, cool nights) and darkens the corners. Off: the colors the game draws.", &grading)) {
+     config->enhancedGrading = grading ? 1 : 0;
++    SaveConfig();
++  }
++
++  bool water = config->enhancedWater != 0;
++  if (Toggle("Water reflections", "Enhanced graphics: lakes, the sea, rivers and puddles mirror the trees, buildings and "
++             "people along their shore. Needs 3D smoothing (anti-aliasing) off; use a higher 3D resolution instead.",
++             &water)) {
++    config->enhancedWater = water ? 1 : 0;
+     SaveConfig();
+   }
+ 
+--- a/libraries/sim/src/sim_shaders.cpp
++++ b/libraries/sim/src/sim_shaders.cpp
+@@ -28,6 +28,18 @@
+ #include "shaders/g3_enhanced_fragment.glsl"
+ ;
+ 
++const char * G3WaterMaskFragmentShader =
++#include "shaders/g3_water_mask_fragment.glsl"
++;
++
++const char * G3WaterMarchFragmentShader =
++#include "shaders/g3_water_march_fragment.glsl"
++;
++
++const char * G3WaterApplyFragmentShader =
++#include "shaders/g3_water_apply_fragment.glsl"
++;
++
+ const char * G2VertexShader =
+ #include "shaders/g2_vertex.glsl"
+ ;
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -172,6 +172,50 @@
+ static G3SIM_Vertex_t s_G3ShadowVerts[G3_SHADOW_MAX_VERTS];
+ static u32 s_G3ShadowCount = 0;
+ extern float s_G3ShadowAlpha;
++
++// Enhanced graphics' water mask: the polygons the game submits under SIM_SetPolygonTag, kept for the frame's water pass
++#define G3_MASK_MAX_VERTS 6000
++static G3SIM_Vertex_t s_G3MaskVerts[G3_MASK_MAX_VERTS];
++static u32 s_G3MaskCount = 0;
++
++void G3SIM_AddMaskVtx(G3SIM_Vertex_t * vtx)
++{
++	if(s_G3MaskCount < G3_MASK_MAX_VERTS) {
++		s_G3MaskVerts[s_G3MaskCount++] = *vtx;
++	}
++}
++
++u32 G3SIM_MaskVertCount(void)
++{
++	return s_G3MaskCount;
++}
++
++void G3SIM_ClearMask(void)
++{
++	s_G3MaskCount = 0;
++}
++
++u32 G3SIM_DrawMask(float *bounds)
++{
++	const u32 count = s_G3MaskCount;
++	s_G3MaskCount = 0;
++	if(count == 0) {
++		return 0;
++	}
++	bounds[0] = bounds[1] = 1e9f;
++	bounds[2] = bounds[3] = -1e9f;
++	for(u32 i = 0; i < count; i++) {
++		bounds[0] = s_G3MaskVerts[i].x < bounds[0] ? s_G3MaskVerts[i].x : bounds[0];
++		bounds[1] = s_G3MaskVerts[i].y < bounds[1] ? s_G3MaskVerts[i].y : bounds[1];
++		bounds[2] = s_G3MaskVerts[i].x > bounds[2] ? s_G3MaskVerts[i].x : bounds[2];
++		bounds[3] = s_G3MaskVerts[i].y > bounds[3] ? s_G3MaskVerts[i].y : bounds[3];
++	}
++	glBindVertexArray(s_G3DrawVertexArray);
++	glBindBuffer(GL_ARRAY_BUFFER, s_G3DrawVertexBuffer);
++	G3SIM_UploadVerts(s_G3MaskVerts, (int)count);
++	glDrawArrays(GL_TRIANGLES, 0, (GLsizei)count);
++	return count;
++}
+ 
+ void G3SIM_AddShadowVtx(G3SIM_Vertex_t * vtx)
+ {
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1614,6 +1614,14 @@
+ static bool s_spriteCasts = false;
+ static float s_sunShearX = 0.0f, s_sunShearY = 0.0f;
+ float s_G3ShadowAlpha = 0.0f; // 0: no shadows (setting off, night, indoors)
++
++// SIM_SetPolygonTag: 1, polygons submitted are not drawn but kept as the water mask (Enhanced graphics' reflections)
++static u8 s_polygonTag = 0;
++
++extern "C" void SIM_SetPolygonTag(u8 tag)
++{
++    s_polygonTag = tag;
++}
+ 
+ extern "C" void SIM_SetSpriteShadow(BOOL casts)
+ {
+@@ -1739,6 +1747,19 @@
+         polyVerts[i].w = (GLfloat)((double)vw / 4096.0);
+     }
+ 
++    // The water mask: kept for the water pass, a hair toward the camera so the surface it marks passes the depth test
++    if(s_polygonTag == 1) {
++        for(int i=0; i < numVerts; i++) {
++            polyVerts[i].z -= 0.0008f;
++        }
++        for(int i=1; i + 1 < numVerts; i++) {
++            G3SIM_AddMaskVtx(&polyVerts[0]);
++            G3SIM_AddMaskVtx(&polyVerts[i]);
++            G3SIM_AddMaskVtx(&polyVerts[i + 1]);
++        }
++        return;
++    }
++
+     // The clipped polygon is convex: a fan of triangles
+     for(int i=1; i + 1 < numVerts; i++) {
+         G3SIM_AddVtx(&polyVerts[0]);
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_water_mask_fragment.glsl
+@@ -0,0 +1,12 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' water mask (SIM_SetPolygonTag): the tiles the game says are water, drawn against the 3D scene's
++// depth so what stands in front of the water hides it. One value, written to a single-channel target.
++out vec4 color;
++
++void main()
++{
++    color = vec4(1.0);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_water_march_fragment.glsl
+@@ -0,0 +1,38 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' water, first pass, at the DS's own resolution (one fragment per DS pixel): for a water pixel, how
++// many DS pixels up the screen the shore is (the first pixel that isn't water), the mirror line of the reflection.
++// 0: not water, or no shore within reach. Stored times 4 (so up to 63 fits in a byte).
++uniform sampler2D maskTexture; // the mask, in framebuffer pixels
++uniform ivec2 origin;          // the 3D viewport's corner in the mask
++uniform int pixelStep;         // framebuffer pixels per DS pixel
++uniform ivec2 dsSize;          // the viewport in DS pixels
++uniform int maxDistance;
++out vec4 color;
++
++bool Water(ivec2 ds)
++{
++    return texelFetch(maskTexture, origin + ds * pixelStep + ivec2(pixelStep / 2), 0).r > 0.5;
++}
++
++void main()
++{
++    ivec2 ds = ivec2(gl_FragCoord.xy);
++    float result = 0.0;
++    if (Water(ds)) {
++        result = 1.0 / 255.0; // water with no shore in reach (distances are stored times 4, so 1 is below the least)
++        for (int i = 1; i <= maxDistance; i++) {
++            ivec2 up = ds + ivec2(0, i);
++            if (up.y >= dsSize.y) {
++                break;
++            }
++            if (!Water(up)) {
++                result = float(i * 4) / 255.0;
++                break;
++            }
++        }
++    }
++    color = vec4(result, 0.0, 0.0, 1.0);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_water_apply_fragment.glsl
+@@ -0,0 +1,55 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' water, second pass, at full resolution over the water's bounds: the scene above the shore,
++// mirrored about it, mixed into the water. The mirror is a whole number of DS pixels away (with a small sideways ripple
++// that moves in whole DS pixels too) and read texel for texel, never filtered, so the art keeps its pixels at any
++// resolution.
++uniform sampler2D offsetTexture; // the first pass's result, one texel per DS pixel
++uniform sampler2D sceneTexture;  // a copy of the 3D viewport, from its corner
++uniform ivec2 origin;            // the 3D viewport's corner in the framebuffer
++uniform int pixelStep;
++uniform ivec2 dsSize;
++uniform float strength;          // 0 to 1: how much of the reflection shows at the shore
++uniform float time;              // seconds, for the ripple
++uniform vec3 waterTint;
++uniform int debugMask;           // SIM_WATER_DEBUG: the mask and the shore distances drawn as colour
++out vec4 color;
++
++void main()
++{
++    if (debugMask == 2) {
++        color = vec4(0.0, 1.0, 0.0, 0.5);
++        return;
++    }
++    ivec2 local = ivec2(gl_FragCoord.xy) - origin;
++    ivec2 ds = local / pixelStep;
++    int raw = int(texelFetch(offsetTexture, ds, 0).r * 255.0 + 0.5);
++    int distanceToShore = raw / 4;
++    if (debugMask == 1 && raw > 0) {
++        color = distanceToShore == 0 ? vec4(0.0, 0.0, 1.0, 0.5) : vec4(1.0, 0.0, 0.0, 0.5);
++        return;
++    }
++    if (distanceToShore == 0) {
++        discard;
++    }
++    // The ripple: whole DS pixels, a row at a time
++    int ripple = int(floor(sin(time * 2.4 + float(ds.y) * 0.85) * 1.5 + 0.5));
++    ivec2 sourceDs = ivec2(ds.x + ripple, ds.y + 2 * distanceToShore);
++    if (sourceDs.x < 0 || sourceDs.x >= dsSize.x || sourceDs.y >= dsSize.y) {
++        discard;
++    }
++    // What is mirrored must not be water itself
++    if (texelFetch(offsetTexture, sourceDs, 0).r > 0.0) {
++        discard;
++    }
++    ivec2 source = local + ivec2(ripple, 2 * distanceToShore) * pixelStep;
++    vec4 scene = texelFetch(sceneTexture, source, 0);
++    if (scene.a < 0.5) {
++        discard;
++    }
++    float fade = 1.0 - float(distanceToShore) / 40.0;
++    float k = strength * clamp(fade, 0.0, 1.0);
++    color = vec4(mix(scene.rgb, waterTint, 0.25), k);
++}
++)""

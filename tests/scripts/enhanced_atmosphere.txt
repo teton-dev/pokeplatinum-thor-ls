@@ -1,0 +1,7 @@
+# Enhanced graphics atmosphere (haze, light shafts) and glow: Canalave City at the hour of POKEPLATINUM_ENHANCED_HOUR.
+# Run with TEST_CONFIG and TEST_CONFIG_PRJ set (see tests/README.md) and --from turtwig.
+mash A until free
+jump 33 50 730
+until free timeout 3000
+wait 60
+shot atmosphere

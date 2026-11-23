@@ -66,6 +66,9 @@ static void PartyMenu_SelectChooseWithLimit(PartyMenuApplication *application, i
 static void PartyMenu_PrintAllEligibilities(PartyMenuApplication *application, int *partyMenuState);
 static void PartyMenu_CleanupContextMenu2(PartyMenuApplication *application, int *partyMenuState);
 static void PartyMenu_SelectBallSeal(PartyMenuApplication *application, int *partyMenuState);
+#ifdef SDK_PORT
+static void PartyMenu_SelectRename(PartyMenuApplication *application, int *partyMenuState);
+#endif
 
 static enum PartyMenuState PartyMenuCB_TakeMail_Transfer(PartyMenuApplication *application);
 static enum PartyMenuState PartyMenuCB_TakeMail_PromptRemoval(PartyMenuApplication *application);
@@ -120,6 +123,9 @@ enum {
     ACTION_MILK_DRINK,
     ACTION_SOFTBOILED,
     ACTION_CANCEL_3,
+#ifdef SDK_PORT
+    ACTION_RENAME,
+#endif
 
     ACTION_MAX,
 };
@@ -158,7 +164,13 @@ static const union PartyMenuActionFunc sPartyMenuActions[ACTION_MAX] = {
     [ACTION_MILK_DRINK] =  PartyMenu_SelectMilkDrink,
     [ACTION_SOFTBOILED] =  PartyMenu_SelectSoftboiled,
     [ACTION_CANCEL_3] =    { .raw = MENU_CANCEL },
+#ifdef SDK_PORT
+    [ACTION_RENAME] =      PartyMenu_SelectRename,
+#endif
 };
+#ifdef SDK_PORT
+_Static_assert(ACTION_RENAME == PARTY_MENU_ENTRY_RENAME, "PARTY_MENU_ENTRY_RENAME must be ACTION_RENAME");
+#endif
 // clang-format on
 
 #ifdef SDK_BUILD_ARM
@@ -840,6 +852,19 @@ static void PartyMenu_CleanupContextMenu2(PartyMenuApplication *application, int
 
     *partyMenuState = PARTY_MENU_STATE_FADE_OUT;
 }
+
+#ifdef SDK_PORT
+// Rename (port): leave the party menu like Summary does; the start menu opens the naming screen and comes back
+static void PartyMenu_SelectRename(PartyMenuApplication *application, int *partyMenuState)
+{
+    application->partyMenu->menuSelectionResult = PARTY_MENU_EXIT_CODE_RENAME;
+
+    Menu_Free(application->contextMenu, NULL);
+    StringList_Free(application->contextMenuChoices);
+
+    *partyMenuState = PARTY_MENU_STATE_FADE_OUT;
+}
+#endif
 
 static void PartyMenu_SelectSummary(PartyMenuApplication *application, int *partyMenuState)
 {

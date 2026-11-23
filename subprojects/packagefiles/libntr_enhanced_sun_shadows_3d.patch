@@ -1,0 +1,513 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -140,6 +140,14 @@
+ // to the right), shearY its reach away from the camera (positive: up the screen, 0: flat on the spot), strength 0 to
+ // 255 how dark (0: no shadows).
+ void SIM_SetSpriteShadow(BOOL casts);
++// Sun shadows of the scene's 3D (trees, signs, houses, cliffs: anything in the depth buffer): every frame the game draws
++// its field map, before the 3D is drawn, the game's projection (m00, m11, m22, m32 of its matrix as floats) and the
++// direction toward the sun in view space (unit length). With SIM_SetEnhancedSun's strength above 0 and the setting on,
++// the depth buffer is marched toward the sun at the DS's resolution and the pixels in shadow darkened.
++void SIM_SetEnhancedShadowCamera(float m00, float m11, float m22, float m32, float sunX, float sunY, float sunZ);
++// While the game draws its land and buildings: the faint shadow polygons they carry (alpha 12 of 31 or less, untextured or
++// 4-colour) aren't drawn, as the sun's shadows take their place (only while SIM_SetEnhancedSun's strength is above 0)
++void SIM_SetHideBuiltInShadows(BOOL hide);
+ void SIM_SetEnhancedSun(float shearX, float shearY, u8 strength);
+ // Water reflections (Settings > Display > Water reflections): polygons submitted while SIM_SetPolygonTag(1) is set are not
+ // drawn but make the water mask (the tiles the game says are water, against the scene's depth); the frame's water is
+--- a/include/simulator/sim_shaders.hpp
++++ b/include/simulator/sim_shaders.hpp
+@@ -14,6 +14,9 @@
+ extern const char * G3WaterMaskFragmentShader;
+ extern const char * G3WaterMarchFragmentShader;
+ extern const char * G3WaterApplyFragmentShader;
++extern const char * G3SunShadowMarchFragmentShader;
++extern const char * G3SunShadowCleanFragmentShader;
++extern const char * G3SunShadowApplyFragmentShader;
+ extern const char * G2VertexShader;
+ extern const char * G2FragmentShader;
+ 
+--- a/libraries/sim/src/sim_shaders.cpp
++++ b/libraries/sim/src/sim_shaders.cpp
+@@ -40,6 +40,18 @@
+ #include "shaders/g3_water_apply_fragment.glsl"
+ ;
+ 
++const char * G3SunShadowMarchFragmentShader =
++#include "shaders/g3_sunshadow_march_fragment.glsl"
++;
++
++const char * G3SunShadowCleanFragmentShader =
++#include "shaders/g3_sunshadow_clean_fragment.glsl"
++;
++
++const char * G3SunShadowApplyFragmentShader =
++#include "shaders/g3_sunshadow_apply_fragment.glsl"
++;
++
+ const char * G2VertexShader =
+ #include "shaders/g2_vertex.glsl"
+ ;
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -368,6 +368,12 @@
+ static GLuint g3WaterMaskTex, g3WaterMaskFbo, g3WaterOffsetTex, g3WaterOffsetFbo, g3WaterSceneTex, g3WaterSceneFbo;
+ static int sWaterMaskW, sWaterMaskH, sWaterOffsetW, sWaterOffsetH, sWaterSceneW, sWaterSceneH;
+ static u8 sEnhancedWaterStrength = 0;
++// Enhanced graphics' sun shadows of the 3D: the march (at the DS's resolution) and the multiply
++static GLuint g3SunShadowMarchProgramID, g3SunShadowCleanProgramID, g3SunShadowApplyProgramID;
++static GLuint g3SunShadowTex, g3SunShadowFbo, g3SunShadowCleanTex, g3SunShadowCleanFbo;
++static int sSunShadowW, sSunShadowH;
++static float sSunCamera[7];
++static bool sSunCameraSet = false;
+ static GLuint g3EnhancedProgramID; // Enhanced graphics' grade (SIM_SetEnhancedScene), over the finished 3D frame
+ static GLuint g3EdgeSourceTextureId; // with anti-aliasing: the 3D viewport before the pass
+ static GLuint g3EdgeSourceFrameBuffer;
+@@ -1166,6 +1172,25 @@
+     g3EnhancedProgramID = glCreateProgram();
+     CompileFragmentShader(gradeFragmentShader, gradeFragmentSrcPtr);
+     LinkShader(g3EnhancedProgramID, edgeVertexShader, gradeFragmentShader);
++
++    {
++      GLuint fragment;
++      std::string src = SIM::PrepareShaderSource(SIM::G3SunShadowMarchFragmentShader);
++      const char *ptr = src.c_str();
++      g3SunShadowMarchProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3SunShadowMarchProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3SunShadowCleanFragmentShader);
++      ptr = src.c_str();
++      g3SunShadowCleanProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3SunShadowCleanProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3SunShadowApplyFragmentShader);
++      ptr = src.c_str();
++      g3SunShadowApplyProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3SunShadowApplyProgramID, edgeVertexShader, fragment);
++    }
+ 
+     // Enhanced graphics' water: the mask (the 3D vertex shader, so the quads are placed as the scene's are), the march
+     // and the apply (the triangle over the viewport)
+@@ -1873,7 +1898,149 @@
+     g3WaterSceneTex = WaterTexture(GL_RGBA8, vpWidth, vpHeight, GL_RGBA);
+     glBindFramebuffer(GL_FRAMEBUFFER, g3WaterSceneFbo);
+     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3WaterSceneTex, 0);
++  }
++}
++
++static GLint WaterUniform(GLuint program, const char *name);
++
++extern "C" void SIM_SetEnhancedShadowCamera(float m00, float m11, float m22, float m32, float sunX, float sunY, float sunZ) {
++  sSunCamera[0] = m00;
++  sSunCamera[1] = m11;
++  sSunCamera[2] = m22;
++  sSunCamera[3] = m32;
++  sSunCamera[4] = sunX;
++  sSunCamera[5] = sunY;
++  sSunCamera[6] = sunZ;
++  sSunCameraSet = true;
++}
++
++extern float s_G3ShadowAlpha;
++
++// Enhanced graphics' sun shadows of the scene's 3D: see g3_sunshadow_march_fragment.glsl. At the DS's resolution a
++// march toward the sun through the depth the 3D shader left in the attribute texture; then, at full resolution, a
++// multiply where it found shadow. Once per frame drawn; not with anti-aliasing (no attributes) or in a W-buffer scene.
++static void G3EnhancedSunShadow() {
++  static u32 sLastDrawSerial = 0;
++  const u32 drawSerial = G3SIM_DrawSerial();
++  const bool drawn = drawSerial != sLastDrawSerial;
++  sLastDrawSerial = drawSerial;
++  const bool cameraSet = sSunCameraSet;
++  if (drawn) {
++    sSunCameraSet = false; // the game says it again every frame it draws the field
++  }
++  if (!drawn || !cameraSet || !s_SIM_config.enhancedShadows || s_G3ShadowAlpha <= 0.0f || sSamples != 0 ||
++      s_SIM_useWBuffer || sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0) {
++    return;
++  }
++  const int dsWidth = (sG3Viewport[2] + sScale - 1) / sScale, dsHeight = (sG3Viewport[3] + sScale - 1) / sScale;
++  if (g3SunShadowFbo == 0) {
++    glGenFramebuffers(1, &g3SunShadowFbo);
++    glGenFramebuffers(1, &g3SunShadowCleanFbo);
++  }
++  if (sSunShadowW != dsWidth || sSunShadowH != dsHeight) {
++    sSunShadowW = dsWidth;
++    sSunShadowH = dsHeight;
++    if (g3SunShadowTex != 0) {
++      glDeleteTextures(1, &g3SunShadowTex);
++    }
++    g3SunShadowTex = WaterTexture(GL_RGBA8, dsWidth, dsHeight, GL_RGBA);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3SunShadowTex, 0);
++    if (g3SunShadowCleanTex != 0) {
++      glDeleteTextures(1, &g3SunShadowCleanTex);
++    }
++    g3SunShadowCleanTex = WaterTexture(GL_RGBA8, dsWidth, dsHeight, GL_RGBA);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowCleanFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3SunShadowCleanTex, 0);
++  }
++  static const int sDebug = (getenv("SIM_SUNSHADOW_DEBUG") != nullptr && getenv("SIM_SUNSHADOW_DEBUG")[0] != 0)
++                                ? atoi(getenv("SIM_SUNSHADOW_DEBUG")) : 0;
++  const float xScale = sWideScale3D ? (float)SIM_NDS_SCREEN_WIDTH / (float)sWide3dWidth : 1.0f;
++
++  GLint viewport[4];
++  GLint vertexArray;
++  glGetIntegerv(GL_VIEWPORT, viewport);
++  glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
++  const GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
++  const GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
++  const GLboolean blend = glIsEnabled(GL_BLEND);
++  glDisable(GL_DEPTH_TEST);
++  glDisable(GL_CULL_FACE);
++  glDisable(GL_BLEND);
++
++  // 1. The march, one fragment per DS pixel
++  glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowFbo);
++  glViewport(0, 0, dsWidth, dsHeight);
++  glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
++  glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
++  const GLuint march = g3SunShadowMarchProgramID;
++  glProgramUniform1i(march, WaterUniform(march, "attrTexture"), kEdgeAttrTexUnit);
++  glProgramUniform2i(march, WaterUniform(march, "origin"), sG3Viewport[0], sG3Viewport[1]);
++  glProgramUniform2i(march, WaterUniform(march, "viewportSize"), sG3Viewport[2], sG3Viewport[3]);
++  glProgramUniform1i(march, WaterUniform(march, "pixelStep"), sScale);
++  glProgramUniform2i(march, WaterUniform(march, "dsSize"), dsWidth, dsHeight);
++  glProgramUniform4f(march, WaterUniform(march, "projection"), sSunCamera[0], sSunCamera[1], sSunCamera[2], sSunCamera[3]);
++  glProgramUniform1f(march, WaterUniform(march, "xScale"), xScale);
++  glProgramUniform3f(march, WaterUniform(march, "toSun"), sSunCamera[4], sSunCamera[5], sSunCamera[6]);
++  // The first step a little off the surface; steps of 2 units (an eighth of a tile) up to about three tiles; things
++  // thicker than a tree stop counting
++  glProgramUniform3f(march, WaterUniform(march, "march"), 2.0f, 2.0f, 120.0f);
++  glProgramUniform1i(march, WaterUniform(march, "steps"), 40);
++  glUseProgram(march);
++  glBindVertexArray(g3EdgeVertexArray);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++
++  // 1b. Holes closed, specks dropped (the mask into its twin)
++  glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowCleanFbo);
++  glActiveTexture(GL_TEXTURE0 + 12);
++  glBindTexture(GL_TEXTURE_2D, g3SunShadowTex);
++  const GLuint clean = g3SunShadowCleanProgramID;
++  glProgramUniform1i(clean, WaterUniform(clean, "maskTexture"), 12);
++  glProgramUniform2i(clean, WaterUniform(clean, "dsSize"), dsWidth, dsHeight);
++  glUseProgram(clean);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++
++  // 2. The multiply, over the viewport, into the 3D colour alone
++  static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glDrawBuffers(1, kBoth);
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glActiveTexture(GL_TEXTURE0 + 12);
++  glBindTexture(GL_TEXTURE_2D, g3SunShadowCleanTex);
++  const GLuint apply = g3SunShadowApplyProgramID;
++  glProgramUniform1i(apply, WaterUniform(apply, "maskTexture"), 12);
++  glProgramUniform2i(apply, WaterUniform(apply, "origin"), sG3Viewport[0], sG3Viewport[1]);
++  glProgramUniform1i(apply, WaterUniform(apply, "pixelStep"), sScale);
++  // The same tone as the sprites' shadows: their dark colour at the sun's strength over what is there
++  const float a = s_G3ShadowAlpha;
++  glProgramUniform3f(apply, WaterUniform(apply, "tone"), 1.0f - a * (1.0f - 0.04f), 1.0f - a * (1.0f - 0.06f),
++                     1.0f - a * (1.0f - 0.14f));
++  glProgramUniform1i(apply, WaterUniform(apply, "debugMask"), sDebug);
++  glEnable(GL_BLEND);
++  if (sDebug == 0) {
++    glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
++  } else {
++    glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ONE);
+   }
++  glUseProgram(apply);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++  glDrawBuffers(2, kBoth);
++  glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++
++  glActiveTexture(GL_TEXTURE0);
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glBindVertexArray(vertexArray);
++  glUseProgram(g3shaderProgramID);
++  if (cullFace) {
++    glEnable(GL_CULL_FACE);
++  }
++  if (depthTest) {
++    glEnable(GL_DEPTH_TEST);
++  }
++  if (!blend) {
++    glDisable(GL_BLEND);
++  }
++  glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+ }
+ 
+ // Enhanced graphics' water: the scene above the shore mirrored in the water tiles the game marked (SIM_SetPolygonTag).
+@@ -2126,6 +2293,7 @@
+   G3SIM_DrawItems();
+ 
+   G3EdgeMarking();
++  G3EnhancedSunShadow();
+   G3EnhancedWater();
+   G3EnhancedGrade();
+ 
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -173,6 +173,8 @@
+ static G3SIM_ShadowQuad_t s_G3ShadowQuads[G3_SHADOW_MAX_QUADS];
+ static u32 s_G3ShadowCount = 0;
+ extern float s_G3ShadowAlpha;
++extern "C" int G3SIM_SpriteDrawing(void);
++extern "C" int G3SIM_HideBuiltInShadows(void);
+ 
+ // Enhanced graphics' water mask: the polygons the game submits under SIM_SetPolygonTag, kept for the frame's water pass
+ #define G3_MASK_MAX_VERTS 6000
+@@ -486,9 +488,18 @@
+ 	}
+ 
+ 
++
++	// Enhanced graphics' sun shadows replace the ones the game's land and building models carry: faint (alpha 12 of 31 or
++	// less), dark polygons with no texture or a 4-colour one (the shadow under a sign, a house's). The game says when
++	// the models being drawn are those and the sun's shadows are shown (SIM_SetHideBuiltInShadows)
++	const bool builtInShadow = G3SIM_HideBuiltInShadows() && s_curPolygonAttr.alpha < 0.41f
++	                           && (s_texImageParam.textureFormat == GX_TEXFMT_NONE
++	                               || s_texImageParam.textureFormat == GX_TEXFMT_PLTT4);
+ 
+ 	// If this is a translucent draw, save it for the end of the frame to render it last
+-	if(
++	if(builtInShadow) {
++		// not drawn
++	} else if(
+ 		( s_texImageParam.textureFormat == GX_TEXFMT_A3I5 
+ 	   || s_texImageParam.textureFormat == GX_TEXFMT_A5I3
+ 	   || s_curPolygonAttr.alpha < 0.99f )
+@@ -517,8 +528,9 @@
+ 		memcpy(item->verts, s_G3DrawVerts, sizeof(G3SIM_Vertex_t) * s_G3DrawCurVertIdx);
+ 
+ 		s_G3DrawItemListCount++;
+-	} else {
++	} else if(!builtInShadow) {
+ 		glProgramUniform1f(g3shaderProgramID, G3SIM_Uniform("polygonId"), (float)s_curPolygonAttr.polygonId);
++		glProgramUniform1f(g3shaderProgramID, G3SIM_Uniform("spriteFlag"), G3SIM_SpriteDrawing() ? 1.0f : 0.0f);
+ 		G3SIM_DrawArray();
+ 	}
+ 
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1625,9 +1625,30 @@
+ 
+ extern "C" void SIM_SetSpriteShadow(BOOL casts)
+ {
++    G3SIM_FlushArray(); // what was submitted so far is drawn as it was (the shadow flag, and the sprite flag, hold for a batch)
+     s_spriteCasts = casts != FALSE;
++}
++
++// Enhanced graphics' sun shadows of the scene's 3D: the sprites are marked in the attributes (they don't cast or receive
++// there), and the game's own faint shadow polygons are not drawn while it says its land and buildings are being drawn
++static bool s_hideBuiltInShadows = false;
++
++extern "C" void SIM_SetHideBuiltInShadows(BOOL hide)
++{
++    G3SIM_FlushArray();
++    s_hideBuiltInShadows = hide != FALSE;
++}
++
++extern "C" int G3SIM_SpriteDrawing(void)
++{
++    return s_spriteDepthBiasTop != 0;
+ }
+ 
++extern "C" int G3SIM_HideBuiltInShadows(void)
++{
++    return s_hideBuiltInShadows && s_G3ShadowAlpha > 0.0f;
++}
++
+ extern "C" void SIM_SetEnhancedSun(float shearX, float shearY, u8 strength)
+ {
+     s_sunShearX = shearX;
+@@ -1637,6 +1658,7 @@
+ 
+ extern "C" void SIM_SetSpriteDepthBias(fx32 top)
+ {
++    G3SIM_FlushArray(); // the sprite flag in the attributes holds for a whole batch
+     s_spriteDepthBiasTop = top;
+ }
+ 
+--- a/libraries/sim/src/shaders/g3_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_fragment.glsl
+@@ -17,6 +17,7 @@
+ // translucent one keeps them (on the DS translucent pixels don't change the opaque polygon ID
+ // either). Opaque is the DS's alpha 31, polygon times texel, as an A3I5 texel can make it.
+ uniform float polygonId;
++uniform float spriteFlag; // 1 while the overworld's sprites are drawn: bit 0 of attr.r, which the sun shadows read
+ // Enhanced graphics: a sprite's sun shadow is its own shape (the texture's alpha) in one dark colour, and leaves the
+ // edge marking's attributes alone
+ uniform int shadowMode;
+@@ -77,7 +78,7 @@
+ 
+     float depth16 = floor(clamp(gl_FragCoord.z, 0.0, 1.0) * 65535.0 + 0.5);
+     float depthHigh = floor(depth16 / 256.0);
+-    attr = vec4(polygonId * 4.0 / 255.0, depthHigh / 255.0, (depth16 - depthHigh * 256.0) / 255.0,
++    attr = vec4((polygonId * 4.0 + spriteFlag) / 255.0, depthHigh / 255.0, (depth16 - depthHigh * 256.0) / 255.0,
+                 shadedColor.a > 30.5 / 31.0 ? 1.0 : 0.0);
+     
+     if(useFog == 1) {
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_sunshadow_march_fragment.glsl
+@@ -0,0 +1,96 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' sun shadows of the scene's 3D (trees, signs, houses, cliffs), first pass, at the DS's own resolution
++// (one fragment per DS pixel, so the shadow keeps the pixel grid): from the pixel's place in the scene, rebuilt from the
++// depth the 3D shader left in the attribute texture, a short march toward the sun in view space; a pixel the ray meets
++// something nearer than itself on its way is in shadow. The sprites are in the depth buffer too but don't cast here
++// (they have shadows of their own, from their pictures) and don't receive.
++uniform sampler2D attrTexture; // polygon ID * 4 + 1 for a sprite in r, the depth's high and low bytes in g and b, a set where opaque
++uniform ivec2 origin;          // the 3D viewport's corner in the framebuffer
++uniform ivec2 viewportSize;    // in framebuffer pixels
++uniform int pixelStep;         // framebuffer pixels per DS pixel
++uniform ivec2 dsSize;
++uniform vec4 projection;       // the game's projection: m00, m11, m22, m32
++uniform float xScale;          // a wide scene libntr narrows
++uniform vec3 toSun;            // view space, unit length
++uniform vec3 march;            // distance to the first step, step length, thickness it still counts as in the way (view units)
++uniform int steps;
++out vec4 color;
++
++// 0: nothing opaque there (or a sprite); otherwise the view distance (positive) of the surface
++float Distance(ivec2 ds)
++{
++    ivec4 a = ivec4(texelFetch(attrTexture, origin + ds * pixelStep + ivec2(pixelStep / 2), 0) * 255.0 + 0.5);
++    if (a.a == 0 || (a.r & 1) == 1) {
++        return 0.0;
++    }
++    float ndcz = float(a.g * 256 + a.b) / 65535.0 * 2.0 - 1.0;
++    return projection.w / (ndcz + projection.z); // = -view z: z_view = -m32 / (ndcz + m22), and m32 and m22 are negative
++}
++
++// How wide the surface at ds is, in view units, along the ray's direction on the screen: the run of pixels around it that
++// are one continuous surface (neighbours within a couple of units of each other), up to 24 each way. A post is a few
++// pixels, a house dozens; a ray that passes behind a thing is only blocked by it if it is not much thinner than the
++// distance the ray is behind it (a post doesn't shade what is far behind it, a house does)
++float Extent(ivec2 ds, float distHere, ivec2 dir)
++{
++    int run = 1;
++    for (int side = 0; side < 2; side++) {
++        ivec2 at = ds;
++        float last = distHere;
++        for (int i = 0; i < 24; i++) {
++            at += side == 0 ? dir : -dir;
++            float d = Distance(at);
++            if (d <= 0.0 || abs(d - last) > 2.5) {
++                break;
++            }
++            last = d;
++            run++;
++        }
++    }
++    float pixelWorld = distHere * 2.0 / (projection.x * float(dsSize.x)) / xScale;
++    return float(run) * pixelWorld;
++}
++
++void main()
++{
++    ivec2 ds = ivec2(gl_FragCoord.xy);
++    float distanceHere = Distance(ds);
++    float shadow = 0.0;
++    if (distanceHere > 0.0) {
++        vec2 ndc = ((vec2(ds) + 0.5) / vec2(dsSize)) * 2.0 - 1.0;
++        // the view-space position: x = ndc.x * distance / m00 (the narrowed scene's x is stretched back first)
++        vec3 here = vec3(ndc.x / xScale * distanceHere / projection.x, ndc.y * distanceHere / projection.y, -distanceHere);
++        // The ray's direction on the screen, in whole pixels, for measuring what it passes behind
++        vec2 screenDirection = vec2(toSun.x * projection.x * xScale, toSun.y * projection.y);
++        screenDirection /= max(max(abs(screenDirection.x), abs(screenDirection.y)), 1e-4);
++        ivec2 rayStep = ivec2(round(screenDirection));
++        for (int i = 0; i < steps; i++) {
++            vec3 q = here + toSun * (march.x + march.y * float(i));
++            float qDistance = -q.z;
++            if (qDistance <= 0.1) {
++                break;
++            }
++            vec2 qNdc = vec2(q.x * projection.x * xScale / qDistance, q.y * projection.y / qDistance);
++            if (abs(qNdc.x) >= 1.0 || abs(qNdc.y) >= 1.0) {
++                break; // off the screen: nothing known
++            }
++            ivec2 qDs = ivec2((qNdc * 0.5 + 0.5) * vec2(dsSize));
++            float scene = Distance(qDs);
++            // something nearer than the ray's point, but not an arbitrarily thick wall of it
++            float behind = qDistance - scene;
++            if (scene > 0.0 && behind > 1.0 + 0.01 * qDistance && behind < march.z) {
++                // Close behind the surface: blocked. Farther behind: only if the thing is that wide (about as wide as
++                // the gap), so thin posts make thin shadows and walls and roofs keep theirs
++                if (behind < 4.0 || behind < 4.0 + Extent(qDs, scene, ivec2(1, 0))) {
++                    shadow = 1.0;
++                    break;
++                }
++            }
++        }
++    }
++    // b: 1 where nothing is shaded (a sprite, or nothing drawn): the clean-up pass leaves those alone
++    color = vec4(shadow, fract(distanceHere / 16.0), distanceHere > 0.0 ? 0.0 : 1.0, 1.0);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_sunshadow_clean_fragment.glsl
+@@ -0,0 +1,27 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' sun shadows of the 3D, between the march and the multiply, at the DS's resolution: the march's mask has
++// small holes (a ray that slips between two steps of a thin edge) and stray specks and dashes (a ray that grazes a surface).
++// A pixel stays in shadow when at least four of the nine around it (itself included) are, and a pixel not in shadow joins
++// it when at least six are: holes close and specks go, the shape of a shadow stays
++uniform sampler2D maskTexture;
++uniform ivec2 dsSize;
++out vec4 color;
++
++void main()
++{
++    ivec2 p = ivec2(gl_FragCoord.xy);
++    int count = 0;
++    for (int y = -1; y <= 1; y++) {
++        for (int x = -1; x <= 1; x++) {
++            ivec2 q = clamp(p + ivec2(x, y), ivec2(0), dsSize - 1);
++            count += texelFetch(maskTexture, q, 0).r > 0.5 ? 1 : 0;
++        }
++    }
++    bool here = texelFetch(maskTexture, p, 0).r > 0.5;
++    vec4 own = texelFetch(maskTexture, p, 0);
++    bool shadow = own.b < 0.5 && (here ? count >= 4 : count >= 6);
++    color = vec4(shadow ? 1.0 : 0.0, own.g, own.b, 1.0);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
+@@ -0,0 +1,30 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' sun shadows of the scene's 3D, second pass: at full resolution, the pixels the first pass found in shadow
++// are multiplied by the shadow's tone (the blend multiplies, so nothing is read from the frame). One texel of the mask is a
++// DS pixel, never filtered, so the shadow's edges are DS pixels.
++uniform sampler2D maskTexture;
++uniform ivec2 origin;
++uniform int pixelStep;
++uniform vec3 tone;  // the multiplier at the shadow's full strength
++uniform int debugMask; // SIM_SUNSHADOW_DEBUG: 1 paints the mask, 2 the distances as grey bands
++out vec4 color;
++
++void main()
++{
++    vec4 mask = texelFetch(maskTexture, (ivec2(gl_FragCoord.xy) - origin) / pixelStep, 0);
++    if (debugMask == 2) {
++        color = vec4(vec3(mask.g), 1.0);
++        return;
++    }
++    if (mask.r < 0.5) {
++        if (debugMask == 1) {
++            color = vec4(1.0);
++            return;
++        }
++        discard;
++    }
++    color = debugMask == 1 ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(tone, 1.0);
++}
++)""

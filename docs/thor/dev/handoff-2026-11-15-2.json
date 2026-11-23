@@ -1,0 +1,79 @@
+{
+  "schema": "session-handoff/1",
+  "written": "2026-11-15",
+  "follows": "docs/thor/dev/handoff-2026-11-15.json",
+  "summary": "Second 2026-11-15 session: the remaining gameplay in BW2's engine for Platinum and HGSS. Bug-Catching Contest, legendaries, roamers, Giratina, the nickname question, the Pokedex entry and PC line after a catch, obedience levels, Mom's line, the catching tutorial, Apricorn Ball colours. Everything is pushed and passes desktop (Docker) tests; nothing was built for or tried on the AYN Thor, and platinum-thor does not have it.",
+  "read_first": [
+    "~/pokeplatinum-thor-ls/CLAUDE.md",
+    "~/pokeplatinum-thor-ls/docs/thor/dev/gen5-battles.md (sections 'The rest of the battles, second pass' and 'After the catch, and the catching tutorial')",
+    "~/pokeplatinum-thor-ls/docs/thor/dev/hgss.md (section 'The Bug-Catching Contest, legendaries, roamers and the rest')",
+    "~/pokeplatinum-thor-ls/docs/thor/dev/handoff-2026-11-15.json (rules, workflows, device details still apply)",
+    "~/.claude/projects/-Users-trysten-pokeplatinum-thor-ls/memory/gen5-gameplay-pass.md"
+  ],
+  "rules": {
+    "commit_trailer": "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+    "no_session_links": "No Claude-Session lines or session links in commits or PR descriptions",
+    "never_commit": ["ROMs", "saves", "extracted game files", "anything from a BW2 or HGSS ROM (the Apricorn palettes and arenas are generated at run time into gen5_data/)"],
+    "pokebw2_untouched": "Never edit ../pokebw2; changes go in gen5/patches as diffs. Re-diff with the scratch a/ b/ copies, then check no '+' lines were lost (comm -23 of old and new '+' lines)",
+    "foreign_uncommitted_changes": "In the Platinum checkout, docs/thor/dev/gen5-battles.md (12 lines about the 3D layer's alpha), subprojects/libntr.wrap and subprojects/packagefiles/libntr_3d_premultiplied.patch belong to someone else; never commit them. To commit your own section of gen5-battles.md: build it on 'git show HEAD:...', git hash-object -w, git update-index --cacheinfo, then put the working-tree copy (with their hunks plus yours) back",
+    "upstream_prs": "None until the work is fully working and debugged"
+  },
+  "repositories": [
+    {"name": "pokeplatinum-thor-ls", "branch": "gen5-battles", "head": "7a0ead53c", "pushed": true},
+    {"name": "pokeplatinum-thor-ls", "branch": "platinum-thor", "head": "04da8e9cd", "pushed": true, "note": "Missing every gen5-battles commit after 7dd63ac9a; merge and push to build the Platinum APK in Actions"},
+    {"name": "pokeheartgold-thor-ls", "branch": "thor-android", "head": "a64b75fc0", "pushed": true, "note": "gen5 is a symlink to the Platinum checkout's gen5/ working tree"}
+  ],
+  "done_this_session": [
+    {"what": "Platinum trainers' mid-battle lines", "how": "TrainerToGen5Ex fills hintText from TRMSG_FIRST_DAMAGE..TRMSG_LAST_BATTLER_HALF_HP", "test": "gen5_trainer_lines (Platinum, --from full100)"},
+    {"what": "HGSS Bug-Catching Contest", "how": "Sport Balls are the bag's only item; catch to setup->bugContestMon (no naming); btl_server_flow_sub.c UseBagItem escapes when the last ball misses (Gen5Battle.bugContest)", "tests": ["gen5_contest_catch", "gen5_contest_out"], "commands": ["contest SPECIES LEVEL [BALLS]", "check contest-balls N", "check contest-mon SPECIES"]},
+    {"what": "Legendaries, roamers, Giratina", "how": "BW2 legendary and roaming flags; the runtime reads wild Pokemon back; roamer HP and status go to the DTO/setup; Distortion flag or TERRAIN_GIRATINA gives arena 11", "tests": ["gen5_legendary", "gen5_giratina", "gen5_roamer (both games)"], "commands": ["legendary", "giratina (Platinum)", "roamer"]},
+    {"what": "Nickname question after a catch", "how": "btl_client.c ScBallThrow seq 5-8 asks with BW2's YES/NO (BTLV_STR_YES_NO 0, 1); Gen5Battle.askNickname, nicknameWanted", "test": "gen5_nickname (both)"},
+    {"what": "Obedience levels", "how": "Gen5Battle.obeyLevel into patched ServerControl_CheckObedience: Platinum 10/30/50/70, all from obeyAllBadges (Renegade: all); HGSS 10/20/30, 50 Fog, 70 Storm, all at 8"},
+    {"what": "Boxes full", "how": "BW2's BTL_SETUP_FLAG_BOXES_FULL: no ball can be thrown"},
+    {"what": "HGSS Mom's line", "how": "btlv_core.c BtlvCore_PortStartMsgPrize appends 'Sent some to Mom!' (Gen5Battle.momSavings)", "test": "gen5_mom_savings (log line only, no screenshot)"},
+    {"what": "Pokedex entry after a new catch", "how": "src/port/gen5_dex_entry.c (Platinum, ov21_021E8D48) and lib/port/gen5_dex_entry.c (HGSS, PokedexEntryPopup_Create) set up the display the battle would give, the font, and reset the master brightness", "test": "gen5_nickname, gen5_catch"},
+    {"what": "BW2's Pokedex knows the species caught", "how": "Gen5Battle.dexCaught copied into BW2's PokeDexSave caught bits"},
+    {"what": "PC line for a declined nickname with a full party", "how": "Gen5Battle.pcText made from the game's battle messages 1174-1177 with box names; shown after the answer; Platinum naming screen battleMsgID on Yes", "test": "gen5_pc_message (both)"},
+    {"what": "Catching tutorial", "how": "BW2's capture demo (BTL_TYPE_CAPTURE_DEMO) with the counterpart, the Pokemon's first moves and the game's two lines (Gen5Battle.captureDemo, demoText; btlv_core.c CmdCaptureDemo)", "test": "gen5_tutorial (both)", "command": "tutorial"},
+    {"what": "Apricorn Balls on the ground", "how": "HGSS gen5_rocket.c appends 8 palettes to a copy of BW2 archive 94 (members 267-274, the ball's main colour from HGSS a/0/0/8); btlv_effvm.c uses them with the Poke Ball frames (Gen5_SetApricornBallSprites)", "test": "gen5_apricorn"},
+    {"what": "Test fixes", "how": "HGSS give used OT ID 0 (BW2 disobedience; the trainer tests were losing while passing); gen5_safari_catch throws until caught; Safari catches name again"}
+  ],
+  "verification": {
+    "platinum_tests_passing": ["gen5_trainer", "gen5_trainer_lines (full100)", "gen5_catch", "gen5_wild", "gen5_nickname", "gen5_legendary", "gen5_giratina", "gen5_roamer", "gen5_pc_message", "gen5_tutorial", "gen5_safari_catch", "gen5_keep_moves", "gen5_weather_doubles", "nuzlocke_gen5 (nuz-normal)", "first_battle (before-starter)"],
+    "hgss_tests_passing": ["gen5_contest_catch", "gen5_contest_out", "gen5_legendary", "gen5_roamer", "gen5_nickname", "gen5_pc_message", "gen5_tutorial", "gen5_catch", "gen5_apricorn", "gen5_safari_catch (TEST_ENV seed 3)", "gen5_trainer", "gen5_trainer_lines", "gen5_mom_savings", "gen5_wild (flaky: BW2 escape can fail and the test stalls at Mom's blackout line)", "gen5_wild_loss", "gen5_evolution", "debug_window"],
+    "not_verified": [
+      "Anything on the Thor (no APK built this session)",
+      "A whole Bug-Catching Contest from the National Park gate (tests start it where the player stands)",
+      "Real roamers from the save (tests use a roamer-type battle; Roamer*_UpdateAfterBattle's write was only checked in the log)",
+      "Widescreen look of the Pokedex entry screens (drawn 4:3)",
+      "The Mom line on screen (log only)",
+      "A real legendary script's result handling (Uxie at Lake Acuity, Lugia, etc.)"
+    ]
+  },
+  "next_steps": [
+    {"priority": 1, "item": "Build and install on the Thor", "how": "Platinum: merge gen5-battles into platinum-thor (do not commit the foreign files), push, gh run download the pokeplatinum-android artifact, adb install -r. HGSS: tools/docker/desktop.sh apk in ~/pokeheartgold-thor-ls, adb install -r. Ask the owner for the adb 'IP address & Port'. Then play: a catch of a new species (Pokedex entry, nickname question), a full-party catch, a contest at the National Park, a trainer battle with a traded Pokemon (obedience)."},
+    {"priority": 2, "item": "Widescreen for the post-battle screens", "how": "The Pokedex entry (both games), the naming screen and HGSS's contest swap screen show 4:3 after a widescreen battle; check how other 4:3 screens are framed on the Thor (src/port/widescreen.c, SIM_SetWidescreen*) and give them the same bezel or edge extension"},
+    {"priority": 3, "item": "Pal Park (Platinum, BATTLE_TYPE_PAL_PARK)", "how": "Like the Safari Zone's view-only battle (gen5/src/safari.c) but Park Balls always catch and there is no bait or rock; check first whether Pal Park is reachable at all on the port (it needs a GBA cartridge's Pokemon)"},
+    {"priority": 4, "item": "Battle Frontier (both games)", "how": "BATTLE_TYPE_FRONTIER battles stay in the native engines; BW2 has BTL_TYPE_FACILITY (its Subway) with level scaling and no items/exp. Large: start with the Battle Tower singles"},
+    {"priority": 5, "item": "Apricorn Ball art on the ground", "how": "Now one colour each on BW2's Poke Ball frames (Level comes out tan). Better: take each ball's colours from BW2's own particle textures (they have true art for all 25 balls), or redraw frames"},
+    {"priority": 6, "item": "Order of the post-catch screens", "how": "Platinum and HGSS show the Pokedex entry before the nickname question; here the question (in BW2's battle) comes first. Moving the question after the entry would need the question outside BW2 (a field-style yes/no after the battle)"},
+    {"priority": 7, "item": "NO_RUNNING wild battles (Platinum)", "how": "Never set by Platinum's C code; check the scripts before deciding whether to accept them"},
+    {"priority": 8, "item": "Test robustness", "how": "Make trainer and wild tests fail on a lost battle (check the log's BW2 result or add a test check command), and make gen5_wild handle a failed escape"}
+  ],
+  "workflows": {
+    "platinum_build_test": "cd ~/pokeplatinum-thor-ls && tools/docker/desktop.sh build && tools/docker/desktop.sh test tests/scripts/NAME.txt --from turtwig",
+    "hgss_build_test": "cd ~/pokeheartgold-thor-ls && tools/docker/desktop.sh build && tools/docker/desktop.sh test tests/scripts/NAME.txt --from new-game",
+    "crash_backtrace": "A crash's functions and lines are in ~/thor-dev/test-shots/[hg/]NAME/crash.txt",
+    "results": "Logs and shots in ~/thor-dev/test-shots/NAME (Platinum) or ~/thor-dev/test-shots/hg/NAME (HGSS)"
+  },
+  "gotchas": [
+    "HGSS CreateMon with OT_ID_PLAYER_ID gives OT ID 0: use OT_ID_PRESET with the player's ID",
+    "A test that doesn't check the result passes a lost battle: grep the log for 'battle ended (BW2's result N' (1 won, 0 lost, 3/4 ran, 5 caught)",
+    "BW2's battle leaves the master brightness faded out: reset it before showing a game screen after the battle",
+    "Game screens run outside their battle need the battle's font (Platinum FONT_SUBSCREEN, HGSS FontID 4)",
+    "BW2's yes/no and move menus: the first pad press only shows the cursor; tests touch YES at (128, 55)",
+    "BtlvEffect_CalcGaugeHP takes the HP left, not the damage",
+    "BW2's thrown and opening balls are particles with art for all 25 balls; archive 94's sprite pairs are only the ball on the ground",
+    "gen5_data/ archives are regenerated when ROCKET_VERSION (HGSS) or GALACTIC_VERSION (Platinum) changes"
+  ]
+}

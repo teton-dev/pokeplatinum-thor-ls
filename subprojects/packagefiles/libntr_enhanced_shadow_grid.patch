@@ -1,0 +1,339 @@
+--- a/include/simulator/sim_g3_Texture.hpp
++++ b/include/simulator/sim_g3_Texture.hpp
+@@ -3,6 +3,8 @@
+ 
+ #include <nitro/types.h>
+ 
++#include <vector>
++
+ namespace SIM::G3 {
+ 
+ class Texture {
+@@ -12,9 +14,14 @@
+ 
+   void Activate();
+   inline unsigned int GetTextureID() {return mGlTextureId;};
++  // Enhanced graphics' sun shadows: of a sprite drawn from the texture's rectangle (s0 + ds * u across, tb + dt * v up the
++  // sprite, 0 to 1), how far up the sprite its lowest opaque row is, 0 to 1 (0: it reaches the bottom, or unknown)
++  float FeetFraction(float s0, float ds, float tb, float dt) const;
+ 
+  private:
+   unsigned int mGlTextureId;
++  std::vector<u8> mAlpha; // the texels' alpha, kept for FeetFraction
++  u16 mWidth, mHeight;
+ };
+ 
+ }
+--- a/include/simulator/g3_draw.h
++++ b/include/simulator/g3_draw.h
+@@ -31,7 +31,15 @@
+ u32 G3SIM_MaskVertCount(void);
+ u32 G3SIM_DrawMask(float *bounds); // draws them with the bound program; returns the vertex count, NDC bounds x0 y0 x1 y1; empties the mask
+ void G3SIM_ClearMask(void);
+-void G3SIM_AddShadowVtx(G3SIM_Vertex_t * vtx); // a sprite's sun shadow, drawn with the batch's texture (Enhanced graphics)
++// A sprite's sun shadow (Enhanced graphics), drawn with the batch's texture: the sprite's rectangle on screen (NDC), its
++// depth, the texture's rectangle it shows (s0 + ds * u across, tb + dt * v up) and how the sun lays it down: the shadow's
++// sideways shift per sprite height (shx, NDC) and its flattening (shy)
++typedef struct {
++	float xl, xr, yb, yt, z;
++	float s0, ds, tb, dt;
++	float shx, shy;
++} G3SIM_ShadowQuad_t;
++void G3SIM_AddShadowQuad(const G3SIM_ShadowQuad_t * quad);
+ void G3SIM_DrawArray();
+ void G3SIM_DrawCleanUp();
+ void G3SIM_DrawInit();
+--- a/libraries/sim/src/sim_g3_Texture.cpp
++++ b/libraries/sim/src/sim_g3_Texture.cpp
+@@ -4,7 +4,11 @@
+ 
+ namespace SIM::G3 {
+ 
+-Texture::Texture(u16 height, u16 width, u8 * data) {
++Texture::Texture(u16 height, u16 width, u8 * data) : mWidth(width), mHeight(height) {
++  mAlpha.resize((size_t)width * height);
++  for (size_t i = 0; i < mAlpha.size(); i++) {
++    mAlpha[i] = data[i * 4 + 3];
++  }
+   glGenTextures(1, &mGlTextureId);                                                      
+   glActiveTexture(GL_TEXTURE0);                                                
+   glBindTexture(GL_TEXTURE_2D, mGlTextureId);                                           
+@@ -16,6 +20,31 @@
+                GL_UNSIGNED_BYTE, data);
+ }
+ 
++float Texture::FeetFraction(float s0, float ds, float tb, float dt) const {
++  if (mWidth == 0 || mHeight == 0 || mAlpha.empty()) {
++    return 0.0f;
++  }
++  const float spanS = ds < 0 ? -ds : ds, spanT = dt < 0 ? -dt : dt;
++  const int rows = (int)(spanT * mHeight + 0.5f), columns = (int)(spanS * mWidth + 0.5f);
++  if (rows < 1 || columns < 1) {
++    return 0.0f;
++  }
++  for (int r = 0; r < rows; r++) {
++    const float t = tb + dt * ((float)r + 0.5f) / (float)rows;
++    int y = (int)(t * mHeight);
++    y = y < 0 ? 0 : (y >= mHeight ? mHeight - 1 : y);
++    for (int c = 0; c < columns; c++) {
++      const float s = s0 + ds * ((float)c + 0.5f) / (float)columns;
++      int x = (int)(s * mWidth);
++      x = x < 0 ? 0 : (x >= mWidth ? mWidth - 1 : x);
++      if (mAlpha[(size_t)y * mWidth + x] >= 128) {
++        return (float)r / (float)rows;
++      }
++    }
++  }
++  return 0.0f;
++}
++
+ Texture::~Texture() {
+     glDeleteTextures(1, &mGlTextureId);
+ }
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -37,6 +37,7 @@
+ 	G3SIM_Vertex_t * verts;
+ 	u32 vertsCount;
+ 	bool shadow; // a sprite's sun shadow (Enhanced graphics): drawn after the other translucent items, once per pixel
++	float shadowParams[8]; // the shadow's: s0, ds, tb, dt of the sprite's texture rectangle, then shift slope, feet fraction
+ } g3_draw_item_t;
+ 
+ G3SIM_Vertex_t s_G3DrawVerts[G3_DRAW_MAX_VERTS];
+@@ -168,8 +169,8 @@
+ 
+ // Enhanced graphics' sun shadows: the shadow triangles of the batch being collected (see G3SIM_SubmitPolygon), with the
+ // colour and strength they are drawn in
+-#define G3_SHADOW_MAX_VERTS 3000
+-static G3SIM_Vertex_t s_G3ShadowVerts[G3_SHADOW_MAX_VERTS];
++#define G3_SHADOW_MAX_QUADS 64
++static G3SIM_ShadowQuad_t s_G3ShadowQuads[G3_SHADOW_MAX_QUADS];
+ static u32 s_G3ShadowCount = 0;
+ extern float s_G3ShadowAlpha;
+ 
+@@ -217,10 +218,10 @@
+ 	return count;
+ }
+ 
+-void G3SIM_AddShadowVtx(G3SIM_Vertex_t * vtx)
++void G3SIM_AddShadowQuad(const G3SIM_ShadowQuad_t * quad)
+ {
+-	if(s_G3ShadowCount < G3_SHADOW_MAX_VERTS) {
+-		s_G3ShadowVerts[s_G3ShadowCount++] = *vtx;
++	if(s_G3ShadowCount < G3_SHADOW_MAX_QUADS) {
++		s_G3ShadowQuads[s_G3ShadowCount++] = *quad;
+ 	}
+ }
+ 
+@@ -521,21 +522,50 @@
+ 		G3SIM_DrawArray();
+ 	}
+ 
+-	// The batch's sun shadows (sprites, Enhanced graphics): its texture's shape, drawn dark after the rest
+-	if(s_G3ShadowCount != 0 && s_G3DrawItemListCount < G3_DRAW_MAX_ITEMS && texture != nullptr
+-	   && s_texImageParam.textureFormat != GX_TEXFMT_NONE) {
++	// The batch's sun shadows (sprites, Enhanced graphics): one item per sprite. The sprite laid down on the ground from
++	// the lowest opaque row of its picture (its feet, not the bottom of its rectangle, which has empty rows), flattened
++	// by the sun's shy and shifted sideways by whole texels per row, so the shadow keeps the sprite's pixel grid and
++	// only stretches (the fragment shader does that: g3_fragment.glsl)
++	for(u32 q = 0; q < s_G3ShadowCount && texture != nullptr && s_texImageParam.textureFormat != GX_TEXFMT_NONE
++	    && s_G3DrawItemListCount < G3_DRAW_MAX_ITEMS; q++) {
++		const G3SIM_ShadowQuad_t * sq = &s_G3ShadowQuads[q];
++		const float width = sq->xr - sq->xl, height = sq->yt - sq->yb;
++		if(width <= 0.0f || height <= 0.0f) {
++			continue;
++		}
++		const float feet = texture->FeetFraction(sq->s0, sq->ds, sq->tb, sq->dt);
++		const float feetY = sq->yb + feet * height;
++		const float aboveFeet = (1.0f - feet) * height;
++		const float topY = feetY + sq->shy * aboveFeet;
++		const float shiftTop = sq->shx * aboveFeet;
++		const float x0 = sq->xl + (shiftTop < 0.0f ? shiftTop : 0.0f), x1 = sq->xr + (shiftTop > 0.0f ? shiftTop : 0.0f);
++		const float u0 = (x0 - sq->xl) / width, u1 = (x1 - sq->xl) / width;
++		G3SIM_Vertex_t quad[4];
++		const float xs[4] = {x0, x1, x1, x0}, ys[4] = {feetY, feetY, topY, topY};
++		const float us[4] = {u0, u1, u1, u0}, vs[4] = {feet, feet, 1.0f, 1.0f};
++		for(int v = 0; v < 4; v++) {
++			quad[v] = {xs[v], ys[v], sq->z, 1.0f, us[v], vs[v], 1.0f, 1.0f, 1.0f, 1.0f};
++		}
+ 		g3_draw_item_t * item = &s_G3DrawItemList[s_G3DrawItemListCount];
+ 		memset(item, 0, sizeof(g3_draw_item_t));
+ 		item->textureId = texture->GetTextureID();
+ 		memcpy(&item->polygonAttr, &s_curPolygonAttr, sizeof(G3SIM_PolygonAttr_t));
+-		// A shadow can be flipped by the shear: both faces, and over the ground it lies on
+ 		item->polygonAttr.cullMode = GX_CULL_NONE;
+ 		item->polygonAttr.depthTest = 1;
+ 		memcpy(&item->texImageParam, &s_texImageParam, sizeof(G3SIM_TexImageParam_t));
+-		item->verts = (G3SIM_Vertex_t*)(malloc(sizeof(G3SIM_Vertex_t) * s_G3ShadowCount));
+-		item->vertsCount = s_G3ShadowCount;
+-		memcpy(item->verts, s_G3ShadowVerts, sizeof(G3SIM_Vertex_t) * s_G3ShadowCount);
++		item->verts = (G3SIM_Vertex_t*)(malloc(sizeof(G3SIM_Vertex_t) * 6));
++		item->vertsCount = 6;
++		const int order[6] = {0, 1, 2, 0, 2, 3};
++		for(int v = 0; v < 6; v++) {
++			item->verts[v] = quad[order[v]];
++		}
+ 		item->shadow = true;
++		item->shadowParams[0] = sq->s0;
++		item->shadowParams[1] = sq->ds;
++		item->shadowParams[2] = sq->tb;
++		item->shadowParams[3] = sq->dt;
++		item->shadowParams[4] = sq->shx * height / width; // the shift in sprite widths per unit of sprite height
++		item->shadowParams[5] = feet;
+ 		s_G3DrawItemListCount++;
+ 	}
+ 
+@@ -657,6 +687,8 @@
+ 				continue;
+ 			}
+ 			G3SIM_ApplyCullAndDepth(&item->polygonAttr);
++			glProgramUniform4fv(g3shaderProgramID, G3SIM_Uniform("shadowParams0"), 1, &item->shadowParams[0]);
++			glProgramUniform4fv(g3shaderProgramID, G3SIM_Uniform("shadowParams1"), 1, &item->shadowParams[4]);
+ 			glActiveTexture(GL_TEXTURE0);
+ 			glBindTexture(GL_TEXTURE_2D, item->textureId);
+ 			G3SIM_ApplyTexWrap(&item->texImageParam);
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1660,6 +1660,46 @@
+         clip[i].g = curVtx->g;
+         clip[i].b = curVtx->b;
+         clip[i].a = curVtx->a;
++    }
++
++    // A caster's rectangle, for the shadow: from the polygon as it comes (a sprite is a quad facing the camera), before
++    // clipping cuts it
++    G3SIM_ShadowQuad_t shadowQuad = {};
++    if(s_spriteCasts && s_G3ShadowAlpha > 0.0f && s_spriteDepthBiasTop != 0 && !s_SIM_useWBuffer) {
++        bool ok = true;
++        float xl = 1e9f, xr = -1e9f, yb = 1e9f, yt = -1e9f;
++        for(int i=0; i < numVerts; i++) {
++            ok &= clip[i].pos[3] > 0;
++        }
++        if(ok) {
++            for(int i=0; i < numVerts; i++) {
++                const float x = (float)((double)clip[i].pos[0] / (double)clip[i].pos[3]);
++                const float y = (float)((double)clip[i].pos[1] / (double)clip[i].pos[3]);
++                xl = x < xl ? x : xl;
++                xr = x > xr ? x : xr;
++                yb = y < yb ? y : yb;
++                yt = y > yt ? y : yt;
++            }
++            // The texture coordinates at its left and right, bottom and top: the means of the vertices on each side
++            float sL = 0, sR = 0, tB = 0, tT = 0;
++            int nL = 0, nR = 0, nB = 0, nT = 0;
++            for(int i=0; i < numVerts; i++) {
++                const float x = (float)((double)clip[i].pos[0] / (double)clip[i].pos[3]);
++                const float y = (float)((double)clip[i].pos[1] / (double)clip[i].pos[3]);
++                if(x < (xl + xr) * 0.5f) { sL += clip[i].s; nL++; } else { sR += clip[i].s; nR++; }
++                if(y < (yb + yt) * 0.5f) { tB += clip[i].t; nB++; } else { tT += clip[i].t; nT++; }
++            }
++            if(nL && nR && nB && nT) {
++                shadowQuad.xl = xl;
++                shadowQuad.xr = xr;
++                shadowQuad.yb = yb;
++                shadowQuad.yt = yt;
++                shadowQuad.s0 = sL / nL;
++                shadowQuad.ds = sR / nR - shadowQuad.s0;
++                shadowQuad.tb = tB / nB;
++                shadowQuad.dt = tT / nT - shadowQuad.tb;
++            }
++        }
+     }
+ 
+     // Clipped in clip space: what is left has -w <= x, y, z <= w, so W >= 0 and the divide below stays on screen
+@@ -1767,28 +1807,18 @@
+         G3SIM_AddVtx(&polyVerts[i + 1]);
+     }
+ 
+-    // The sprite's sun shadow: each point sheared along the ground from the sprite's feet by its height on screen
+-    // (x by the sun's side, y by the ground's depth: up the screen is away from the camera), at the feet's depth
+-    // so what stands in front of the sprite still hides it. Same texture: the shadow has the sprite's outline
+-    if(s_spriteCasts && s_G3ShadowAlpha > 0.0f && biasSpan > 0.0) {
++    // The sprite's sun shadow (the rest is made where the texture is known: g3_draw.cpp): the sprite's rectangle on screen
++    // before clipping, the part of its texture it shows, and how the sun lays it down. At the feet's depth, a hair toward
++    // the camera, so what stands in front of the sprite still hides it
++    if(shadowQuad.xr > shadowQuad.xl) {
+         const float ratio = SIM_WidescreenRatio() > 1.0f ? SIM_WidescreenRatio() : 1.0f; // a wide scene's NDC x is narrower
+-        int foot = 0;
++        int foot = 0; // the lowest point on screen, where the sprite stands: the depth bias leaves it alone
+         for(int i=1; i < numVerts; i++) {
+             foot = polyVerts[i].y < polyVerts[foot].y ? i : foot;
+         }
+-        const float footZ = polyVerts[foot].z - 0.0004f; // a hair toward the camera: off the ground's own depth
+-        G3SIM_Vertex_t shadowVerts[G3SIM_CLIP_MAX_VERTS];
+-        for(int i=0; i < numVerts; i++) {
+-            shadowVerts[i] = polyVerts[i];
+-            const float h = polyVerts[i].y - (float)biasBottom;
+-            shadowVerts[i].x = polyVerts[i].x + s_sunShearX * h / ratio;
+-            shadowVerts[i].y = (float)biasBottom + s_sunShearY * h;
+-            shadowVerts[i].z = footZ;
+-        }
+-        for(int i=1; i + 1 < numVerts; i++) {
+-            G3SIM_AddShadowVtx(&shadowVerts[0]);
+-            G3SIM_AddShadowVtx(&shadowVerts[i]);
+-            G3SIM_AddShadowVtx(&shadowVerts[i + 1]);
+-        }
++        shadowQuad.z = polyVerts[foot].z - 0.0004f;
++        shadowQuad.shx = s_sunShearX / ratio;
++        shadowQuad.shy = s_sunShearY < 0.05f ? 0.05f : s_sunShearY;
++        G3SIM_AddShadowQuad(&shadowQuad);
+     }
+ }
+--- a/libraries/sim/src/shaders/g3_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_fragment.glsl
+@@ -21,11 +21,42 @@
+ // edge marking's attributes alone
+ uniform int shadowMode;
+ uniform vec4 shadowColor;
++// The shadow's sprite: its texture rectangle (s0, ds, tb, dt) and (shift per height, feet row); the polygon's texture
++// coordinates are then the shadow's own: u across the sprite's width, v up its height, 0 to 1
++uniform vec4 shadowParams0;
++uniform vec4 shadowParams1;
+ layout(location = 0) out vec4 color;
+ layout(location = 1) out vec4 attr;
+ 
+ void main()
+ {
++    if( shadowMode == 1 ) {
++        // The sprite laid down on the ground, texel for texel: each row of its picture is one row of the shadow (the rows
++        // are squeezed together, the picture's own pixels are not blurred or cut across), shifted sideways by a whole
++        // number of texels per row, so the shadow keeps the sprite's pixel grid and only stretches
++        vec2 size = vec2(textureSize(myTexture, 0));
++        float columns = max(abs(shadowParams0.y) * size.x, 1.0);
++        float rows = max(abs(shadowParams0.w) * size.y, 1.0);
++        float v = fragTexCoord.y;
++        if( v < shadowParams1.y || v >= 1.0 ) {
++            discard;
++        }
++        float rowCentre = (floor(v * rows) + 0.5) / rows;
++        float shift = floor(shadowParams1.x * (rowCentre - shadowParams1.y) * columns + 0.5) / columns;
++        float u = fragTexCoord.x - shift;
++        if( u < 0.0 || u >= 1.0 ) {
++            discard;
++        }
++        float columnCentre = (floor(u * columns) + 0.5) / columns;
++        vec2 source = vec2(shadowParams0.x + shadowParams0.y * columnCentre, shadowParams0.z + shadowParams0.w * rowCentre);
++        if( texture(myTexture, source).a < 0.05 ) {
++            discard;
++        }
++        attr = vec4(0.0);
++        color = shadowColor;
++        return;
++    }
++
+     vec4 coords = vec4(coordsW.xyz / coordsW.w, 1.0);
+     vec4 shadedColor;
+     if( useTexture == 1 ) {
+@@ -44,12 +75,6 @@
+         shadedColor = fragInColor;
+     }
+ 
+-    if( shadowMode == 1 ) {
+-        attr = vec4(0.0);
+-        color = shadowColor;
+-        return;
+-    }
+-
+     float depth16 = floor(clamp(gl_FragCoord.z, 0.0, 1.0) * 65535.0 + 0.5);
+     float depthHigh = floor(depth16 / 256.0);
+     attr = vec4(polygonId * 4.0 / 255.0, depthHigh / 255.0, (depth16 - depthHigh * 256.0) / 255.0,

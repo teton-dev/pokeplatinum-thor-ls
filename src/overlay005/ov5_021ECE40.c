@@ -227,6 +227,11 @@ Billboard *ov5_021ECF1C(MapObject *param0, int param1)
 
     GF_ASSERT(v2 != NULL);
 
+#ifdef SDK_PORT
+    // Enhanced graphics: objects with a blob shadow (people, Pokemon) cast the sun's shadow
+    Billboard_SetCastsShadow(v2, ov5_021ECD04(param0)->hasShadow != 0);
+#endif
+
     return v2;
 }
 

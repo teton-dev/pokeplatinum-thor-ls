@@ -48,6 +48,9 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("General", "FollowerPokemon")) {
         config->followerPokemon = StringToBool(value);
     }
+    if (MATCH("General", "CameraTilt")) {
+        config->cameraTilt = atoi(value);
+    }
     if (MATCH("General", "InfiniteTMs")) {
         config->infiniteTMs = StringToBool(value);
     }
@@ -195,6 +198,7 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->repelPrompt = TRUE;
   aConfig->followerPokemon = FALSE;
   aConfig->infiniteTMs = FALSE;
+  aConfig->cameraTilt = 0;
   aConfig->gen5Battles = FALSE;
   aConfig->gen5Screens = FALSE;
   aConfig->expShareAll = FALSE;
@@ -260,6 +264,7 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "RepelPrompt=%s\n", BoolToString(aConfig->repelPrompt));
     fprintf(configFile, "FollowerPokemon=%s\n", BoolToString(aConfig->followerPokemon));
     fprintf(configFile, "InfiniteTMs=%s\n", BoolToString(aConfig->infiniteTMs));
+    fprintf(configFile, "CameraTilt=%d\n", aConfig->cameraTilt);
     fprintf(configFile, "Gen5Screens=%s\n", BoolToString(aConfig->gen5Screens));
     fprintf(configFile, "Gen5Battles=%s\n", BoolToString(aConfig->gen5Battles));
     fprintf(configFile, "ExpShareAll=%s\n", BoolToString(aConfig->expShareAll));

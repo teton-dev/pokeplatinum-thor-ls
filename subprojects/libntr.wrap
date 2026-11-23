@@ -45,11 +45,24 @@ directory = libntr
 # libntr_color_adjust.patch: Settings > Display > Color Balance (sliders: saturation, vibrance, contrast, white point, -25..+25,
 # applied to each screen before the fade; SIM::UI::Slider), and the defaults Widescreen on and Fast forward as a toggle
 # libntr_native_menus_carts.patch: the carts UI over the settings: the native view steps aside (SuspendNative)
+# libntr_enhanced_grade.patch: Enhanced graphics' first pass: SIM_SetEnhancedScene, the 3D frame tinted by the time of
+# day's light and its corners darkened (Settings > Display > Time-of-day light)
+# libntr_enhanced_shadows.patch: SIM_SetSpriteShadow / SIM_SetEnhancedSun: the overworld's character sprites (inside the
+# depth-bias bracket) also draw a sheared, dark copy of themselves along the ground (Settings > Display > Sun shadows)
+# libntr_enhanced_water.patch: SIM_SetPolygonTag / SIM_SetEnhancedWater: the game's water tiles as a mask (drawn against the
+# scene's depth), each water pixel's distance to the shore at the DS's resolution, and the scene above the shore
+# mirrored in the water from a copy of the frame, in whole DS pixels (Settings > Display > Water reflections)
+# libntr_enhanced_shadow_grid.patch: the sun shadow stands on the sprite's feet (its lowest opaque row) and keeps the sprite's
+# texel grid (rows squeezed, whole-texel shifts per row, done in the fragment shader) instead of a sheared quad
+# libntr_enhanced_sun_shadows_3d.patch: sun shadows of the scene's 3D (trees, signs, houses, cliffs): a march toward the sun through
+# the depth buffer at the DS's resolution, a multiply at full resolution; the sprites flagged in the attributes; the game's
+# own faint shadow polygons dropped while the land is drawn (SIM_SetEnhancedShadowCamera, SIM_SetHideBuiltInShadows)
+# libntr_enhanced_highlights.patch: SIM_SetEnhancedSunLight, Settings > Display > Sun highlights: from the depth buffer's normals (and the
+# polygon IDs that mark buildings) walls and roofs glint, lift and sheen in the sun's colour, brightening their own pixels;
+# sprites get a rim of the sun's colour on its side (DS resolution, then a full-resolution brighten/add)
 # libntr_native_screens.patch: the carts UI (Add a game, the game picker, a version question) as native views too
-# libntr_second_swap_after.patch: Android with two screens swaps the second screen's frame right after the main one's
-# (it waited up to a refresh first, and the two waits made 30 fps on a 60 Hz panel). libntr_android_pacing.patch: Android's
-# swap interval is 0 and the 60 fps limit is a running deadline (PaceVBlank), so no display's refresh rate halves the speed
-diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch, libntr_snd_lock.patch, libntr_g3_tex_wrap.patch, libntr_wide_subtop_bgs.patch, libntr_3d_premultiplied.patch, libntr_native_menus.patch, libntr_native_menus_carts.patch, libntr_carts_known.patch, libntr_battle_speed.patch, libntr_color_adjust.patch, libntr_native_screens.patch, libntr_second_swap_after.patch, libntr_android_pacing.patch
+# libntr_enhanced_atmosphere.patch: SIM_SetEnhancedAtmosphere / SIM_SetEnhancedBloom, Settings > Display > Atmosphere and Glow: haze and sun shafts from a march through the depth buffer, and a blur-based glow of bright pixels.
+diff_files = libntr_g3_mult.patch, libntr_g3_clip.patch, libntr_g3_clear.patch, libntr_wide_obj.patch, libntr_snd_waveout.patch, libntr_g3_translucent_state.patch, libntr_wide_edge.patch, libntr_translucent_id.patch, libntr_g3_perspective.patch, libntr_wide_obj_edge.patch, libntr_wide_window.patch, libntr_bg_charbase.patch, libntr_wide_mirror.patch, libntr_wide_subtop.patch, libntr_tex_bank_d.patch, libntr_wide_stripe.patch, libntr_sprite_depth.patch, libntr_snd_lock.patch, libntr_g3_tex_wrap.patch, libntr_wide_subtop_bgs.patch, libntr_3d_premultiplied.patch, libntr_native_menus.patch, libntr_native_menus_carts.patch, libntr_carts_known.patch, libntr_battle_speed.patch, libntr_color_adjust.patch, libntr_native_screens.patch, libntr_second_swap_after.patch, libntr_android_pacing.patch, libntr_enhanced_grade.patch, libntr_enhanced_shadows.patch, libntr_enhanced_water.patch, libntr_enhanced_shadow_grid.patch, libntr_enhanced_sun_shadows_3d.patch, libntr_enhanced_highlights.patch, libntr_enhanced_atmosphere.patch
 
 [provide]
 dependency_names = NitroSDK

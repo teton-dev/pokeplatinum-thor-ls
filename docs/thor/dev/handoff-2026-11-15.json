@@ -1,0 +1,204 @@
+{
+  "schema": "session-handoff/1",
+  "written": "2026-11-15",
+  "summary": "HGSS port: Japanese Game Corner prize counters and text; Platinum Gen 5 work merged and installed; save editor and debug window ported to HGSS; HGSS Gen 5 battles gained naming, evolution, Apricorn Balls, trainers' mid-battle lines, a loss fix and the Safari Zone. Everything tested on the desktop (Docker) and installed on the AYN Thor, but nothing new has been tried on the Thor itself.",
+  "read_first": [
+    "~/pokeplatinum-thor-ls/CLAUDE.md",
+    "~/pokeplatinum-thor-ls/AGENTS.md",
+    "~/pokeplatinum-thor-ls/docs/thor/dev/hgss.md",
+    "~/pokeplatinum-thor-ls/docs/thor/dev/gen5-battles.md",
+    "~/pokeplatinum-thor-ls/docs/thor/dev/hgss-game-corner.md",
+    "~/pokeheartgold-thor-ls/tests/README.md",
+    "~/.claude/projects/-Users-trysten-pokeplatinum-thor-ls/memory/MEMORY.md"
+  ],
+  "rules": {
+    "commit_trailer": "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+    "no_session_links": "No Claude-Session lines or session links in commits or PR descriptions",
+    "never_commit": ["ROMs", "saves", "extracted game files", "anything from a BW2 ROM"],
+    "sdk_port_guard": "Port-only code in game source files goes behind #ifdef SDK_PORT",
+    "upstream_prs": "None until the work is fully working and debugged",
+    "pokebw2_untouched": "Never edit ../pokebw2; changes go in gen5/patches as diffs (see workflows.patch_bw2)",
+    "foreign_uncommitted_changes": "In the Platinum checkout, docs/thor/dev/gen5-battles.md, subprojects/libntr.wrap and subprojects/packagefiles/libntr_3d_premultiplied.patch were modified by someone else before this session; never commit them as part of other work"
+  },
+  "repositories": [
+    {
+      "name": "pokeplatinum-thor-ls",
+      "path": "~/pokeplatinum-thor-ls",
+      "remote": "teton-dev/pokeplatinum-thor-ls",
+      "branches": {
+        "gen5-battles": {"head": "4473e7f96", "pushed": true, "note": "Gen 5 work and all dev notes; gen5/ is shared with HGSS"},
+        "platinum-thor": {"head": "04da8e9cd", "pushed": true, "note": "Owner's build; a push builds the APK in GitHub Actions (artifact pokeplatinum-android). Does NOT yet contain gen5-battles commits after 7dd63ac9a"}
+      }
+    },
+    {
+      "name": "pokeheartgold-thor-ls",
+      "path": "~/pokeheartgold-thor-ls",
+      "remote": "teton-dev/pokeheartgold-thor-ls",
+      "branches": {
+        "thor-android": {"head": "a2ff77f29", "pushed": true}
+      },
+      "links": {"gen5": "symlink to ../pokeplatinum-thor-ls/gen5 (its working tree, not a commit)"}
+    },
+    {"name": "pokebw2", "path": "~/pokebw2", "note": "BW2 decompilation, read-only for this work"}
+  ],
+  "commits": [
+    {"repo": "pokeheartgold-thor-ls", "sha": "b0fd05f15", "title": "Japanese Game Corner: the prize counters work, with whole English text"},
+    {"repo": "pokeheartgold-thor-ls", "sha": "83149a7b3", "title": "Japanese Game Corner: English lines wrapped to fill the message box"},
+    {"repo": "pokeplatinum-thor-ls", "sha": "42fccf928", "title": "Notes: the Japanese Game Corner's prize counters"},
+    {"repo": "pokeplatinum-thor-ls", "sha": "7dd63ac9a", "title": "Notes and tool: the Japanese Game Corner's English text wrapped to the message box"},
+    {"repo": "pokeplatinum-thor-ls", "sha": "04da8e9cd", "branch": "platinum-thor", "title": "Merge branch 'gen5-battles' into platinum-thor"},
+    {"repo": "pokeheartgold-thor-ls", "sha": "3411e1e97", "title": "Save editor and debug window, ported from the Platinum fork"},
+    {"repo": "pokeplatinum-thor-ls", "sha": "cd264f717", "title": "Notes: HGSS's save editor and debug window"},
+    {"repo": "pokeplatinum-thor-ls", "sha": "065ae4ea3", "title": "Gen 5: HGSS's Apricorn Balls, fishing, and trainers' lines during the battle"},
+    {"repo": "pokeheartgold-thor-ls", "sha": "1308ab996", "title": "Gen 5 battles: naming, evolution, Apricorn Balls and trainers' lines"},
+    {"repo": "pokeheartgold-thor-ls", "sha": "a2ff77f29", "title": "Gen 5 battles: the Safari Zone"},
+    {"repo": "pokeplatinum-thor-ls", "sha": "4473e7f96", "title": "Notes: HGSS's Safari Zone in Gen 5 battles"}
+  ],
+  "work": [
+    {
+      "id": "jp-game-corner-prizes",
+      "game": "HGSS",
+      "status": "done-desktop",
+      "what": "Japanese Game Corner prize counters (TMs/held items, Pokemon) work with the JP scripts; English text fixed (CopyU16ArrayToStringN length must include EOS) and re-wrapped to <=208 px of the 216 px box.",
+      "files": ["src/msgdata.c", "src/field/touchscreen_choice_menu.c", "lib/port/slots/slot_maps.c", "lib/port/test_script.c"],
+      "tools": ["~/pokeplatinum-thor-ls/tools/jp-gamecorner/reflow.py"],
+      "tests": ["slots_jp_prizes.txt", "slots_jp_text.txt"],
+      "test_commands_added": ["check coins|party|item ITEM N", "textwidths FILE MAX", "menu event for touchscreen yes/no and lists"]
+    },
+    {
+      "id": "platinum-gen5-merge",
+      "game": "Platinum",
+      "status": "installed-untried",
+      "what": "gen5-battles (Safari Zone, weather, partner sprites, Nuzlocke, keep moves) reviewed, merged into platinum-thor, built by Actions run 43691796942, installed as org.pokeplatinum.port 9100027."
+    },
+    {
+      "id": "hgss-save-editor",
+      "game": "HGSS",
+      "status": "done-desktop",
+      "where_in_app": "Settings > Save editor",
+      "what": "Port of Platinum's save editor on HGSS's save APIs: party/PC (level, nature, shiny, gender, ability, item, friendship, IVs, EVs, moves, heal), give a Pokemon, .pk4 export/import, bag, trainer (money, BP, 16 badges, play time, National Dex). Left out: trade box (no save slots), Sinnoh legendary events.",
+      "files": ["include/port_sdk/port_save_editor.h", "lib/port/save_editor.c", "lib/port/save_editor_gui.cpp", "lib/port/settings_pages.cpp", "meson.build"],
+      "tests": ["save_editor.txt"]
+    },
+    {
+      "id": "hgss-debug-window",
+      "game": "HGSS",
+      "status": "done-desktop",
+      "where_in_app": "Settings > Advanced > Developer windows > Application",
+      "what": "ImGui window (SIM::GUI::PrjMain): warps to the 30 Fly points (named from the map each lands on) or any map/tile; trainers on the current map with Go to / Battle / Beaten; battle any trainer by number or name; wild battle by species/level. Battles follow the Gen 5 setting; lost wild battles white out.",
+      "files": ["include/port_sdk/port_debug_field.h", "lib/port/debug_field.c", "lib/port/debug_window.cpp"],
+      "tests": ["debug_window.txt"]
+    },
+    {
+      "id": "hgss-gen5-after-battle",
+      "game": "HGSS",
+      "status": "done-desktop",
+      "what": "After a Gen 5 battle: HGSS naming screen for a catch (own HEAP_ID_BATTLE heap), then evolutions via BattleSystem_CheckEvolution/EvolutionScene_New, as a state machine in the Gen 5 overlay's Main.",
+      "files": ["lib/port/gen5_battle.c"],
+      "tests": ["gen5_catch.txt", "gen5_evolution.txt"]
+    },
+    {
+      "id": "hgss-gen5-loss-fix",
+      "game": "HGSS",
+      "status": "done-desktop",
+      "what": "Debug window and test-runner wild battles now call CallTask_Blackout on a loss (HGSS's encounter task leaves a loss to its caller; before, the game was left with no overworld).",
+      "files": ["lib/port/debug_field.c", "lib/port/gen5_battle.c"],
+      "tests": ["gen5_wild_loss.txt"]
+    },
+    {
+      "id": "hgss-gen5-apricorn-balls",
+      "game": "HGSS (shared gen5/)",
+      "status": "done-desktop",
+      "what": "Apricorn Balls by HGSS's battle_command.c rules when Gen5Battle.apricornBalls is set (HGSS only). BW2 patches: btl_server_flow_sub.c (catch rate, Sport Ball 1.5x), pml_item.c (Poke Ball's item data for them), b_bag_item.c (battle bag pocket), btlv_effvm.c (thrown as a Poke Ball sprite). Caught ball comes back as ball id (Level=18) and is converted to the item (493); Friend Ball sets friendship 200. Gen5Battle.fishing sets BW2's fishing flag (Lure Ball).",
+      "files": ["gen5/api/gen5.h", "gen5/include/gen5/port.h", "gen5/src/runtime.c", "gen5/meson.build", "gen5/patches/src/ov167/btl_server_flow_sub.c.patch", "gen5/patches/src/system/pml_item.c.patch", "gen5/patches/src/ov286/b_bag_item.c.patch", "gen5/patches/src/ov168/btlv_effvm.c.patch", "lib/port/gen5_battle.c (HGSS)"],
+      "tests": ["gen5_apricorn.txt"]
+    },
+    {
+      "id": "hgss-gen5-trainer-lines",
+      "game": "HGSS (shared gen5/)",
+      "status": "done-desktop",
+      "what": "Gen5Trainer.hintText[4]: lines at first hit, half HP, last Pokemon, last at half HP (BW2 hint ids 0x11-0x14 = HGSS TRMSG 13-16). btl_client.c and btlv_core.c patches ask the port for trainers >= 0x800. Platinum doesn't fill them yet.",
+      "files": ["gen5/api/gen5.h", "gen5/src/runtime.c", "gen5/patches/src/ov167/btl_client.c.patch", "gen5/patches/src/ov167/btlv_core.c.patch", "lib/port/gen5_battle.c (HGSS)"],
+      "tests": ["gen5_trainer_lines.txt"]
+    },
+    {
+      "id": "hgss-gen5-mom-savings",
+      "game": "HGSS",
+      "status": "verified-no-change-needed",
+      "what": "BattleSetup_CopyResultsToSaveData moves a quarter of money won to Mom regardless of engine. Missing: HGSS's in-battle 'sent money to Mom' line.",
+      "tests": ["gen5_mom_savings.txt"]
+    },
+    {
+      "id": "hgss-gen5-safari",
+      "game": "HGSS",
+      "status": "done-desktop",
+      "what": "Safari battles go to BW2's engine with gen5/src/safari.c unchanged (HGSS's rules equal Platinum's). Bridge passes safariBalls, BASE_CATCH_RATE, BASE_GREAT_MARSH_RATE; returns balls left and BATTLE_OUTCOME_FOE_FLED. BALL/BAIT/ROCK labels added to the archive-11 copy in lib/port/gen5_rocket.c (MakeSafariButtons copied from Platinum's src/port/gen5_data.c; ROCKET_VERSION 5).",
+      "files": ["lib/port/gen5_battle.c", "lib/port/gen5_rocket.c", "include/port_sdk/port_gen5_battle.h", "lib/port/test_script.c"],
+      "tests": ["gen5_safari.txt", "gen5_safari_catch.txt", "gen5_safari_end.txt"],
+      "env": "TEST_ENV=POKEPLATINUM_GEN5_SAFARI_SEED=3"
+    }
+  ],
+  "test_commands_added_hgss": {
+    "editor": ["give SPECIES LEVEL", "level SLOT N", "nature SLOT N", "shiny SLOT", "ivs SLOT", "move SLOT MOVE", "learnable SLOT", "item ITEM N", "money N", "badge B 0|1", "pk4 SLOT", "dump", "almost SLOT", "firstmove SLOT MOVE", "species SLOT N", "ball SLOT N", "mom MONEY", "safari N"],
+    "debug": ["trainers [N]", "goto I", "battle I", "beaten I 0|1", "unbeat I", "trainer ID", "wild SPECIES LEVEL", "towns", "town N", "map ID"],
+    "other": ["safari SPECIES LEVEL [BALLS]"],
+    "implementation": "lib/port/test_editor.c (TestEditor_Run), wired in lib/port/test_script.c as OP_EDITOR"
+  },
+  "verification": {
+    "hgss_tests_passing": ["save_editor", "debug_window", "gen5_wild", "gen5_catch", "gen5_apricorn", "gen5_evolution", "gen5_wild_loss", "gen5_mom_savings", "gen5_trainer", "gen5_trainer_lines", "gen5_trainer_arena", "gen5_rival", "gen5_player_back", "gen5_player_back_girl", "gen5_safari", "gen5_safari_catch", "gen5_safari_end"],
+    "platinum_tests_passing_after_gen5_changes": ["first_battle", "gen5_battle", "gen5_wild", "gen5_catch", "gen5_trainer", "gen5_widescreen", "gen5_player_back", "gen5_safari", "gen5_safari_catch", "gen5_safari_end", "gen5_safari_marsh", "gen5_safari_react", "gen5_safari_widescreen", "gen5_partner_sprite", "gen5_weather", "gen5_weather_doubles", "gen5_keep_moves", "nuzlocke_gen5", "nuzlocke_crit_gen5"],
+    "ui_checked_on_desktop": ["Save editor home and Trainer view", "Application window (fits portrait, Warp to Violet City works)"],
+    "not_verified": ["Anything on the Thor itself", "A battle in the real HGSS Safari Zone (tests start Safari battles where the player stands)", "Platinum built with gen5 commit 065ae4ea3 on the Thor"]
+  },
+  "device": {
+    "name": "AYN Thor (Android)",
+    "adb": "~/Library/Android/sdk/platform-tools/adb",
+    "address_last_used": "192.168.8.163:34573",
+    "address_note": "IP and port change when wireless debugging restarts; ask the owner for the 'IP address & Port' line. If 'adb connect' says 'No route to host' while 'nc -z IP PORT' succeeds, run 'adb kill-server' and connect again.",
+    "sd_card": "/storage/7FF7-EEA4 (ROMs in ROMs/nds)",
+    "installed": {
+      "org.pokeheartgold.port.dev": 26111518,
+      "org.pokeplatinum.port": 9100027
+    }
+  },
+  "workflows": {
+    "hgss_build": "cd ~/pokeheartgold-thor-ls && tools/docker/desktop.sh build",
+    "hgss_test": "tools/docker/desktop.sh test tests/scripts/NAME.txt --from new-game  (test does not rebuild: build first)",
+    "hgss_apk": "tools/docker/desktop.sh apk  (native macOS; VERSION_CODE from date and hour) then adb -s ADDR install -r android/app/build/outputs/apk/release/app-release.apk",
+    "platinum_build_test": "cd ~/pokeplatinum-thor-ls && tools/docker/desktop.sh build && tools/docker/desktop.sh test tests/scripts/NAME.txt --from turtwig",
+    "platinum_apk": "push platinum-thor; gh run download <id> -R teton-dev/pokeplatinum-thor-ls -n pokeplatinum-android",
+    "patch_bw2": "Copy the pokebw2 file to scratch a/ and b/, apply the existing gen5/patches/<path>.patch to b/, edit b/, then 'diff -u --label a/PATH --label b/PATH a/PATH b/PATH > gen5/patches/PATH.patch'. A newly patched file moves from gen5/meson.build's base list into gen5_patched. Check no '+' lines were lost against git HEAD.",
+    "desktop_ui": "tools/docker/desktop.sh start, then key/click/shot; the settings key is 'grave' (backquote); continue the saved game from the title with Return and z"
+  },
+  "gotchas": [
+    "HGSS and Platinum name their save/bag/Pokemon APIs differently (GetMonData vs Pokemon_GetValue, PCStorage, PlayerProfile...); grep every API.",
+    "The decompilation's SPAWN_* constants don't match sSpawnPoints' order (spawn 5 is Cianwood); name warps from GetFlyWarpData's map.",
+    "Map object trainer ids: object types 1-8 with ScriptNumToTrainerNum(script).",
+    "HGSS GetMonData(MON_DATA_POKEBALL) returns a ball id (Apricorn 17-24); SetMonData/MonSetCatchData want an item id (492-499).",
+    "BW2's battle bag lists balls from archive 228 (a byte per item), not item data.",
+    "BW2 throw sprites stop at the Dream Ball; its ball particles cover all 25 balls.",
+    "gen5/include/gen5/port.h is force-included into every BW2 file: declare StrBuf-taking functions inside the patch that uses them.",
+    "Set Gen5Battle-derived flags at the start of Gen5_BattleBegin: the bag is filled before the rest.",
+    "At full HP no ball is a sure catch (even catch rate 255 Safari Ball ~1/2); tests use False Swipe + Spore or throw until caught.",
+    "BW2's move menu: the first pad press only shows the cursor; tests touch moves (FIGHT 128,95; move1 64,57; move2 191,57 in DS coords).",
+    "Falkner's birds use Sand-Attack; give test Pokemon Swift (firstmove 0 129).",
+    "HGSS flee rates differ from Platinum's: Chansey 90, Bulbasaur 0, Kangaskhan 150.",
+    "Mashing A with a Pokemon whose first move is a status move loses battles; set firstmove.",
+    "Desktop can't reach the Pokegear (desktop-only bug); use the Thor for Pokegear checks."
+  ],
+  "open_items": [
+    {"area": "HGSS Gen 5", "item": "Bug-Catching Contest in BW2's engine", "priority": "next (owner was asked)"},
+    {"area": "HGSS Gen 5", "item": "Battle Frontier"},
+    {"area": "HGSS Gen 5", "item": "HGSS's in-battle 'sent money to Mom' line"},
+    {"area": "HGSS Gen 5", "item": "Apricorn Ball throw sprites (currently fly as a Poke Ball)"},
+    {"area": "HGSS Gen 5", "item": "Arenas per Safari area; Nuzlocke catch rule in the Safari Zone; a check in the real Safari Zone"},
+    {"area": "HGSS Nuzlocke", "item": "Settings UI, gray icons, save mark, native-engine rules"},
+    {"area": "HGSS", "item": "Pokegear widescreen bezel; Lyra's back-sprite wrist seam; 60 FPS for HGSS-only effects"},
+    {"area": "HGSS save editor", "item": "Trade box and HGSS Mystery Gift events (not ported)"},
+    {"area": "HGSS Game Corner", "item": "Top-screen Smeargle animations, reach effects, sound, widescreen, Thor test"},
+    {"area": "Platinum Gen 5", "item": "Fill Gen5Trainer.hintText from Platinum's trainer messages; evolutions/new moves after trainer battles; trainers' items in battle; multi battles, catching tutorial, Pal Park, Frontier"},
+    {"area": "Platinum", "item": "platinum-thor lacks gen5-battles commits after 7dd63ac9a (merge and Actions build when the owner wants a new Platinum APK)"},
+    {"area": "Following Renegade", "item": "Bikes, emotes, unported hooks (see docs/thor/dev/following-renegade.md)"},
+    {"area": "Roadmap", "item": "Move gen5/ to its own repository; SoulSilver checks; enhanced graphics last"}
+  ]
+}

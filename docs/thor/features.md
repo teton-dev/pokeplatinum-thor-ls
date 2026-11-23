@@ -177,6 +177,34 @@ DS's dark outlines around 3D models and along the screen's edges. *Settings > Di
 DS outlines* turns the outlines off; *Smooth 3D edges* (anti-aliasing) also leaves them
 out.
 
+**Enhanced graphics (new, off by default):** *Settings > Display > Time-of-day light* tints
+the outdoor world with the light of the hour (warm mornings and evenings, cool nights) and
+darkens the corners a little, on top of the game's own lighting. Towns and routes only:
+caves, buildings and battles stay as the game draws them. It costs one cheap pass over the
+3D picture.
+
+*Settings > Display > Sun shadows* gives the people and Pokemon outdoors a shadow away
+from the sun (long in the morning and evening, short at noon, none at night) in place of
+their round blob; trees, signs and houses cast shadows too, in place of the ones their models have. *Water reflections* mirrors what stands along the far shore of lakes,
+the sea and rivers in the water, with a small ripple. Both keep the art's pixels at any 3D
+resolution and are off by default; they work best with a higher *3D resolution* and
+*Smooth 3D edges* off (water reflections don't draw with it on).
+*Sun highlights* lets walls and roofs catch the sun (a soft glint and sheen in the sun's color,
+warmer when it is low) and gives people and Pokemon a thin rim of sunlight on the sun's side; it
+keeps the art's texture and outlines and is off by default too.
+*Atmosphere* adds a haze over the far side of the screen, in the color of the sky at that
+hour (peach at sunrise and sunset, pale blue by day, deep blue at night), and lets the sun's
+light scatter in the air near the ground, so shafts of light stand between the shadows of houses
+and trees; it is warmer and stronger when the sun is low. *Glow* makes lamps, lit windows and
+other bright lights bloom, most at night. Both leave the art's pixels as drawn (the glow and the
+light are added on top), work best with a higher *3D resolution* and *Smooth 3D edges* off, and
+are off by default.
+
+**Camera tilt:** *Settings > Display > Camera tilt* (Standard, Slightly lower, Lower) lowers the
+overworld camera by 6 or 12 degrees, between Platinum's nearly top-down view and Black 2 and White
+2's, so a little more of what lies ahead shows and a little less of what is behind. It is only
+for the overworld (cut scenes, vistas and battles keep their own camera) and is off by default.
+
 ## GBA slot (Pal Park and dual-slot Pokemon)
 
 On a DS Lite, Platinum looks in the GBA slot. *Settings > GBA slot* puts a game there

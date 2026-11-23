@@ -86,6 +86,8 @@
 
 #ifdef SDK_PORT
 #include "port/widescreen.h"
+#include "port/enhanced_graphics.h"
+#include "port/camera_tilt.h"
 #endif
 
 #define FIELD_MAP_INIT_STATE_RESET         0
@@ -693,6 +695,7 @@ static void ov5_021D15F4(FieldSystem *fieldSystem)
     G3_ResetG3X();
 
 #ifdef SDK_PORT
+    CameraTilt_Apply(fieldSystem);
     Widescreen_BeforeFieldRender(fieldSystem);
 #endif
 
@@ -707,6 +710,10 @@ static void ov5_021D15F4(FieldSystem *fieldSystem)
     }
 
     PokeRadar_ClearIfAllOutOfView(fieldSystem);
+#ifdef SDK_PORT
+    EnhancedGraphics_SetCamera(NNS_G3dGlbGetProjectionMtx(), NNS_G3dGlbGetCameraMtx());
+    EnhancedGraphics_LandDrawing(TRUE);
+#endif
     LandDataManager_RenderLoadedMaps(fieldSystem->landDataMan, fieldSystem->areaModelAttrs);
 
     if (FieldMap_InDistortionWorld(fieldSystem) == TRUE) {
@@ -714,6 +721,9 @@ static void ov5_021D15F4(FieldSystem *fieldSystem)
     }
 
     MapPropManager_Render2(fieldSystem->mapPropManager, fieldSystem->areaDataManager);
+#ifdef SDK_PORT
+    EnhancedGraphics_LandDrawing(FALSE);
+#endif
 
     {
         const MtxFx44 *v2;
@@ -741,6 +751,14 @@ static void ov5_021D15F4(FieldSystem *fieldSystem)
         NNS_G3dGlbSetProjectionMtx(&v0);
         NNS_G3dGlbFlush();
     }
+
+#ifdef SDK_PORT
+    EnhancedGraphics_DrawWaterMask(fieldSystem);
+#endif
+
+#ifdef SDK_PORT
+    CameraTilt_Restore(fieldSystem);
+#endif
 
     ov5_021D1B18(fieldSystem->unk_04->unk_04);
     G3_RequestSwapBuffers(GX_SORTMODE_AUTO, gBufferMode);

@@ -1,5 +1,6 @@
 // Widescreen overworld (experimental); see include/port/widescreen.h
 #include "port/widescreen.h"
+#include "port/enhanced_graphics.h"
 
 #include <nitro.h>
 #include <string.h>
@@ -336,6 +337,7 @@ void Widescreen_Update(void)
     // gauges, whose edge pixels would smear)
     SIM_SetWidescreenObjEdgeExtend(Gen5BattleShown() ? 0x01 : (EncounterEffect_PortEliteFourPlaying() ? 0x04 : 0));
     SIM_SetWidescreenScene(wide);
+    EnhancedGraphics_Update(!Gen5BattleShown() && Gear_ActiveBattleSystem() == NULL ? fieldSystem : NULL);
 }
 
 static float WantedRatio(const Camera *camera)
