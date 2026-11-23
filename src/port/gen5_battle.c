@@ -1326,7 +1326,7 @@ static void Finish(FieldBattleDTO *dto)
     SetVBlankCallback(NULL, NULL);
     sShown = FALSE;
     SIM_SetBattleActive(FALSE);
-    SIM_SetTranslucentPolygonIdRule(FALSE);
+    SIM_SetTranslucentPolygonIdRule(TRUE); // the field's, too (src/main.c)
     Gen5_SetWidescreen(1.0f);
     const enum Gen5BattleResult result = sFailed ? GEN5_BATTLE_FAILED : Gen5_BattleEnd(&sBattle);
 

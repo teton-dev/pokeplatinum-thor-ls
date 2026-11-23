@@ -1,0 +1,58 @@
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -906,7 +906,11 @@
+ #endif
+   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
++#ifdef SDK_BUILD_ANDROID
++  SDL_GL_SetSwapInterval(0); // Android paces itself (the frame limit in the render loop)
++#else
+   SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval);
++#endif
+ 
+   u32 windowHeight;
+   u32 windowWidth;
+@@ -979,7 +983,11 @@
+       windowTitle.c_str(), windowX, windowY, windowWidth, windowHeight,
+       windowFlags);
+   context = SDL_GL_CreateContext(window);
++#ifdef SDK_BUILD_ANDROID
++  SDL_GL_SetSwapInterval(0); // Android paces itself (the frame limit in the render loop)
++#else
+   SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval);
++#endif
+ 
+   if(s_SIM_config.fullScreen) {
+     SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+@@ -2119,7 +2127,9 @@
+           s_reg_PAD_KEYINPUT = s_reg_PAD_KEYINPUT | 0b0000000000000100;
+         } else if(keyRead == s_SIM_config.padSettings.frameCapKey) {
+           FastForwardButton(false);
++#ifndef SDK_BUILD_ANDROID
+           SDL_GL_SetSwapInterval(s_SIM_config.vsyncInterval);
++#endif
+         }
+       }
+       if (Event.type == SDL_JOYBUTTONDOWN) {
+@@ -2478,7 +2488,12 @@
+         PaceVBlank(16666667ull / s_SIM_config.fastForwardSpeed);
+       }
+     } else if (s_SIM_config.capFrameRate) {
+-
++#ifdef SDK_BUILD_ANDROID
++      // A running deadline, one DS frame apart, and no wait on the display's refresh (the swap interval is 0): the
++      // swap's vsync wait after a sleep that ended near a refresh made the frame rate 30 on some displays (the Duo's,
++      // with its second screen), staying there until the next fast-forward. Any display rate now shows 60 a second.
++      PaceVBlank(16666667ull);
++#else
+       // 60 Fps
+       if (frameNs < 16600000) {
+         u64 frameTimeRemaining = 16600000 - frameNs;
+@@ -2487,6 +2502,7 @@
+           SDL_Delay(frameTimeRemainingMs - 1);
+         }
+       }
++#endif
+     }
+ 
+     u64 beforeSwapNs = SIM_NowNs();

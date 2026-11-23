@@ -1,0 +1,11 @@
+# The player standing just below Twinleaf Town's signpost (tile 112, 878): the head must be drawn over the sign's
+# lower edge (the sprite depth bias). The shot is of the sign and the cap.
+#   tools/docker/desktop.sh test tests/scripts/signpost_head.txt --from turtwig
+mash A for 300
+mash B for 300
+mash A until free timeout 3000
+jump 411 112 879
+until free timeout 3000
+wait 60
+shot sign-below
+exit 0

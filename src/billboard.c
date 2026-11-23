@@ -13,7 +13,7 @@
 // units; nothing at their feet), so a head clears the lower edge of a sign just behind it (Twinleaf's town sign was
 // drawn over the player's cap). On the DS the edge snaps to its 256x192 pixels, which hides most of the overlap; at
 // a higher resolution it shows. Feet are not nudged, so tall grass still covers them
-#define BILLBOARD_DEPTH_NUDGE (FX32_ONE * 8)
+#define BILLBOARD_DEPTH_NUDGE (FX32_ONE * 16)
 #endif
 
 enum BillboardAnimStatus {

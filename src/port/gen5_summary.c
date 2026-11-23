@@ -9,6 +9,7 @@
 #include "applications/pokemon_summary_screen/main.h"
 #include "charcode_convert.h"
 #include "gen5.h"
+#include "gx_layers.h"
 #include "party.h"
 #include "pokemon.h"
 #include "port/gen5_rom.h"
@@ -83,6 +84,8 @@ BOOL Gen5Summary_Begin(ApplicationManager *appMan)
         return FALSE;
     }
     SetVBlankCallback(VBlank, NULL);
+    // BW2's Summary shadows are off for now: the polygon ID rule (on all the time, src/main.c) hides them, and without it
+    // their overlapping quads stack into a black blob (docs/thor/dev/plan.md, "Later")
     sActive = TRUE;
     sFailed = FALSE;
     return TRUE;
@@ -103,6 +106,9 @@ void Gen5Summary_Exit(ApplicationManager *appMan)
     SetVBlankCallback(NULL, NULL);
     const enum Gen5SummaryResult result = Gen5_SummaryEnd(&sSummary);
     sActive = FALSE;
+    // BW2's summary puts the top screen on the sub engine (GX_DISP_SELECT_SUB_MAIN); give the screens back to Platinum's
+    // own layout, or the app that opened it (the bag after a TM) comes back with its screens reversed
+    GXLayers_SwapDisplay();
     if (result == GEN5_SUMMARY_FAILED || sFailed) {
         return;
     }
