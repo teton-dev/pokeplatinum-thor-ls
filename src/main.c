@@ -34,6 +34,7 @@
 #include "unk_0209A74C.h"
 
 #ifdef SDK_PORT
+#include <simulator/sim.h>
 #include "port/frame_rate.h"
 #include "port/gba_slot.h"
 #include "port/nuzlocke_mode.h"
@@ -83,6 +84,9 @@ void NitroMain(void)
 {
 #ifdef SDK_PORT
     SIM_Config_prj_init();
+    // The DS doesn't blend translucent polygons of one polygon ID over each other: the overworld's shadows (a building's,
+    // a sign's, a sprite's) darkened twice where they overlap, and flickered with the camera
+    SIM_SetTranslucentPolygonIdRule(TRUE);
     // Point the save file at the slot in use before the save is loaded
     SaveSlots_Init();
     // Saves kept in step with other devices through a shared folder

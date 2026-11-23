@@ -41,6 +41,17 @@ enhanced graphics `enhanced-graphics.md`. The order is: Gen 5 battles (Platinum)
    Tower's multi battles and the other facilities' doubles and multis, an APK of each for the Thor, then Pal Park.
 5. **Renegade checks** (below).
 
+## Later
+
+- **BW2 Summary shadows** (2026-11-23): the Pokémon's shadow in the Gen 5 Summary is off for now (the owner's choice: no
+  shadow looks better than a broken one). Without libntr's polygon ID rule (`SIM_SetTranslucentPolygonIdRule`) the
+  shadow's many overlapping cell quads (`MCSS_DrawQuad`, polygon ID 1, a low alpha) stack into an opaque black blob beside
+  the Pokémon; with the rule on (it is on all the time now, `src/main.c`, for the overworld's overlapping shadows) nothing is drawn (checked by pixels on the desktop,
+  `gen5_summary.txt`; the battle's shadows are fine with the same rule). Not found why: log `shadowAlpha`, the polygon IDs
+  and the stencil in `G3SIM_DrawItems` for the Summary. The goal is BW2's faint shadow under the Pokémon.
+- **Eterna/Twinleaf signs** (2026-11-23): on the Duo the sign's lower plank covered the cap's top outline; the sprite depth
+  nudge went from 8 to 16 (`billboard.c`, Eterna 9100047): check it on the Duo.
+
 ## The owner's decisions (2026-11-17)
 
 Platinum:

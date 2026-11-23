@@ -1,0 +1,81 @@
+--- a/include/simulator/sim_display.h
++++ b/include/simulator/sim_display.h
+@@ -32,6 +32,12 @@
+ // Presents the secondary output and makes the main window current again.
+ void SIM_Display_EndSecondary(void);
+ 
++// Android: EndSecondary leaves the secondary frame unswapped (the main window is current again); this presents it.
++// Call it right after the main window's swap: that returns just after a vsync, when the secondary surface's buffer
++// has been released too, so the swap doesn't wait. Swapped before the main window's wait it stalled up to a refresh,
++// and the two waits one after the other made 30 frames a second on 60 Hz panels. A no-op elsewhere.
++void SIM_Display_PresentSecondary(void);
++
+ // Gives the display code a look at SDL events (desktop second window input/close).
+ // Returns TRUE if the event belonged to the secondary output and must not be handled
+ // as main-window input.
+--- a/libraries/sim/src/sim_display.cpp
++++ b/libraries/sim/src/sim_display.cpp
+@@ -55,6 +55,7 @@
+ EGLSurface sMainDraw = EGL_NO_SURFACE;
+ EGLSurface sMainRead = EGL_NO_SURFACE;
+ bool sHoldingLock = false;
++EGLSurface sPendingSurface = EGL_NO_SURFACE; // drawn, to be swapped by SIM_Display_PresentSecondary
+ 
+ // Must be called with sLock held
+ void ReleaseWindowLocked() {
+@@ -388,8 +389,9 @@
+ 
+ extern "C" void SIM_Display_EndSecondary(void) {
+ #ifdef SDK_BUILD_ANDROID
+-  eglSwapBuffers(sEglDisplay, sSurface);
++  // The swap waits for SIM_Display_PresentSecondary (the lock is not held until then: the Java side needs it)
+   eglMakeCurrent(sEglDisplay, sMainDraw, sMainRead, sEglContext);
++  sPendingSurface = sSurface;
+   if (sHoldingLock) {
+     sHoldingLock = false;
+     sLock.unlock();
+@@ -398,6 +400,26 @@
+   SDL_GL_SwapWindow(sSecondWindow);
+   SDL_GL_MakeCurrent(sMainWindow, sContext);
+   SDL_GL_SetSwapInterval(sMainSwapInterval);
++#endif
++}
++
++extern "C" void SIM_Display_PresentSecondary(void) {
++#ifdef SDK_BUILD_ANDROID
++  if (sPendingSurface == EGL_NO_SURFACE) {
++    return;
++  }
++  const EGLSurface surface = sPendingSurface;
++  sPendingSurface = EGL_NO_SURFACE;
++  std::lock_guard<std::mutex> guard(sLock);
++  if (sWindow == nullptr || sSurface != surface) {
++    return; // the surface went away meanwhile
++  }
++  const EGLSurface mainDraw = eglGetCurrentSurface(EGL_DRAW);
++  const EGLSurface mainRead = eglGetCurrentSurface(EGL_READ);
++  if (eglMakeCurrent(sEglDisplay, surface, surface, sEglContext)) {
++    eglSwapBuffers(sEglDisplay, surface);
++  }
++  eglMakeCurrent(sEglDisplay, mainDraw, mainRead, sEglContext);
+ #endif
+ }
+ 
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -2394,6 +2394,7 @@
+           glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+           glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+           SIM_Display_EndSecondary();
++          SIM_Display_PresentSecondary();
+           glViewport(viewX, viewY, viewWidth, viewHeight);
+         }
+         s_WasDualScreen = false;
+@@ -2493,6 +2494,7 @@
+       SIM_Smooth(&sTimings.capWaitMs, beforeSwapNs - sBeforeWaitNs);
+ 
+       SDL_GL_SwapWindow(window);
++      SIM_Display_PresentSecondary();
+       sLastPresentNs = SIM_NowNs();
+ 
+       SIM_Smooth(&sTimings.swapMs, sLastPresentNs - beforeSwapNs);
