@@ -110,6 +110,9 @@ void Billboard_Reset(Billboard *billboard)
     billboard->prev = NULL;
     billboard->draw = FALSE;
     billboard->callback = NULL;
+#ifdef SDK_PORT
+    billboard->castsShadow = FALSE;
+#endif
 }
 
 void BillboardLists_Create(int count, enum HeapID heapID)
@@ -263,8 +266,21 @@ static void BillboardList_Draw(BillboardList *list)
     SIM_SetSpriteDepthBias(BILLBOARD_DEPTH_NUDGE);
 #endif
 
+#ifdef SDK_PORT
+    BOOL casting = FALSE;
+#endif
+
     while (billboard != &list->sentinelData) {
         if (billboard->draw == TRUE) {
+#ifdef SDK_PORT
+            // The sprites of objects with a shadow (people, Pokemon) cast the sun's; the commands before must be
+            // processed before libntr's state changes
+            if ((billboard->castsShadow != FALSE) != casting) {
+                casting = billboard->castsShadow != FALSE;
+                NNS_G3dGeFlushBuffer();
+                SIM_SetSpriteShadow(casting);
+            }
+#endif
             if (billboard->callback != NULL) {
                 billboard->callback(billboard, billboard->callbackParam);
             }
@@ -292,6 +308,7 @@ static void BillboardList_Draw(BillboardList *list)
 
 #ifdef SDK_PORT
     NNS_G3dGeFlushBuffer();
+    SIM_SetSpriteShadow(FALSE);
     SIM_SetSpriteDepthBias(0);
 #endif
 }
@@ -670,6 +687,13 @@ NNSG3dRenderObj *Billboard_GetRenderObj(Billboard *billboard)
 {
     return &billboard->renderObj;
 }
+
+#ifdef SDK_PORT
+void Billboard_SetCastsShadow(Billboard *billboard, BOOL casts)
+{
+    billboard->castsShadow = casts != FALSE;
+}
+#endif
 
 void Billboard_SetCallback(Billboard *billboard, BillboardCallback callback, void *callbackParam)
 {

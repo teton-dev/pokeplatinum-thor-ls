@@ -715,6 +715,9 @@ void DrawChallenges()
 
 // --- Display: the frame rate (after libntr's own settings there) --------------------------------
 
+bool ConfigChoice(const char *label, const char *help, int *setting, const int *values, const char *const *labels,
+    int count);
+
 void DrawFrameRate()
 {
     SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
@@ -726,6 +729,13 @@ void DrawFrameRate()
         &config->enable60fpsSpeedFix, fps60);
     ConfigToggle("60 FPS in battles and menus too", "Everything off the overworld then runs twice as fast.",
         &config->enable60fpsEverywhere, fps60);
+    Section("Camera");
+    static const int kTiltValues[] = { 0, 1, 2 };
+    static const char *const kTiltLabels[] = { "Standard", "Slightly lower", "Lower" };
+    ConfigChoice("Camera tilt", "The overworld camera lower, between Platinum's nearly top-down view and Black 2 and "
+        "White 2's: a little more of what is ahead shows, a little less of what is behind.", &config->cameraTilt,
+        kTiltValues, kTiltLabels, 3);
+    Section("Drawing");
     ConfigToggle("Draw every DS frame", "Battles and menus make a new picture every other DS frame; normally only "
         "those are drawn, which halves the work there. Turn this on if something flickers.",
         &config->drawEveryFrame);
