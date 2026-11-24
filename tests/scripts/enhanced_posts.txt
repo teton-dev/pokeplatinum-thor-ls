@@ -1,0 +1,7 @@
+# Enhanced graphics sun shadows of thin 3D objects: the posts by Canalave City canal (their shadows should be thin streaks).
+# TEST_CONFIG="EnhancedShadows=true" POKEPLATINUM_ENHANCED_HOUR=16 tools/docker/desktop.sh test tests/scripts/enhanced_posts.txt --from turtwig
+mash A until free
+jump 33 50 730
+until free timeout 3000
+wait 40
+shot posts

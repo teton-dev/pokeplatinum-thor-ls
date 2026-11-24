@@ -1,0 +1,9 @@
+# Enhanced graphics water reflections in Canalave City: the canal under the bridge mirrors the planks above its shore.
+# From the turtwig fixture (SIM_WATER_DEBUG=1 paints the water mask blue and the pixels with a shore red):
+#
+#   TEST_CONFIG="EnhancedWater=true" tools/docker/desktop.sh test tests/scripts/enhanced_water.txt --from turtwig
+mash A until free
+jump 33 50 730
+until free timeout 3000
+wait 40
+shot canal

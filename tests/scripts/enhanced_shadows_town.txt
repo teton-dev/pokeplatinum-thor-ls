@@ -1,0 +1,8 @@
+# Enhanced graphics sun shadows of the 3D in Twinleaf Town (houses, trees, sign), from the turtwig fixture; run with
+# TEST_CONFIG="EnhancedShadows=true" and POKEPLATINUM_ENHANCED_HOUR=9 (SIM_SUNSHADOW_DEBUG=1 paints the shadow mask) and once
+# with EnhancedShadows=false to compare with the shadows the models carry
+mash A until free
+jump 411 116 884
+until free timeout 3000
+wait 40
+shot twin

@@ -140,6 +140,13 @@ test)
     for setting in ${TEST_CONFIG:-}; do
         echo "$setting" >> "$RUN/sim_config.ini"
     done
+    # TEST_CONFIG_PRJ='Key=value ...': the game's own settings (sim_config_prj.ini: InfiniteTMs=true...)
+    if [ -n "${TEST_CONFIG_PRJ:-}" ]; then
+        printf '[General]\n' > "$RUN/sim_config_prj.ini"
+        for setting in ${TEST_CONFIG_PRJ}; do
+            echo "$setting" >> "$RUN/sim_config_prj.ini"
+        done
+    fi
     if [ -n "$FROM" ]; then
         [ -f "$FIXTURES/$FROM/save.bin" ] || { echo "No fixture $FIXTURES/$FROM"; exit 1; }
         cp "$FIXTURES/$FROM/save.bin" "$RUN/save.bin"
@@ -150,7 +157,7 @@ test)
     GEN5_ROM=${GEN5_ROM:-$(ls "$THOR_DEV"/PKMNB2.nds "$THOR_DEV"/PKMNW2.nds 2>/dev/null | head -n 1)}
     docker run -d --name $TEST --user "$(id -u):$(id -g)" -e HOME=/home -e DISPLAY=:1 -e SDL_AUDIODRIVER=dummy \
         -e LIBGL_ALWAYS_SOFTWARE=1 -e LIBNTR_TEST_MODE=1 -e POKEPLATINUM_TEST_SCRIPT="$SCRIPT" \
-        -e POKEPLATINUM_GEN5_ROM="$GEN5_ROM" -e POKEPLATINUM_GEN5_ARENA="$POKEPLATINUM_GEN5_ARENA" -e POKEPLATINUM_GEN5_SAFARI_SEED="$POKEPLATINUM_GEN5_SAFARI_SEED" -e POKEPLATINUM_TOWER_OPPONENT="${POKEPLATINUM_TOWER_OPPONENT:-}" -e SIM_NATIVE_SETTINGS="${SIM_NATIVE_SETTINGS:-}" -e SIM_NATIVE_SETTINGS_EVENTS="${SIM_NATIVE_SETTINGS_EVENTS:-}" $(mounts) -w "$RUN" \
+        -e POKEPLATINUM_ENHANCED_HOUR="${POKEPLATINUM_ENHANCED_HOUR:-}" -e POKEPLATINUM_GEN5_ROM="$GEN5_ROM" -e POKEPLATINUM_GEN5_ARENA="$POKEPLATINUM_GEN5_ARENA" -e POKEPLATINUM_GEN5_SAFARI_SEED="$POKEPLATINUM_GEN5_SAFARI_SEED" -e POKEPLATINUM_TOWER_OPPONENT="${POKEPLATINUM_TOWER_OPPONENT:-}" -e SIM_WATER_DEBUG="${SIM_WATER_DEBUG:-}" -e SIM_HIGHLIGHT_DEBUG="${SIM_HIGHLIGHT_DEBUG:-}" -e SIM_ATMOSPHERE_DEBUG="${SIM_ATMOSPHERE_DEBUG:-}" -e SIM_SUNSHADOW_DEBUG="${SIM_SUNSHADOW_DEBUG:-}" -e SIM_NATIVE_SETTINGS="${SIM_NATIVE_SETTINGS:-}" -e SIM_NATIVE_SETTINGS_EVENTS="${SIM_NATIVE_SETTINGS_EVENTS:-}" $(mounts) -w "$RUN" \
         $IMAGE sh -c "Xvfb :1 -screen 0 ${SCREEN}x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
                       sleep 1
                       cp -f '$BIN/firmware.bin' '$BIN/header.bin' .
