@@ -1,0 +1,577 @@
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -65,6 +65,7 @@ typedef struct {
+     s8 colorVibrance;
+     s8 colorContrast;
+     s8 colorWhitePoint;
++    u8 enhancedHighlights; /* Enhanced graphics: the sun's specular and fresnel highlights on buildings, rim light on sprites */
+     u8 enhancedWater; /* Enhanced graphics: the scene mirrored in water (SIM_SetEnhancedWater) */
+     u8 enhancedShadows; /* Enhanced graphics: the sun's shadows of the overworld's sprites (SIM_SetEnhancedSun) */
+     u8 enhancedGrading; /* Enhanced graphics: the time of day's light over the 3D scene (SIM_SetEnhancedScene) */
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -144,7 +144,12 @@ void SIM_SetSpriteShadow(BOOL casts);
+ // its field map, before the 3D is drawn, the game's projection (m00, m11, m22, m32 of its matrix as floats) and the
+ // direction toward the sun in view space (unit length). With SIM_SetEnhancedSun's strength above 0 and the setting on,
+ // the depth buffer is marched toward the sun at the DS's resolution and the pixels in shadow darkened.
+-void SIM_SetEnhancedShadowCamera(float m00, float m11, float m22, float m32, float sunX, float sunY, float sunZ);
++void SIM_SetEnhancedShadowCamera(float m00, float m11, float m22, float m32, float sunX, float sunY, float sunZ,
++                                 float upX, float upY, float upZ);
++// Sun highlights (Settings > Display > Sun highlights), every frame: the sun's light, its color times how strong it is now
++// (0: none, as at night or indoors). With SIM_SetEnhancedShadowCamera's view (the same call) the depth buffer's surfaces
++// that are flat and not the ground glint and sheen in that color, and the sprites get a rim of it on the sun's side.
++void SIM_SetEnhancedSunLight(float r, float g, float b);
+ // While the game draws its land and buildings: the faint shadow polygons they carry (alpha 12 of 31 or less, untextured or
+ // 4-colour) aren't drawn, as the sun's shadows take their place (only while SIM_SetEnhancedSun's strength is above 0)
+ void SIM_SetHideBuiltInShadows(BOOL hide);
+--- a/include/simulator/sim_shaders.hpp
++++ b/include/simulator/sim_shaders.hpp
+@@ -16,6 +16,8 @@ extern const char * G3WaterMarchFragmentShader;
+ extern const char * G3WaterApplyFragmentShader;
+ extern const char * G3SunShadowMarchFragmentShader;
+ extern const char * G3SunShadowCleanFragmentShader;
++extern const char * G3HighlightFragmentShader;
++extern const char * G3HighlightApplyFragmentShader;
+ extern const char * G3SunShadowApplyFragmentShader;
+ extern const char * G2VertexShader;
+ extern const char * G2FragmentShader;
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -77,6 +77,9 @@ static int IniHandler(void* user, const char* section, const char* name,
+     if(MATCH("General", "ColorWhitePoint")) {
+         config->colorWhitePoint = (s8)atoi(value);
+     }
++    if(MATCH("General", "EnhancedHighlights")) {
++        config->enhancedHighlights = StringToBool(value);
++    }
+     if(MATCH("General", "EnhancedWater")) {
+         config->enhancedWater = StringToBool(value);
+     }
+@@ -487,6 +490,7 @@ void SIM_Config_LoadDefaults(SIM_config_type * aConfig)
+     aConfig->enhancedGrading = FALSE;
+     aConfig->enhancedShadows = FALSE;
+     aConfig->enhancedWater = FALSE;
++    aConfig->enhancedHighlights = FALSE;
+     aConfig->colorSaturation = 0;
+     aConfig->colorVibrance = 0;
+     aConfig->colorContrast = 0;
+@@ -588,6 +592,7 @@ void SIM_Config_SaveConfigFile(SIM_config_type * aConfig)
+     fprintf(configFile, "EnhancedGrading=%s\n", BoolToString(aConfig->enhancedGrading));
+     fprintf(configFile, "EnhancedShadows=%s\n", BoolToString(aConfig->enhancedShadows));
+     fprintf(configFile, "EnhancedWater=%s\n", BoolToString(aConfig->enhancedWater));
++    fprintf(configFile, "EnhancedHighlights=%s\n", BoolToString(aConfig->enhancedHighlights));
+     fprintf(configFile, "ColorSaturation=%d\n", aConfig->colorSaturation);
+     fprintf(configFile, "ColorVibrance=%d\n", aConfig->colorVibrance);
+     fprintf(configFile, "ColorContrast=%d\n", aConfig->colorContrast);
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_highlight_apply_fragment.glsl
+@@ -0,0 +1,29 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' sun highlights, second pass: at full resolution what the first pass found. Drawn twice: mode 0 brightens
++// the pixel's own colour (the blend multiplies and adds: dst * (1 + light)), mode 1 adds the sun's colour for the rim. One
++// texel of the light texture is a DS pixel, never filtered, so the light keeps the pixel grid.
++uniform sampler2D lightTexture;
++uniform ivec2 origin;
++uniform int pixelStep;
++uniform int mode;
++uniform vec3 sunColor;
++out vec4 color;
++
++void main()
++{
++    vec4 light = texelFetch(lightTexture, (ivec2(gl_FragCoord.xy) - origin) / pixelStep, 0);
++    if (mode == 0) {
++        if (dot(light.rgb, light.rgb) < 1e-5) {
++            discard;
++        }
++        color = vec4(light.rgb, 1.0);
++    } else {
++        if (light.a < 0.01) {
++            discard;
++        }
++        color = vec4(sunColor * light.a, 1.0);
++    }
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_highlight_fragment.glsl
+@@ -0,0 +1,152 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' sun highlights, at the DS's own resolution (one fragment per DS pixel, so the light keeps the pixel grid):
++// from the depth the 3D shader left in the attribute texture the surface's normal is rebuilt in view space (differences of
++// the neighbours' positions, read from the side with the smaller jump so an edge doesn't bend it), and a surface that is
++// flat (the normal agrees at one and two pixels' reach) and not the ground (walls, roof slopes) gets
++//   a specular glint where its normal is near the half vector between the sun and the eye,
++//   a lift where it faces the sun, and
++//   a fresnel sheen where it is seen at a graze,
++// all in the sun's colour. A sprite gets a rim: its outermost pixels on the side toward the sun. Nothing in shadow (the sun
++// shadows' mask) is lit. The result is two numbers per DS pixel for the next pass, at full resolution: rgb how much the
++// pixel's own colour is brightened (so a texture's detail and a black outline stay as drawn), a how much of the sun's colour
++// is added (the sprites' rim, which has to show on outlines).
++uniform sampler2D attrTexture;   // polygon ID * 4 + 1 for a sprite in r, the depth's high and low bytes in g and b, a set where opaque
++uniform sampler2D shadowTexture; // the sun shadows' mask (r: in shadow), when it was made this frame
++uniform int useShadow;
++uniform ivec2 origin;
++uniform int pixelStep;
++uniform ivec2 dsSize;
++uniform vec4 projection;         // m00, m11, m22, m32
++uniform float xScale;
++uniform vec3 toSun;              // view space, unit length
++uniform vec3 upView;             // the world's up in view space, unit length
++uniform vec3 sunColor;           // the sun's light, scaled by how strong it is now
++uniform int debugNormals;        // SIM_HIGHLIGHT_DEBUG=1: the normals as colour
++out vec4 color;
++
++// false: nothing opaque there, or off the screen. dist: view distance; sprite: a sprite's pixel
++int fetchedPolygonId; // the polygon ID of the pixel Fetch read last
++
++bool Fetch(ivec2 ds, out float dist, out bool sprite)
++{
++    dist = 0.0;
++    sprite = false;
++    if (ds.x < 0 || ds.y < 0 || ds.x >= dsSize.x || ds.y >= dsSize.y) {
++        return false;
++    }
++    ivec4 a = ivec4(texelFetch(attrTexture, origin + ds * pixelStep + ivec2(pixelStep / 2), 0) * 255.0 + 0.5);
++    if (a.a == 0) {
++        return false;
++    }
++    sprite = (a.r & 1) == 1;
++    fetchedPolygonId = a.r >> 2;
++    float ndcz = float(a.g * 256 + a.b) / 65535.0 * 2.0 - 1.0;
++    dist = projection.w / (ndcz + projection.z);
++    return true;
++}
++
++vec3 ViewPosition(ivec2 ds, float dist)
++{
++    vec2 ndc = ((vec2(ds) + 0.5) / vec2(dsSize)) * 2.0 - 1.0;
++    return vec3(ndc.x / xScale * dist / projection.x, ndc.y * dist / projection.y, -dist);
++}
++
++// A neighbour usable for a difference: opaque, not a sprite, and not across an edge
++bool Usable(ivec2 ds, float distHere, out vec3 position)
++{
++    float d;
++    bool sprite;
++    position = vec3(0.0);
++    if (!Fetch(ds, d, sprite) || sprite || abs(d - distHere) > 6.0) {
++        return false;
++    }
++    position = ViewPosition(ds, d);
++    return true;
++}
++
++// The surface's normal toward the viewer at a reach of `reach` pixels; ok false at an edge
++vec3 Normal(ivec2 p, float dist, vec3 here, int reach, out bool ok)
++{
++    vec3 r, l, u, d;
++    bool hasR = Usable(p + ivec2(reach, 0), dist, r), hasL = Usable(p - ivec2(reach, 0), dist, l);
++    bool hasU = Usable(p + ivec2(0, reach), dist, u), hasD = Usable(p - ivec2(0, reach), dist, d);
++    vec3 dx = vec3(0.0), dy = vec3(0.0);
++    ok = true;
++    if (hasR && hasL) {
++        dx = r - l;
++    } else if (hasR) {
++        dx = r - here;
++    } else if (hasL) {
++        dx = here - l;
++    } else {
++        ok = false;
++    }
++    if (hasU && hasD) {
++        dy = u - d;
++    } else if (hasU) {
++        dy = u - here;
++    } else if (hasD) {
++        dy = here - d;
++    } else {
++        ok = false;
++    }
++    vec3 n = cross(dx, dy);
++    if (!ok || dot(n, n) < 1e-6) {
++        ok = false;
++        return vec3(0.0, 0.0, 1.0);
++    }
++    n = normalize(n);
++    return dot(n, -here) < 0.0 ? -n : n;
++}
++
++void main()
++{
++    ivec2 p = ivec2(gl_FragCoord.xy);
++    float dist;
++    bool sprite;
++    vec3 light = vec3(0.0);
++    float rim = 0.0;
++    vec3 shown = vec3(0.0);
++    if (Fetch(p, dist, sprite)) {
++        // Buildings carry polygon IDs the ground and the trees don't (the DS gives them to outline them): only those glint
++        bool building = fetchedPolygonId != 0;
++        if (sprite) {
++            // The rim: the pixel's neighbour toward the sun on screen isn't a sprite's pixel
++            vec2 s = normalize(vec2(toSun.x, toSun.y) + vec2(1e-4));
++            ivec2 towardSun = ivec2(abs(s.x) > 0.38 ? int(sign(s.x)) : 0, abs(s.y) > 0.38 ? int(sign(s.y)) : 0);
++            float d2;
++            bool sprite2;
++            if (!(Fetch(p + towardSun, d2, sprite2) && sprite2)) {
++                rim = 0.4;
++            }
++        } else {
++            vec3 here = ViewPosition(p, dist);
++            bool ok1, ok2;
++            vec3 n = Normal(p, dist, here, 1, ok1);
++            vec3 n2 = Normal(p, dist, here, 2, ok2);
++            shown = n * 0.5 + 0.5;
++            // Flat (the same normal at two reaches) and not the ground
++            if (building && ok1 && ok2 && dot(n, n2) > 0.985 && dot(n, upView) < 0.9) {
++                vec3 eye = normalize(-here);
++                vec3 halfway = normalize(toSun + eye);
++                float facing = max(dot(n, toSun), 0.0);
++                float glint = pow(max(dot(n, halfway), 0.0), 48.0);
++                float sheen = pow(1.0 - max(dot(n, eye), 0.0), 2.0) * (0.3 + 0.7 * facing);
++                light = sunColor * clamp(0.9 * glint + 0.3 * facing * facing + 0.25 * sheen, 0.0, 0.8);
++            }
++        }
++        if (useShadow == 1 && texelFetch(shadowTexture, p, 0).r > 0.5) {
++            light = vec3(0.0);
++            rim = 0.0;
++        }
++    }
++    if (debugNormals == 2) {
++        ivec4 a = ivec4(texelFetch(attrTexture, origin + p * pixelStep + ivec2(pixelStep / 2), 0) * 255.0 + 0.5);
++        int id = a.r >> 2;
++        shown = a.a == 0 ? vec3(0.0) : vec3(float(id & 1), float((id >> 1) & 1), float((id >> 2) & 1)) * 0.6 + 0.2 * float((id >> 3) & 3);
++    }
++    color = vec4(debugNormals >= 1 ? shown : light, rim);
++}
++)""
+--- a/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
+@@ -8,12 +8,18 @@ uniform sampler2D maskTexture;
+ uniform ivec2 origin;
+ uniform int pixelStep;
+ uniform vec3 tone;  // the multiplier at the shadow's full strength
+-uniform int debugMask; // SIM_SUNSHADOW_DEBUG: 1 paints the mask, 2 the distances as grey bands
++uniform int debugMask; // SIM_SUNSHADOW_DEBUG: 1 paints the mask, 2 the distances as grey bands,
++                       // 3 which test decided (blue close behind, green wide enough, red rejected only by the width)
+ out vec4 color;
+ 
+ void main()
+ {
+     vec4 mask = texelFetch(maskTexture, (ivec2(gl_FragCoord.xy) - origin) / pixelStep, 0);
++    if (debugMask == 3) {
++        float w = mask.g;
++        color = w < 0.1 ? vec4(1.0) : w < 0.5 ? vec4(0.0, 0.0, 1.0, 1.0) : w < 0.8 ? vec4(0.0, 0.7, 0.0, 1.0) : vec4(1.0, 0.0, 0.0, 1.0);
++        return;
++    }
+     if (debugMask == 2) {
+         color = vec4(vec3(mask.g), 1.0);
+         return;
+--- a/libraries/sim/src/shaders/g3_sunshadow_march_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_sunshadow_march_fragment.glsl
+@@ -16,6 +16,8 @@ uniform float xScale;          // a wide scene libntr narrows
+ uniform vec3 toSun;            // view space, unit length
+ uniform vec3 march;            // distance to the first step, step length, thickness it still counts as in the way (view units)
+ uniform int steps;
++uniform vec3 upView;           // the world's up in view space, unit length
++uniform int debugMode;         // SIM_SUNSHADOW_DEBUG=3: g says which test decided (see the end)
+ out vec4 color;
+ 
+ // 0: nothing opaque there (or a sprite); otherwise the view distance (positive) of the surface
+@@ -58,14 +60,11 @@ void main()
+     ivec2 ds = ivec2(gl_FragCoord.xy);
+     float distanceHere = Distance(ds);
+     float shadow = 0.0;
++    float why = 0.0; // debug: 0.33 blocked close behind, 0.66 blocked by a wide enough thing, 1.0 only rejected by the width
+     if (distanceHere > 0.0) {
+         vec2 ndc = ((vec2(ds) + 0.5) / vec2(dsSize)) * 2.0 - 1.0;
+         // the view-space position: x = ndc.x * distance / m00 (the narrowed scene's x is stretched back first)
+         vec3 here = vec3(ndc.x / xScale * distanceHere / projection.x, ndc.y * distanceHere / projection.y, -distanceHere);
+-        // The ray's direction on the screen, in whole pixels, for measuring what it passes behind
+-        vec2 screenDirection = vec2(toSun.x * projection.x * xScale, toSun.y * projection.y);
+-        screenDirection /= max(max(abs(screenDirection.x), abs(screenDirection.y)), 1e-4);
+-        ivec2 rayStep = ivec2(round(screenDirection));
+         for (int i = 0; i < steps; i++) {
+             vec3 q = here + toSun * (march.x + march.y * float(i));
+             float qDistance = -q.z;
+@@ -83,14 +82,21 @@ void main()
+             if (scene > 0.0 && behind > 1.0 + 0.01 * qDistance && behind < march.z) {
+                 // Close behind the surface: blocked. Farther behind: only if the thing is that wide (about as wide as
+                 // the gap), so thin posts make thin shadows and walls and roofs keep theirs
+-                if (behind < 4.0 || behind < 4.0 + Extent(qDs, scene, ivec2(1, 0))) {
++                // The width is measured across the screen, but the gap is along the view ray, which crosses an
++                // upright thing of that width over width / cos(the ray's angle with the ground): a post seen from
++                // above is deeper along the view than it is wide
++                float up = dot(normalize(q), upView);
++                float across = sqrt(max(1.0 - up * up, 0.09));
++                if (behind < 4.0 || behind < 4.0 + Extent(qDs, scene, ivec2(1, 0)) / across) {
+                     shadow = 1.0;
++                    why = behind < 4.0 ? 0.33 : 0.66;
+                     break;
+                 }
++                why = 1.0;
+             }
+         }
+     }
+     // b: 1 where nothing is shaded (a sprite, or nothing drawn): the clean-up pass leaves those alone
+-    color = vec4(shadow, fract(distanceHere / 16.0), distanceHere > 0.0 ? 0.0 : 1.0, 1.0);
++    color = vec4(shadow, debugMode == 3 ? why : fract(distanceHere / 16.0), distanceHere > 0.0 ? 0.0 : 1.0, 1.0);
+ }
+ )""
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -372,7 +372,11 @@ static u8 sEnhancedWaterStrength = 0;
+ static GLuint g3SunShadowMarchProgramID, g3SunShadowCleanProgramID, g3SunShadowApplyProgramID;
+ static GLuint g3SunShadowTex, g3SunShadowFbo, g3SunShadowCleanTex, g3SunShadowCleanFbo;
+ static int sSunShadowW, sSunShadowH;
+-static float sSunCamera[7];
++static float sSunCamera[10];
++static float sSunLight[3] = {0.0f, 0.0f, 0.0f};
++static bool sSunFrameDrawn = false, sSunFrameCamera = false, sSunShadowMade = false;
++static GLuint g3HighlightProgramID, g3HighlightApplyProgramID, g3HighlightTex, g3HighlightFbo;
++static int sHighlightW, sHighlightH;
+ static bool sSunCameraSet = false;
+ static GLuint g3EnhancedProgramID; // Enhanced graphics' grade (SIM_SetEnhancedScene), over the finished 3D frame
+ static GLuint g3EdgeSourceTextureId; // with anti-aliasing: the 3D viewport before the pass
+@@ -1180,6 +1184,16 @@ void *SIM_RenderInit(void *arg) {
+       g3SunShadowMarchProgramID = glCreateProgram();
+       CompileFragmentShader(fragment, ptr);
+       LinkShader(g3SunShadowMarchProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3HighlightFragmentShader);
++      ptr = src.c_str();
++      g3HighlightProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3HighlightProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3HighlightApplyFragmentShader);
++      ptr = src.c_str();
++      g3HighlightApplyProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3HighlightApplyProgramID, edgeVertexShader, fragment);
+       src = SIM::PrepareShaderSource(SIM::G3SunShadowCleanFragmentShader);
+       ptr = src.c_str();
+       g3SunShadowCleanProgramID = glCreateProgram();
+@@ -1903,7 +1917,14 @@ static void WaterResources(int fbWidth, int fbHeight, int dsWidth, int dsHeight,
+ 
+ static GLint WaterUniform(GLuint program, const char *name);
+ 
+-extern "C" void SIM_SetEnhancedShadowCamera(float m00, float m11, float m22, float m32, float sunX, float sunY, float sunZ) {
++extern "C" void SIM_SetEnhancedSunLight(float r, float g, float b) {
++  sSunLight[0] = r;
++  sSunLight[1] = g;
++  sSunLight[2] = b;
++}
++
++extern "C" void SIM_SetEnhancedShadowCamera(float m00, float m11, float m22, float m32, float sunX, float sunY, float sunZ,
++                                            float upX, float upY, float upZ) {
+   sSunCamera[0] = m00;
+   sSunCamera[1] = m11;
+   sSunCamera[2] = m22;
+@@ -1911,6 +1932,9 @@ extern "C" void SIM_SetEnhancedShadowCamera(float m00, float m11, float m22, flo
+   sSunCamera[4] = sunX;
+   sSunCamera[5] = sunY;
+   sSunCamera[6] = sunZ;
++  sSunCamera[7] = upX;
++  sSunCamera[8] = upY;
++  sSunCamera[9] = upZ;
+   sSunCameraSet = true;
+ }
+ 
+@@ -1919,15 +1943,23 @@ extern float s_G3ShadowAlpha;
+ // Enhanced graphics' sun shadows of the scene's 3D: see g3_sunshadow_march_fragment.glsl. At the DS's resolution a
+ // march toward the sun through the depth the 3D shader left in the attribute texture; then, at full resolution, a
+ // multiply where it found shadow. Once per frame drawn; not with anti-aliasing (no attributes) or in a W-buffer scene.
+-static void G3EnhancedSunShadow() {
++// Once a frame, before the passes that read the game's camera (the sun shadows and the highlights): is there a new frame, and
++// did the game give its camera for it (it says it again every frame it draws the field)
++static void G3EnhancedSunPrepare() {
+   static u32 sLastDrawSerial = 0;
+   const u32 drawSerial = G3SIM_DrawSerial();
+-  const bool drawn = drawSerial != sLastDrawSerial;
++  sSunFrameDrawn = drawSerial != sLastDrawSerial;
+   sLastDrawSerial = drawSerial;
+-  const bool cameraSet = sSunCameraSet;
+-  if (drawn) {
+-    sSunCameraSet = false; // the game says it again every frame it draws the field
++  sSunFrameCamera = sSunFrameDrawn && sSunCameraSet;
++  if (sSunFrameDrawn) {
++    sSunCameraSet = false;
+   }
++  sSunShadowMade = false;
++}
++
++static void G3EnhancedSunShadow() {
++  const bool drawn = sSunFrameDrawn;
++  const bool cameraSet = sSunFrameCamera;
+   if (!drawn || !cameraSet || !s_SIM_config.enhancedShadows || s_G3ShadowAlpha <= 0.0f || sSamples != 0 ||
+       s_SIM_useWBuffer || sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0) {
+     return;
+@@ -1986,6 +2018,8 @@ static void G3EnhancedSunShadow() {
+   // thicker than a tree stop counting
+   glProgramUniform3f(march, WaterUniform(march, "march"), 2.0f, 2.0f, 120.0f);
+   glProgramUniform1i(march, WaterUniform(march, "steps"), 40);
++  glProgramUniform1i(march, WaterUniform(march, "debugMode"), sDebug);
++  glProgramUniform3f(march, WaterUniform(march, "upView"), sSunCamera[7], sSunCamera[8], sSunCamera[9]);
+   glUseProgram(march);
+   glBindVertexArray(g3EdgeVertexArray);
+   glDrawArrays(GL_TRIANGLES, 0, 3);
+@@ -2026,6 +2060,111 @@ static void G3EnhancedSunShadow() {
+   glDrawArrays(GL_TRIANGLES, 0, 3);
+   glDrawBuffers(2, kBoth);
+   glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++  sSunShadowMade = true;
++
++  glActiveTexture(GL_TEXTURE0);
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glBindVertexArray(vertexArray);
++  glUseProgram(g3shaderProgramID);
++  if (cullFace) {
++    glEnable(GL_CULL_FACE);
++  }
++  if (depthTest) {
++    glEnable(GL_DEPTH_TEST);
++  }
++  if (!blend) {
++    glDisable(GL_BLEND);
++  }
++  glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
++}
++
++// Enhanced graphics' sun highlights: see g3_highlight_fragment.glsl. At the DS's resolution the light on each pixel, then
++// at full resolution an addition of it; not with anti-aliasing (no attributes), in a W-buffer scene, or with no sun.
++static void G3EnhancedHighlights() {
++  if (!sSunFrameDrawn || !sSunFrameCamera || !s_SIM_config.enhancedHighlights || sSamples != 0 || s_SIM_useWBuffer ||
++      sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0 || (sSunLight[0] + sSunLight[1] + sSunLight[2]) <= 0.0f) {
++    return;
++  }
++  const int dsWidth = (sG3Viewport[2] + sScale - 1) / sScale, dsHeight = (sG3Viewport[3] + sScale - 1) / sScale;
++  if (g3HighlightFbo == 0) {
++    glGenFramebuffers(1, &g3HighlightFbo);
++  }
++  if (sHighlightW != dsWidth || sHighlightH != dsHeight) {
++    sHighlightW = dsWidth;
++    sHighlightH = dsHeight;
++    if (g3HighlightTex != 0) {
++      glDeleteTextures(1, &g3HighlightTex);
++    }
++    g3HighlightTex = WaterTexture(GL_RGBA8, dsWidth, dsHeight, GL_RGBA);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3HighlightFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3HighlightTex, 0);
++  }
++  static const int sDebug = (getenv("SIM_HIGHLIGHT_DEBUG") != nullptr && getenv("SIM_HIGHLIGHT_DEBUG")[0] != 0)
++                                ? atoi(getenv("SIM_HIGHLIGHT_DEBUG")) : 0;
++  const float xScale = sWideScale3D ? (float)SIM_NDS_SCREEN_WIDTH / (float)sWide3dWidth : 1.0f;
++
++  GLint viewport[4];
++  GLint vertexArray;
++  glGetIntegerv(GL_VIEWPORT, viewport);
++  glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
++  const GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
++  const GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
++  const GLboolean blend = glIsEnabled(GL_BLEND);
++  glDisable(GL_DEPTH_TEST);
++  glDisable(GL_CULL_FACE);
++  glDisable(GL_BLEND);
++
++  glBindFramebuffer(GL_FRAMEBUFFER, g3HighlightFbo);
++  glViewport(0, 0, dsWidth, dsHeight);
++  glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
++  glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
++  glActiveTexture(GL_TEXTURE0 + 12);
++  glBindTexture(GL_TEXTURE_2D, g3SunShadowCleanTex);
++  const GLuint light = g3HighlightProgramID;
++  glProgramUniform1i(light, WaterUniform(light, "attrTexture"), kEdgeAttrTexUnit);
++  glProgramUniform1i(light, WaterUniform(light, "shadowTexture"), 12);
++  glProgramUniform1i(light, WaterUniform(light, "useShadow"), sSunShadowMade ? 1 : 0);
++  glProgramUniform2i(light, WaterUniform(light, "origin"), sG3Viewport[0], sG3Viewport[1]);
++  glProgramUniform1i(light, WaterUniform(light, "pixelStep"), sScale);
++  glProgramUniform2i(light, WaterUniform(light, "dsSize"), dsWidth, dsHeight);
++  glProgramUniform4f(light, WaterUniform(light, "projection"), sSunCamera[0], sSunCamera[1], sSunCamera[2], sSunCamera[3]);
++  glProgramUniform1f(light, WaterUniform(light, "xScale"), xScale);
++  glProgramUniform3f(light, WaterUniform(light, "toSun"), sSunCamera[4], sSunCamera[5], sSunCamera[6]);
++  glProgramUniform3f(light, WaterUniform(light, "upView"), sSunCamera[7], sSunCamera[8], sSunCamera[9]);
++  glProgramUniform3f(light, WaterUniform(light, "sunColor"), sSunLight[0], sSunLight[1], sSunLight[2]);
++  glProgramUniform1i(light, WaterUniform(light, "debugNormals"), sDebug);
++  glUseProgram(light);
++  glBindVertexArray(g3EdgeVertexArray);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++
++  static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glDrawBuffers(1, kBoth);
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glActiveTexture(GL_TEXTURE0 + 12);
++  glBindTexture(GL_TEXTURE_2D, g3HighlightTex);
++  const GLuint apply = g3HighlightApplyProgramID;
++  glProgramUniform1i(apply, WaterUniform(apply, "lightTexture"), 12);
++  glProgramUniform2i(apply, WaterUniform(apply, "origin"), sG3Viewport[0], sG3Viewport[1]);
++  glProgramUniform1i(apply, WaterUniform(apply, "pixelStep"), sScale);
++  glProgramUniform3f(apply, WaterUniform(apply, "sunColor"), sSunLight[0], sSunLight[1], sSunLight[2]);
++  glEnable(GL_BLEND);
++  glUseProgram(apply);
++  if (sDebug == 0) {
++    // The pixel's own colour brightened (dst * (1 + light)), then the sun's colour added where there is a rim
++    glProgramUniform1i(apply, WaterUniform(apply, "mode"), 0);
++    glBlendFuncSeparate(GL_DST_COLOR, GL_ONE, GL_ZERO, GL_ONE);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++    glProgramUniform1i(apply, WaterUniform(apply, "mode"), 1);
++    glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++  } else {
++    glProgramUniform1i(apply, WaterUniform(apply, "mode"), 0);
++    glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ONE);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++  }
++  glDrawBuffers(2, kBoth);
++  glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+ 
+   glActiveTexture(GL_TEXTURE0);
+   glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
+@@ -2293,7 +2432,9 @@ void *SIM_Render(void *arg) {
+   G3SIM_DrawItems();
+ 
+   G3EdgeMarking();
++  G3EnhancedSunPrepare();
+   G3EnhancedSunShadow();
++  G3EnhancedHighlights();
+   G3EnhancedWater();
+   G3EnhancedGrade();
+ 
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -326,6 +326,14 @@ void DrawDisplay() {
+     SaveConfig();
+   }
+ 
++  bool highlights = config->enhancedHighlights != 0;
++  if (Toggle("Sun highlights", "Enhanced graphics: walls and roofs glint where the sun catches them, with a soft sheen at "
++             "a graze and a thin rim of light on people and Pokemon, in the color of the sun at that hour.",
++             &highlights)) {
++    config->enhancedHighlights = highlights ? 1 : 0;
++    SaveConfig();
++  }
++
+   bool water = config->enhancedWater != 0;
+   if (Toggle("Water reflections", "Enhanced graphics: lakes, the sea, rivers and puddles mirror the trees, buildings and "
+              "people along their shore. Needs 3D smoothing (anti-aliasing) off; use a higher 3D resolution instead.",
+--- a/libraries/sim/src/sim_shaders.cpp
++++ b/libraries/sim/src/sim_shaders.cpp
+@@ -48,6 +48,14 @@ const char * G3SunShadowCleanFragmentShader =
+ #include "shaders/g3_sunshadow_clean_fragment.glsl"
+ ;
+ 
++const char * G3HighlightFragmentShader =
++#include "shaders/g3_highlight_fragment.glsl"
++;
++
++const char * G3HighlightApplyFragmentShader =
++#include "shaders/g3_highlight_apply_fragment.glsl"
++;
++
+ const char * G3SunShadowApplyFragmentShader =
+ #include "shaders/g3_sunshadow_apply_fragment.glsl"
+ ;

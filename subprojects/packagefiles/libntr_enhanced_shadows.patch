@@ -1,0 +1,285 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -134,6 +134,13 @@
+ // own clock and map. tintR/G/B: what the finished 3D frame is multiplied by, 0 to 255 (255: unchanged); vignette: how
+ // dark the corners get, 0 to 255. All neutral (255, 255, 255, 0) draws nothing, and so does the setting off.
+ void SIM_SetEnhancedScene(u8 tintR, u8 tintG, u8 tintB, u8 vignette);
++// Sun shadows (Settings > Display > Sun shadows): the overworld's sprites between SIM_SetSpriteShadow(TRUE) and (FALSE)
++// (inside SIM_SetSpriteDepthBias's bracket) also draw a shadow: the sprite sheared along the ground from its feet.
++// SIM_SetEnhancedSun, every frame: shearX the shadow's sideways reach per height of the sprite on screen (positive:
++// to the right), shearY its reach away from the camera (positive: up the screen, 0: flat on the spot), strength 0 to
++// 255 how dark (0: no shadows).
++void SIM_SetSpriteShadow(BOOL casts);
++void SIM_SetEnhancedSun(float shearX, float shearY, u8 strength);
+ // How a wide scene is made, asked for with SIM_SetWidescreenScene (every frame too).
+ // scale3D: the game leaves its projection 4:3 and libntr narrows the 3D instead, keeping
+ // its shapes and showing more at the sides (2D-positioned 3D sprites, say); the game's own
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -65,6 +65,7 @@
+     s8 colorVibrance;
+     s8 colorContrast;
+     s8 colorWhitePoint;
++    u8 enhancedShadows; /* Enhanced graphics: the sun's shadows of the overworld's sprites (SIM_SetEnhancedSun) */
+     u8 enhancedGrading; /* Enhanced graphics: the time of day's light over the 3D scene (SIM_SetEnhancedScene) */
+     u8 edgeMarking; /* Draw the DS's 3D outlines (edge marking) where the game turns them on */
+     u32 windowWidth; /* Initial width of the window. If set to 0, will use the default width for the screen layout */
+--- a/include/simulator/g3_draw.h
++++ b/include/simulator/g3_draw.h
+@@ -27,6 +27,7 @@
+ #endif
+ 
+ void G3SIM_AddVtx(G3SIM_Vertex_t * vtx);
++void G3SIM_AddShadowVtx(G3SIM_Vertex_t * vtx); // a sprite's sun shadow, drawn with the batch's texture (Enhanced graphics)
+ void G3SIM_DrawArray();
+ void G3SIM_DrawCleanUp();
+ void G3SIM_DrawInit();
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -77,6 +77,9 @@
+     if(MATCH("General", "ColorWhitePoint")) {
+         config->colorWhitePoint = (s8)atoi(value);
+     }
++    if(MATCH("General", "EnhancedShadows")) {
++        config->enhancedShadows = StringToBool(value);
++    }
+     if(MATCH("General", "EnhancedGrading")) {
+         config->enhancedGrading = StringToBool(value);
+     }
+@@ -479,6 +482,7 @@
+     aConfig->dumpTextures = FALSE;
+     aConfig->edgeMarking = TRUE;
+     aConfig->enhancedGrading = FALSE;
++    aConfig->enhancedShadows = FALSE;
+     aConfig->colorSaturation = 0;
+     aConfig->colorVibrance = 0;
+     aConfig->colorContrast = 0;
+@@ -578,6 +582,7 @@
+     fprintf(configFile, "DumpTextures=%s\n", BoolToString(aConfig->dumpTextures));
+     fprintf(configFile, "EdgeMarking=%s\n", BoolToString(aConfig->edgeMarking));
+     fprintf(configFile, "EnhancedGrading=%s\n", BoolToString(aConfig->enhancedGrading));
++    fprintf(configFile, "EnhancedShadows=%s\n", BoolToString(aConfig->enhancedShadows));
+     fprintf(configFile, "ColorSaturation=%d\n", aConfig->colorSaturation);
+     fprintf(configFile, "ColorVibrance=%d\n", aConfig->colorVibrance);
+     fprintf(configFile, "ColorContrast=%d\n", aConfig->colorContrast);
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -326,6 +326,13 @@
+     SaveConfig();
+   }
+ 
++  bool shadows = config->enhancedShadows != 0;
++  if (Toggle("Sun shadows", "Enhanced graphics: the people and Pokemon on the overworld cast a shadow away from the "
++             "sun, long in the morning and evening and short at noon, none at night.", &shadows)) {
++    config->enhancedShadows = shadows ? 1 : 0;
++    SaveConfig();
++  }
++
+ #ifdef SDK_BUILD_ANDROID
+   const char *secondLabel = "Bottom screen on the second display";
+   const char *secondHelp = "On dual-screen devices like the AYN Thor. Off puts both screens on this display.";
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -36,6 +36,7 @@
+ 	G3SIM_TexImageParam_t texImageParam;
+ 	G3SIM_Vertex_t * verts;
+ 	u32 vertsCount;
++	bool shadow; // a sprite's sun shadow (Enhanced graphics): drawn after the other translucent items, once per pixel
+ } g3_draw_item_t;
+ 
+ G3SIM_Vertex_t s_G3DrawVerts[G3_DRAW_MAX_VERTS];
+@@ -165,6 +166,20 @@
+ 	return location;
+ }
+ 
++// Enhanced graphics' sun shadows: the shadow triangles of the batch being collected (see G3SIM_SubmitPolygon), with the
++// colour and strength they are drawn in
++#define G3_SHADOW_MAX_VERTS 3000
++static G3SIM_Vertex_t s_G3ShadowVerts[G3_SHADOW_MAX_VERTS];
++static u32 s_G3ShadowCount = 0;
++extern float s_G3ShadowAlpha;
++
++void G3SIM_AddShadowVtx(G3SIM_Vertex_t * vtx)
++{
++	if(s_G3ShadowCount < G3_SHADOW_MAX_VERTS) {
++		s_G3ShadowVerts[s_G3ShadowCount++] = *vtx;
++	}
++}
++
+ void G3SIM_AddVtx(G3SIM_Vertex_t * vtx)
+ {
+ 	memcpy(&s_G3DrawVerts[s_G3DrawCurVertIdx], vtx, sizeof(G3SIM_Vertex_t));
+@@ -222,6 +237,7 @@
+ void G3SIM_DrawCleanUp()
+ {
+ 	s_G3DrawCurVertIdx = 0;
++	s_G3ShadowCount = 0;
+ }
+ 
+ void G3SIM_DrawInit()
+@@ -459,6 +475,24 @@
+ 	} else {
+ 		glProgramUniform1f(g3shaderProgramID, G3SIM_Uniform("polygonId"), (float)s_curPolygonAttr.polygonId);
+ 		G3SIM_DrawArray();
++	}
++
++	// The batch's sun shadows (sprites, Enhanced graphics): its texture's shape, drawn dark after the rest
++	if(s_G3ShadowCount != 0 && s_G3DrawItemListCount < G3_DRAW_MAX_ITEMS && texture != nullptr
++	   && s_texImageParam.textureFormat != GX_TEXFMT_NONE) {
++		g3_draw_item_t * item = &s_G3DrawItemList[s_G3DrawItemListCount];
++		memset(item, 0, sizeof(g3_draw_item_t));
++		item->textureId = texture->GetTextureID();
++		memcpy(&item->polygonAttr, &s_curPolygonAttr, sizeof(G3SIM_PolygonAttr_t));
++		// A shadow can be flipped by the shear: both faces, and over the ground it lies on
++		item->polygonAttr.cullMode = GX_CULL_NONE;
++		item->polygonAttr.depthTest = 1;
++		memcpy(&item->texImageParam, &s_texImageParam, sizeof(G3SIM_TexImageParam_t));
++		item->verts = (G3SIM_Vertex_t*)(malloc(sizeof(G3SIM_Vertex_t) * s_G3ShadowCount));
++		item->vertsCount = s_G3ShadowCount;
++		memcpy(item->verts, s_G3ShadowVerts, sizeof(G3SIM_Vertex_t) * s_G3ShadowCount);
++		item->shadow = true;
++		s_G3DrawItemListCount++;
+ 	}
+ 
+ 	G3SIM_DrawCleanUp();
+@@ -515,6 +549,9 @@
+ 	//Draws all the translucent objects that were deferred to the end of the frame.
+ 	for(int i=0; i<s_G3DrawItemListCount; i++) {
+ 		g3_draw_item_t * item = &s_G3DrawItemList[i];
++		if(item->shadow) {
++			continue; // after the others, below
++		}
+ 		// Each with its own culling and depth test: GL has those of the last polygon attributes
+ 		// the frame set, which culled polygons drawn without culling (Black 2 and White 2's
+ 		// battle particles)
+@@ -551,6 +588,46 @@
+ 	if(idRule) {
+ 		glDisable(GL_STENCIL_TEST);
+ 	}
++
++	// Sun shadows (Enhanced graphics): each pixel darkened once, however many shadows overlap it (the stencil counts),
++	// not written into the depth buffer, and with the sprite's own alpha so the edges stay as sharp as the art
++	bool anyShadow = false;
++	for(int i=0; i<s_G3DrawItemListCount; i++) {
++		anyShadow |= s_G3DrawItemList[i].shadow;
++	}
++	if(anyShadow) {
++		glStencilMask(0xFF);
++		glClearStencil(0);
++		glClear(GL_STENCIL_BUFFER_BIT);
++		glEnable(GL_STENCIL_TEST);
++		glStencilFunc(GL_EQUAL, 0, 0xFF);
++		glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
++		glDepthMask(GL_FALSE);
++		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("shadowMode"), 1);
++		glProgramUniform4f(g3shaderProgramID, G3SIM_Uniform("shadowColor"), 0.04f, 0.06f, 0.14f, s_G3ShadowAlpha);
++		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("useTexture"), 1);
++		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("polygonMode"), 0);
++		for(int i=0; i<s_G3DrawItemListCount; i++) {
++			g3_draw_item_t * item = &s_G3DrawItemList[i];
++			if(!item->shadow) {
++				continue;
++			}
++			G3SIM_ApplyCullAndDepth(&item->polygonAttr);
++			glActiveTexture(GL_TEXTURE0);
++			glBindTexture(GL_TEXTURE_2D, item->textureId);
++			G3SIM_ApplyTexWrap(&item->texImageParam);
++			glBindVertexArray(s_G3DrawVertexArray);
++			glBindBuffer(GL_ARRAY_BUFFER, s_G3DrawVertexBuffer);
++			G3SIM_UploadVerts(item->verts, item->vertsCount);
++			glDrawArrays(GL_TRIANGLES,0, item->vertsCount);
++			sG3Draws++;
++			sG3DrawSerial++;
++			free(item->verts);
++		}
++		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("shadowMode"), 0);
++		glDepthMask(GL_TRUE);
++		glDisable(GL_STENCIL_TEST);
++	}
+ 	if (s_G3DrawItemListCount != 0) {
+ 		// Back to the current polygon attributes' (G3SIM_PolygonAttr sets the depth test only
+ 		// when it changes)
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1608,7 +1608,25 @@
+ // where the ground's effects (tall grass) can cover them. The DS snaps polygon edges to its 256x192 pixels, which
+ // hides most of those overlaps; drawn at a higher resolution they show
+ static fx32 s_spriteDepthBiasTop;
++
++// Enhanced graphics' sun shadows: a sprite drawn while s_spriteCasts is set (and the depth bias is, which marks the
++// sprites) also gets a shadow polygon: the sprite sheared along the ground, from its lowest point on screen
++static bool s_spriteCasts = false;
++static float s_sunShearX = 0.0f, s_sunShearY = 0.0f;
++float s_G3ShadowAlpha = 0.0f; // 0: no shadows (setting off, night, indoors)
+ 
++extern "C" void SIM_SetSpriteShadow(BOOL casts)
++{
++    s_spriteCasts = casts != FALSE;
++}
++
++extern "C" void SIM_SetEnhancedSun(float shearX, float shearY, u8 strength)
++{
++    s_sunShearX = shearX;
++    s_sunShearY = shearY;
++    s_G3ShadowAlpha = SIM_GetConfigPtr()->enhancedShadows ? (float)strength / 255.0f : 0.0f;
++}
++
+ extern "C" void SIM_SetSpriteDepthBias(fx32 top)
+ {
+     s_spriteDepthBiasTop = top;
+@@ -1727,4 +1745,29 @@
+         G3SIM_AddVtx(&polyVerts[i]);
+         G3SIM_AddVtx(&polyVerts[i + 1]);
+     }
++
++    // The sprite's sun shadow: each point sheared along the ground from the sprite's feet by its height on screen
++    // (x by the sun's side, y by the ground's depth: up the screen is away from the camera), at the feet's depth
++    // so what stands in front of the sprite still hides it. Same texture: the shadow has the sprite's outline
++    if(s_spriteCasts && s_G3ShadowAlpha > 0.0f && biasSpan > 0.0) {
++        const float ratio = SIM_WidescreenRatio() > 1.0f ? SIM_WidescreenRatio() : 1.0f; // a wide scene's NDC x is narrower
++        int foot = 0;
++        for(int i=1; i < numVerts; i++) {
++            foot = polyVerts[i].y < polyVerts[foot].y ? i : foot;
++        }
++        const float footZ = polyVerts[foot].z - 0.0004f; // a hair toward the camera: off the ground's own depth
++        G3SIM_Vertex_t shadowVerts[G3SIM_CLIP_MAX_VERTS];
++        for(int i=0; i < numVerts; i++) {
++            shadowVerts[i] = polyVerts[i];
++            const float h = polyVerts[i].y - (float)biasBottom;
++            shadowVerts[i].x = polyVerts[i].x + s_sunShearX * h / ratio;
++            shadowVerts[i].y = (float)biasBottom + s_sunShearY * h;
++            shadowVerts[i].z = footZ;
++        }
++        for(int i=1; i + 1 < numVerts; i++) {
++            G3SIM_AddShadowVtx(&shadowVerts[0]);
++            G3SIM_AddShadowVtx(&shadowVerts[i]);
++            G3SIM_AddShadowVtx(&shadowVerts[i + 1]);
++        }
++    }
+ }
+--- a/libraries/sim/src/shaders/g3_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_fragment.glsl
+@@ -17,6 +17,10 @@
+ // translucent one keeps them (on the DS translucent pixels don't change the opaque polygon ID
+ // either). Opaque is the DS's alpha 31, polygon times texel, as an A3I5 texel can make it.
+ uniform float polygonId;
++// Enhanced graphics: a sprite's sun shadow is its own shape (the texture's alpha) in one dark colour, and leaves the
++// edge marking's attributes alone
++uniform int shadowMode;
++uniform vec4 shadowColor;
+ layout(location = 0) out vec4 color;
+ layout(location = 1) out vec4 attr;
+ 
+@@ -40,6 +44,12 @@
+         shadedColor = fragInColor;
+     }
+ 
++    if( shadowMode == 1 ) {
++        attr = vec4(0.0);
++        color = shadowColor;
++        return;
++    }
++
+     float depth16 = floor(clamp(gl_FragCoord.z, 0.0, 1.0) * 65535.0 + 0.5);
+     float depthHigh = floor(depth16 / 256.0);
+     attr = vec4(polygonId * 4.0 / 255.0, depthHigh / 255.0, (depth16 - depthHigh * 256.0) / 255.0,

@@ -1,0 +1,622 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -150,6 +150,13 @@
+ // (0: none, as at night or indoors). With SIM_SetEnhancedShadowCamera's view (the same call) the depth buffer's surfaces
+ // that are flat and not the ground glint and sheen in that color, and the sprites get a rim of it on the sun's side.
+ void SIM_SetEnhancedSunLight(float r, float g, float b);
++// Atmosphere (Settings > Display > Atmosphere), every frame: how much of the sun's light the air near the ground scatters
++// (the shafts; 0: none; the sun's colour is SIM_SetEnhancedSunLight's, its view SIM_SetEnhancedShadowCamera's), and the haze
++// over the far side of the screen: its colour and its share (0 to 1) at the top.
++void SIM_SetEnhancedAtmosphere(float shaft, float hazeR, float hazeG, float hazeB, float haze);
++// Glow (Settings > Display > Glow), every frame: pixels brighter than the threshold (luminance 0 to 1, measured before the
++// time of day's tint) glow, by strength (0: none).
++void SIM_SetEnhancedBloom(float threshold, float strength);
+ // While the game draws its land and buildings: the faint shadow polygons they carry (alpha 12 of 31 or less, untextured or
+ // 4-colour) aren't drawn, as the sun's shadows take their place (only while SIM_SetEnhancedSun's strength is above 0)
+ void SIM_SetHideBuiltInShadows(BOOL hide);
+--- a/include/simulator/sim_shaders.hpp
++++ b/include/simulator/sim_shaders.hpp
+@@ -18,6 +18,11 @@
+ extern const char * G3SunShadowCleanFragmentShader;
+ extern const char * G3HighlightFragmentShader;
+ extern const char * G3HighlightApplyFragmentShader;
++extern const char * G3AtmosphereMarchFragmentShader;
++extern const char * G3AtmosphereApplyFragmentShader;
++extern const char * G3BloomBrightFragmentShader;
++extern const char * G3BloomBlurFragmentShader;
++extern const char * G3BloomApplyFragmentShader;
+ extern const char * G3SunShadowApplyFragmentShader;
+ extern const char * G2VertexShader;
+ extern const char * G2FragmentShader;
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -65,6 +65,8 @@
+     s8 colorVibrance;
+     s8 colorContrast;
+     s8 colorWhitePoint;
++    u8 enhancedAtmosphere; /* Enhanced graphics: haze and light shafts in the air (SIM_SetEnhancedAtmosphere) */
++    u8 enhancedBloom; /* Enhanced graphics: the glow of lamps and lit windows (SIM_SetEnhancedBloom) */
+     u8 enhancedHighlights; /* Enhanced graphics: the sun's specular and fresnel highlights on buildings, rim light on sprites */
+     u8 enhancedWater; /* Enhanced graphics: the scene mirrored in water (SIM_SetEnhancedWater) */
+     u8 enhancedShadows; /* Enhanced graphics: the sun's shadows of the overworld's sprites (SIM_SetEnhancedSun) */
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -76,6 +76,12 @@
+     }
+     if(MATCH("General", "ColorWhitePoint")) {
+         config->colorWhitePoint = (s8)atoi(value);
++    }
++    if(MATCH("General", "EnhancedAtmosphere")) {
++        config->enhancedAtmosphere = StringToBool(value);
++    }
++    if(MATCH("General", "EnhancedBloom")) {
++        config->enhancedBloom = StringToBool(value);
+     }
+     if(MATCH("General", "EnhancedHighlights")) {
+         config->enhancedHighlights = StringToBool(value);
+@@ -491,6 +497,8 @@
+     aConfig->enhancedShadows = FALSE;
+     aConfig->enhancedWater = FALSE;
+     aConfig->enhancedHighlights = FALSE;
++    aConfig->enhancedAtmosphere = FALSE;
++    aConfig->enhancedBloom = FALSE;
+     aConfig->colorSaturation = 0;
+     aConfig->colorVibrance = 0;
+     aConfig->colorContrast = 0;
+@@ -593,6 +601,8 @@
+     fprintf(configFile, "EnhancedShadows=%s\n", BoolToString(aConfig->enhancedShadows));
+     fprintf(configFile, "EnhancedWater=%s\n", BoolToString(aConfig->enhancedWater));
+     fprintf(configFile, "EnhancedHighlights=%s\n", BoolToString(aConfig->enhancedHighlights));
++    fprintf(configFile, "EnhancedAtmosphere=%s\n", BoolToString(aConfig->enhancedAtmosphere));
++    fprintf(configFile, "EnhancedBloom=%s\n", BoolToString(aConfig->enhancedBloom));
+     fprintf(configFile, "ColorSaturation=%d\n", aConfig->colorSaturation);
+     fprintf(configFile, "ColorVibrance=%d\n", aConfig->colorVibrance);
+     fprintf(configFile, "ColorContrast=%d\n", aConfig->colorContrast);
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -334,6 +334,21 @@
+     SaveConfig();
+   }
+ 
++  bool atmosphere = config->enhancedAtmosphere != 0;
++  if (Toggle("Atmosphere", "Enhanced graphics: a haze over the far side of the field in the color of the sky, and the sun's "
++             "light scattering in the air near the ground, with the shadows of houses and trees reaching up into it. "
++             "Warmer and stronger at sunrise and sunset. Needs 3D smoothing (anti-aliasing) off.", &atmosphere)) {
++    config->enhancedAtmosphere = atmosphere ? 1 : 0;
++    SaveConfig();
++  }
++
++  bool bloom = config->enhancedBloom != 0;
++  if (Toggle("Glow", "Enhanced graphics: lamps, lit windows and other bright lights glow, most at night. Needs 3D "
++             "smoothing (anti-aliasing) off.", &bloom)) {
++    config->enhancedBloom = bloom ? 1 : 0;
++    SaveConfig();
++  }
++
+   bool water = config->enhancedWater != 0;
+   if (Toggle("Water reflections", "Enhanced graphics: lakes, the sea, rivers and puddles mirror the trees, buildings and "
+              "people along their shore. Needs 3D smoothing (anti-aliasing) off; use a higher 3D resolution instead.",
+--- a/libraries/sim/src/sim_shaders.cpp
++++ b/libraries/sim/src/sim_shaders.cpp
+@@ -56,6 +56,26 @@
+ #include "shaders/g3_highlight_apply_fragment.glsl"
+ ;
+ 
++const char * G3AtmosphereMarchFragmentShader =
++#include "shaders/g3_atmosphere_march_fragment.glsl"
++;
++
++const char * G3AtmosphereApplyFragmentShader =
++#include "shaders/g3_atmosphere_apply_fragment.glsl"
++;
++
++const char * G3BloomBrightFragmentShader =
++#include "shaders/g3_bloom_bright_fragment.glsl"
++;
++
++const char * G3BloomBlurFragmentShader =
++#include "shaders/g3_bloom_blur_fragment.glsl"
++;
++
++const char * G3BloomApplyFragmentShader =
++#include "shaders/g3_bloom_apply_fragment.glsl"
++;
++
+ const char * G3SunShadowApplyFragmentShader =
+ #include "shaders/g3_sunshadow_apply_fragment.glsl"
+ ;
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -378,6 +378,14 @@
+ static GLuint g3HighlightProgramID, g3HighlightApplyProgramID, g3HighlightTex, g3HighlightFbo;
+ static int sHighlightW, sHighlightH;
+ static bool sSunCameraSet = false;
++// Enhanced graphics' atmosphere (haze and shafts) and bloom
++static GLuint g3AtmoMarchProgramID, g3AtmoApplyProgramID, g3AtmoTex, g3AtmoFbo;
++static int sAtmoW, sAtmoH;
++static float sAtmosphere[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // shaft, haze colour, haze share
++static GLuint g3BloomBrightProgramID, g3BloomBlurProgramID, g3BloomApplyProgramID;
++static GLuint g3BloomTex[2], g3BloomFbo[2], g3BloomSceneTex, g3BloomSceneFbo;
++static int sBloomW, sBloomH;
++static float sBloom[2] = {0.0f, 0.0f}; // threshold, strength
+ static GLuint g3EnhancedProgramID; // Enhanced graphics' grade (SIM_SetEnhancedScene), over the finished 3D frame
+ static GLuint g3EdgeSourceTextureId; // with anti-aliasing: the 3D viewport before the pass
+ static GLuint g3EdgeSourceFrameBuffer;
+@@ -1194,6 +1202,31 @@
+       g3HighlightApplyProgramID = glCreateProgram();
+       CompileFragmentShader(fragment, ptr);
+       LinkShader(g3HighlightApplyProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3AtmosphereMarchFragmentShader);
++      ptr = src.c_str();
++      g3AtmoMarchProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3AtmoMarchProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3AtmosphereApplyFragmentShader);
++      ptr = src.c_str();
++      g3AtmoApplyProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3AtmoApplyProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3BloomBrightFragmentShader);
++      ptr = src.c_str();
++      g3BloomBrightProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3BloomBrightProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3BloomBlurFragmentShader);
++      ptr = src.c_str();
++      g3BloomBlurProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3BloomBlurProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3BloomApplyFragmentShader);
++      ptr = src.c_str();
++      g3BloomApplyProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3BloomApplyProgramID, edgeVertexShader, fragment);
+       src = SIM::PrepareShaderSource(SIM::G3SunShadowCleanFragmentShader);
+       ptr = src.c_str();
+       g3SunShadowCleanProgramID = glCreateProgram();
+@@ -2188,7 +2221,7 @@
+ // Uniform locations never change once linked: found once, not by name every frame
+ static GLint WaterUniform(GLuint program, const char *name) {
+   struct Cached { GLuint program; const char *name; GLint location; };
+-  static Cached sCache[40];
++  static Cached sCache[120];
+   static int sCount = 0;
+   for (int c = 0; c < sCount; c++) {
+     if (sCache[c].program == program && sCache[c].name == name) {
+@@ -2196,7 +2229,7 @@
+     }
+   }
+   const GLint location = glGetUniformLocation(program, name);
+-  if (sCount < 40) {
++  if (sCount < 120) {
+     sCache[sCount++] = {program, name, location};
+   }
+   return location;
+@@ -2401,6 +2434,234 @@
+   glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+ }
+ 
++extern "C" void SIM_SetEnhancedAtmosphere(float shaft, float hazeR, float hazeG, float hazeB, float haze) {
++  sAtmosphere[0] = shaft;
++  sAtmosphere[1] = hazeR;
++  sAtmosphere[2] = hazeG;
++  sAtmosphere[3] = hazeB;
++  sAtmosphere[4] = haze;
++}
++
++extern "C" void SIM_SetEnhancedBloom(float threshold, float strength) {
++  sBloom[0] = threshold;
++  sBloom[1] = strength;
++}
++
++// Enhanced graphics' atmosphere: see g3_atmosphere_march_fragment.glsl. At the DS's resolution how much sunlight the air in
++// front of each pixel holds (when there are shafts to show), then at full resolution a haze over the far side of the
++// screen and the shafts added. After the water (so a reflection isn't hazed twice), before the grade; once per frame drawn;
++// not with anti-aliasing (no attributes) or in a W-buffer scene.
++static void G3EnhancedAtmosphere() {
++  const bool haze = sAtmosphere[4] > 0.001f;
++  const bool shafts = sSunFrameCamera && sAtmosphere[0] > 0.001f && (sSunLight[0] + sSunLight[1] + sSunLight[2]) > 0.0f;
++  if (!sSunFrameDrawn || !s_SIM_config.enhancedAtmosphere || (!haze && !shafts) || sSamples != 0 || s_SIM_useWBuffer ||
++      sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0) {
++    return;
++  }
++  static const int sDebug = (getenv("SIM_ATMOSPHERE_DEBUG") != nullptr && getenv("SIM_ATMOSPHERE_DEBUG")[0] != 0)
++                                ? atoi(getenv("SIM_ATMOSPHERE_DEBUG")) : 0;
++  const int dsWidth = (sG3Viewport[2] + sScale - 1) / sScale, dsHeight = (sG3Viewport[3] + sScale - 1) / sScale;
++  if (g3AtmoFbo == 0) {
++    glGenFramebuffers(1, &g3AtmoFbo);
++  }
++  if (sAtmoW != dsWidth || sAtmoH != dsHeight) {
++    sAtmoW = dsWidth;
++    sAtmoH = dsHeight;
++    if (g3AtmoTex != 0) {
++      glDeleteTextures(1, &g3AtmoTex);
++    }
++    g3AtmoTex = WaterTexture(GL_RGBA8, dsWidth, dsHeight, GL_RGBA);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3AtmoFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3AtmoTex, 0);
++  }
++  const float xScale = sWideScale3D ? (float)SIM_NDS_SCREEN_WIDTH / (float)sWide3dWidth : 1.0f;
++
++  GLint viewport[4];
++  GLint vertexArray;
++  glGetIntegerv(GL_VIEWPORT, viewport);
++  glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
++  const GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
++  const GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
++  const GLboolean blend = glIsEnabled(GL_BLEND);
++  glDisable(GL_DEPTH_TEST);
++  glDisable(GL_CULL_FACE);
++  glDisable(GL_BLEND);
++  glBindVertexArray(g3EdgeVertexArray);
++  glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
++  glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
++
++  if (shafts) {
++    glBindFramebuffer(GL_FRAMEBUFFER, g3AtmoFbo);
++    glViewport(0, 0, dsWidth, dsHeight);
++    const GLuint march = g3AtmoMarchProgramID;
++    glProgramUniform1i(march, WaterUniform(march, "attrTexture"), kEdgeAttrTexUnit);
++    glProgramUniform2i(march, WaterUniform(march, "origin"), sG3Viewport[0], sG3Viewport[1]);
++    glProgramUniform1i(march, WaterUniform(march, "pixelStep"), sScale);
++    glProgramUniform2i(march, WaterUniform(march, "dsSize"), dsWidth, dsHeight);
++    glProgramUniform4f(march, WaterUniform(march, "projection"), sSunCamera[0], sSunCamera[1], sSunCamera[2], sSunCamera[3]);
++    glProgramUniform1f(march, WaterUniform(march, "xScale"), xScale);
++    glProgramUniform3f(march, WaterUniform(march, "toSun"), sSunCamera[4], sSunCamera[5], sSunCamera[6]);
++    glUseProgram(march);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++  }
++
++  static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glDrawBuffers(1, kBoth);
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glActiveTexture(GL_TEXTURE0 + 12);
++  glBindTexture(GL_TEXTURE_2D, g3AtmoTex);
++  const GLuint apply = g3AtmoApplyProgramID;
++  glProgramUniform1i(apply, WaterUniform(apply, "shaftTexture"), 12);
++  glProgramUniform1i(apply, WaterUniform(apply, "attrTexture"), kEdgeAttrTexUnit);
++  glProgramUniform2i(apply, WaterUniform(apply, "origin"), sG3Viewport[0], sG3Viewport[1]);
++  glProgramUniform2i(apply, WaterUniform(apply, "viewportSize"), sG3Viewport[2], sG3Viewport[3]);
++  glProgramUniform1i(apply, WaterUniform(apply, "pixelStep"), sScale);
++  glProgramUniform1i(apply, WaterUniform(apply, "useShafts"), shafts ? 1 : 0);
++  glProgramUniform3f(apply, WaterUniform(apply, "sunColor"), sSunLight[0], sSunLight[1], sSunLight[2]);
++  glProgramUniform1f(apply, WaterUniform(apply, "shaftGain"), sAtmosphere[0]);
++  glProgramUniform3f(apply, WaterUniform(apply, "hazeColor"), sAtmosphere[1], sAtmosphere[2], sAtmosphere[3]);
++  glProgramUniform1f(apply, WaterUniform(apply, "hazeAmount"), haze ? sAtmosphere[4] : 0.0f);
++  glProgramUniform1i(apply, WaterUniform(apply, "debugMode"), sDebug);
++  glEnable(GL_BLEND);
++  // premultiplied: the haze's colour over what is there, the shafts added (the alpha stays)
++  glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
++  if (sDebug == 1) {
++    glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ONE);
++  }
++  glUseProgram(apply);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++  glDrawBuffers(2, kBoth);
++  glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++
++  glActiveTexture(GL_TEXTURE0);
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glBindVertexArray(vertexArray);
++  glUseProgram(g3shaderProgramID);
++  if (cullFace) {
++    glEnable(GL_CULL_FACE);
++  }
++  if (depthTest) {
++    glEnable(GL_DEPTH_TEST);
++  }
++  if (!blend) {
++    glDisable(GL_BLEND);
++  }
++  glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
++}
++
++// Enhanced graphics' bloom: see g3_bloom_bright_fragment.glsl. The finished (graded) frame copied down to one pixel per DS
++// pixel, its bright parts picked out and blurred there, and the glow enlarged and added at full resolution. The last pass of
++// a frame; once per frame drawn; not with anti-aliasing (the frame is multisampled).
++static void G3EnhancedBloom() {
++  if (!sSunFrameDrawn || !s_SIM_config.enhancedBloom || sBloom[1] <= 0.001f || sSamples != 0 || sG3Viewport[2] <= 0 ||
++      sG3Viewport[3] <= 0) {
++    return;
++  }
++  const int dsWidth = (sG3Viewport[2] + sScale - 1) / sScale, dsHeight = (sG3Viewport[3] + sScale - 1) / sScale;
++  if (g3BloomFbo[0] == 0) {
++    glGenFramebuffers(2, g3BloomFbo);
++    glGenFramebuffers(1, &g3BloomSceneFbo);
++  }
++  if (sBloomW != dsWidth || sBloomH != dsHeight) {
++    sBloomW = dsWidth;
++    sBloomH = dsHeight;
++    for (int i = 0; i < 2; i++) {
++      if (g3BloomTex[i] != 0) {
++        glDeleteTextures(1, &g3BloomTex[i]);
++      }
++      g3BloomTex[i] = WaterTexture(GL_RGBA8, dsWidth, dsHeight, GL_RGBA);
++      glBindFramebuffer(GL_FRAMEBUFFER, g3BloomFbo[i]);
++      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3BloomTex[i], 0);
++    }
++    if (g3BloomSceneTex != 0) {
++      glDeleteTextures(1, &g3BloomSceneTex);
++    }
++    g3BloomSceneTex = WaterTexture(GL_RGBA8, dsWidth, dsHeight, GL_RGBA);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3BloomSceneFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3BloomSceneTex, 0);
++  }
++
++  GLint viewport[4];
++  GLint vertexArray;
++  glGetIntegerv(GL_VIEWPORT, viewport);
++  glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
++  const GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
++  const GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
++  const GLboolean blend = glIsEnabled(GL_BLEND);
++  glDisable(GL_DEPTH_TEST);
++  glDisable(GL_CULL_FACE);
++  glDisable(GL_BLEND);
++
++  // 1. The frame, one pixel per DS pixel (a pick, not an average)
++  glBindFramebuffer(GL_READ_FRAMEBUFFER, g3FrameBuffer);
++  glReadBuffer(GL_COLOR_ATTACHMENT0);
++  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g3BloomSceneFbo);
++  glBlitFramebuffer(sG3Viewport[0], sG3Viewport[1], sG3Viewport[0] + sG3Viewport[2], sG3Viewport[1] + sG3Viewport[3], 0, 0,
++                    dsWidth, dsHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
++
++  glBindVertexArray(g3EdgeVertexArray);
++  glViewport(0, 0, dsWidth, dsHeight);
++  // 2. The bright parts
++  glBindFramebuffer(GL_FRAMEBUFFER, g3BloomFbo[1]);
++  glActiveTexture(GL_TEXTURE0 + 12);
++  glBindTexture(GL_TEXTURE_2D, g3BloomSceneTex);
++  const GLuint bright = g3BloomBrightProgramID;
++  glProgramUniform1i(bright, WaterUniform(bright, "sceneTexture"), 12);
++  glProgramUniform3f(bright, WaterUniform(bright, "tint"), 1.0f, 1.0f, 1.0f);
++  glProgramUniform1f(bright, WaterUniform(bright, "threshold"), sBloom[0]);
++  glUseProgram(bright);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++  // 3. Blurred along x (into 0), then along y (into 1)
++  const GLuint blur = g3BloomBlurProgramID;
++  glProgramUniform1i(blur, WaterUniform(blur, "source"), 12);
++  glProgramUniform2i(blur, WaterUniform(blur, "dsSize"), dsWidth, dsHeight);
++  glUseProgram(blur);
++  glBindFramebuffer(GL_FRAMEBUFFER, g3BloomFbo[0]);
++  glBindTexture(GL_TEXTURE_2D, g3BloomTex[1]);
++  glProgramUniform2i(blur, WaterUniform(blur, "direction"), 1, 0);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++  glBindFramebuffer(GL_FRAMEBUFFER, g3BloomFbo[1]);
++  glBindTexture(GL_TEXTURE_2D, g3BloomTex[0]);
++  glProgramUniform2i(blur, WaterUniform(blur, "direction"), 0, 1);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++
++  // 4. Added over the frame at full resolution, into the colour alone
++  static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glDrawBuffers(1, kBoth);
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glBindTexture(GL_TEXTURE_2D, g3BloomTex[1]);
++  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++  const GLuint apply = g3BloomApplyProgramID;
++  glProgramUniform1i(apply, WaterUniform(apply, "glowTexture"), 12);
++  glProgramUniform2i(apply, WaterUniform(apply, "origin"), sG3Viewport[0], sG3Viewport[1]);
++  glProgramUniform2f(apply, WaterUniform(apply, "coverSize"), (float)(dsWidth * sScale), (float)(dsHeight * sScale));
++  glProgramUniform1f(apply, WaterUniform(apply, "strength"), sBloom[1]);
++  glEnable(GL_BLEND);
++  glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
++  glUseProgram(apply);
++  glDrawArrays(GL_TRIANGLES, 0, 3);
++  glDrawBuffers(2, kBoth);
++  glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++
++  glActiveTexture(GL_TEXTURE0);
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glBindVertexArray(vertexArray);
++  glUseProgram(g3shaderProgramID);
++  if (cullFace) {
++    glEnable(GL_CULL_FACE);
++  }
++  if (depthTest) {
++    glEnable(GL_DEPTH_TEST);
++  }
++  if (!blend) {
++    glDisable(GL_BLEND);
++  }
++  glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
++}
++
+ void *SIM_Render(void *arg) {
+ 
+   SDL_Event Event;
+@@ -2434,7 +2695,9 @@
+   G3EnhancedSunShadow();
+   G3EnhancedHighlights();
+   G3EnhancedWater();
++  G3EnhancedAtmosphere();
+   G3EnhancedGrade();
++  G3EnhancedBloom();
+ 
+   GpuTimerEnd(); // the 3D scene's GPU time (started after the last frame)
+   GpuTimersCollect();
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_atmosphere_march_fragment.glsl
+@@ -0,0 +1,67 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' atmosphere, first pass, at the DS's own resolution (one fragment per DS pixel, so the light keeps the
++// pixel grid): how much sunlight the air in front of each pixel's surface holds. A few points on the view ray from the
++// camera to the surface, the lowest ones (the air within a couple of tiles of the ground), are each marched toward the sun
++// through the depth the 3D shader left in the attribute texture, as the sun shadows are; a point that meets something nearer
++// than itself is in shadow (the shadow of a house or a tree reaches up into the air), a point that does not is lit air that
++// scatters the sun's light toward the eye. The result is the lit share, weighted toward the air close to the ground.
++// Sprites are in the depth buffer but cast no volume here, as they cast no 3D shadow.
++uniform sampler2D attrTexture; // polygon ID * 4 + 1 for a sprite in r, the depth's high and low bytes in g and b, a set where opaque
++uniform ivec2 origin;          // the 3D viewport's corner in the framebuffer
++uniform int pixelStep;         // framebuffer pixels per DS pixel
++uniform ivec2 dsSize;
++uniform vec4 projection;       // the game's projection: m00, m11, m22, m32
++uniform float xScale;          // a wide scene libntr narrows
++uniform vec3 toSun;            // view space, unit length
++out vec4 color;
++
++// 0: nothing opaque there; otherwise the view distance (positive) of the surface. A sprite counts only when asked
++float Distance(ivec2 ds, bool withSprites)
++{
++    ivec4 a = ivec4(texelFetch(attrTexture, origin + ds * pixelStep + ivec2(pixelStep / 2), 0) * 255.0 + 0.5);
++    if (a.a == 0 || ((a.r & 1) == 1 && !withSprites)) {
++        return 0.0;
++    }
++    float ndcz = float(a.g * 256 + a.b) / 65535.0 * 2.0 - 1.0;
++    return projection.w / (ndcz + projection.z);
++}
++
++void main()
++{
++    ivec2 ds = ivec2(gl_FragCoord.xy);
++    float surface = Distance(ds, true);
++    float lit = 0.0;
++    if (surface > 0.0) {
++        vec2 ndc = ((vec2(ds) + 0.5) / vec2(dsSize)) * 2.0 - 1.0;
++        vec3 here = vec3(ndc.x / xScale * surface / projection.x, ndc.y * surface / projection.y, -surface);
++        // How far up the view ray, from the surface toward the eye, each sample sits (view units: 16 to a tile), and its weight
++        const float lift[4] = float[4](10.0, 26.0, 46.0, 72.0);
++        const float weight[4] = float[4](0.4, 0.3, 0.2, 0.1);
++        for (int k = 0; k < 4; k++) {
++            vec3 p = here * (1.0 - lift[k] / surface);
++            float open = 1.0;
++            for (int i = 1; i <= 9; i++) {
++                vec3 q = p + toSun * (7.0 * float(i));
++                float qDistance = -q.z;
++                if (qDistance <= 0.1) {
++                    break;
++                }
++                vec2 qNdc = vec2(q.x * projection.x * xScale / qDistance, q.y * projection.y / qDistance);
++                if (abs(qNdc.x) >= 1.0 || abs(qNdc.y) >= 1.0) {
++                    break; // off the screen: nothing known, the air stays lit
++                }
++                float scene = Distance(ivec2((qNdc * 0.5 + 0.5) * vec2(dsSize)), false);
++                float behind = qDistance - scene;
++                if (scene > 0.0 && behind > 3.0 && behind < 120.0) {
++                    open = 0.0;
++                    break;
++                }
++            }
++            lit += weight[k] * open;
++        }
++    }
++    color = vec4(lit, 0.0, 0.0, 1.0);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_atmosphere_apply_fragment.glsl
+@@ -0,0 +1,39 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' atmosphere, second pass, at full resolution: over what is drawn (not over what isn't), the sun's light
++// scattered by the air, from the march's texture (one texel a DS pixel, never filtered, so the light keeps the pixel grid),
++// and a haze that thickens toward the top of the screen (the far side of the field), in the colour of the sky at that hour.
++// The blend is premultiplied: the haze's colour with alpha as its share, over what is there; the shafts add to it.
++uniform sampler2D shaftTexture;
++uniform sampler2D attrTexture;
++uniform ivec2 origin;
++uniform ivec2 viewportSize;
++uniform int pixelStep;
++uniform int useShafts;
++uniform vec3 sunColor;      // the sun's light now
++uniform float shaftGain;
++uniform vec3 hazeColor;
++uniform float hazeAmount;   // the haze's share at the top of the screen
++uniform int debugMode;
++out vec4 color;
++
++void main()
++{
++    ivec2 fragment = ivec2(gl_FragCoord.xy);
++    if (texelFetch(attrTexture, fragment, 0).a < 0.5) {
++        discard;
++    }
++    float y = clamp(float(fragment.y - origin.y) / float(viewportSize.y), 0.0, 1.0);
++    float haze = hazeAmount * smoothstep(0.25, 1.0, y);
++    float shaft = 0.0;
++    if (useShafts == 1) {
++        shaft = texelFetch(shaftTexture, (fragment - origin) / pixelStep, 0).r;
++    }
++    if (debugMode == 1) {
++        color = vec4(vec3(shaft), 1.0);
++        return;
++    }
++    color = vec4(hazeColor * haze + sunColor * (shaft * shaftGain), haze);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_bloom_bright_fragment.glsl
+@@ -0,0 +1,23 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' bloom, first pass, at the DS's own resolution: the bright, glowing parts of the finished frame (lamps,
++// lit windows, sparkles) and nothing else. The frame was copied down to one texel per DS pixel by picking a pixel, never
++// averaging, so the glow starts from the art's own colours. The colour is divided by the time of day's tint first: a lamp is
++// as bright at night as at noon, even though the grade darkens everything at night.
++uniform sampler2D sceneTexture;
++uniform vec3 tint;
++uniform float threshold; // luminance (of the colour before the grade) where the glow starts
++out vec4 color;
++
++void main()
++{
++    vec3 c = texelFetch(sceneTexture, ivec2(gl_FragCoord.xy), 0).rgb;
++    vec3 lit = min(c / max(tint, vec3(0.2)), vec3(1.0));
++    float luminance = dot(lit, vec3(0.299, 0.587, 0.114));
++    float peak = max(lit.r, max(lit.g, lit.b));
++    // Bright, and not merely light: a white wall in daylight is under the threshold, a lamp or a window isn't
++    float glow = smoothstep(threshold, min(threshold + 0.12, 1.0), min(luminance + 0.35 * (peak - luminance), 1.0));
++    color = vec4(lit * glow, 1.0);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_bloom_blur_fragment.glsl
+@@ -0,0 +1,22 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' bloom, second and third pass: a gaussian blur at the DS's resolution, one direction at a time.
++uniform sampler2D source;
++uniform ivec2 direction; // (1, 0) or (0, 1)
++uniform ivec2 dsSize;
++out vec4 color;
++
++void main()
++{
++    const float weight[6] = float[6](0.2270, 0.1945, 0.1216, 0.0541, 0.0162, 0.0054);
++    ivec2 p = ivec2(gl_FragCoord.xy);
++    vec3 sum = texelFetch(source, p, 0).rgb * weight[0];
++    for (int i = 1; i < 6; i++) {
++        ivec2 a = clamp(p + direction * i, ivec2(0), dsSize - 1);
++        ivec2 b = clamp(p - direction * i, ivec2(0), dsSize - 1);
++        sum += (texelFetch(source, a, 0).rgb + texelFetch(source, b, 0).rgb) * weight[i];
++    }
++    color = vec4(sum, 1.0);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_bloom_apply_fragment.glsl
+@@ -0,0 +1,17 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' bloom, last pass, at full resolution: the blurred glow, smoothly enlarged (it is a haze of light, so
++// filtering it is right; the frame under it isn't touched), added over the frame.
++uniform sampler2D glowTexture; // filtered
++uniform ivec2 origin;
++uniform vec2 coverSize;        // the glow texture's size in framebuffer pixels
++uniform float strength;
++out vec4 color;
++
++void main()
++{
++    vec2 uv = (gl_FragCoord.xy - vec2(origin)) / coverSize;
++    color = vec4(texture(glowTexture, uv).rgb * strength, 1.0);
++}
++)""
