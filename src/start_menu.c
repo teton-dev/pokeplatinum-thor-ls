@@ -43,6 +43,8 @@
 #include "field_task.h"
 #include "font.h"
 #include "game_records.h"
+#include "generated/game_records.h"
+#include "applications/naming_screen.h"
 #include "gx_layers.h"
 #include "heap.h"
 #include "item.h"
@@ -180,6 +182,9 @@ static BOOL StartMenu_SelectSave(FieldTask *fieldTask);
 static void StartMenu_SaveWait(FieldTask *fieldTask);
 static void StartMenu_Save(FieldTask *fieldTask);
 static BOOL StartMenu_ExitSummary(FieldTask *fieldTask);
+#ifdef SDK_PORT
+static BOOL StartMenu_ExitRename(FieldTask *fieldTask);
+#endif
 static void StartMenu_ShowBerryTag(FieldTask *fieldTask, u16 berryItemID);
 static BOOL StartMenu_ExitBerryTag(FieldTask *fieldTask);
 static void StartMenu_EvolveInit(FieldTask *fieldTask);
@@ -1123,6 +1128,24 @@ BOOL StartMenu_ExitPartyMenu(FieldTask *fieldTask)
         menu->taskData = FieldSystem_OpenBag(fieldSystem, &menu->itemUseCtx);
         StartMenu_SetCallback(menu, StartMenu_ExitBag);
         break;
+#ifdef SDK_PORT
+    case PARTY_MENU_EXIT_CODE_RENAME: {
+        // Rename from the party menu: the naming screen, with the Pokemon's name to edit
+        Pokemon *mon = Party_GetPokemonBySlotIndex(SaveData_GetParty(fieldSystem->saveData), partyMenu->selectedMonSlot);
+        NamingScreenArgs *args = NamingScreenArgs_Init(HEAP_ID_FIELD2, NAMING_SCREEN_TYPE_POKEMON, Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL), MON_NAME_LEN, SaveData_GetOptions(fieldSystem->saveData));
+        args->monGender = Pokemon_GetValue(mon, MON_DATA_GENDER, NULL);
+        args->monForm = Pokemon_GetValue(mon, MON_DATA_FORM, NULL);
+        Pokemon_GetValue(mon, MON_DATA_NICKNAME_STRING, args->textInputStr);
+
+        u32 *renameSlot = Heap_Alloc(HEAP_ID_FIELD2, sizeof(u32));
+        *renameSlot = partyMenu->selectedMonSlot;
+        menu->additionalTaskContext = renameSlot;
+
+        FieldSystem_StartChildProcess(fieldSystem, &gNamingScreenAppTemplate, args);
+        menu->taskData = args;
+        StartMenu_SetCallback(menu, StartMenu_ExitRename);
+    } break;
+#endif
     default:
         if (partyMenu->mode == PARTY_MENU_MODE_USE_ITEM || partyMenu->mode == PARTY_MENU_MODE_TEACH_MOVE || partyMenu->mode == PARTY_MENU_MODE_TEACH_MOVE_DONE || partyMenu->mode == PARTY_MENU_MODE_USE_EVO_ITEM || partyMenu->mode == PARTY_MENU_MODE_LEVEL_MOVE_DONE) {
             menu->taskData = FieldSystem_OpenBag(fieldSystem, &menu->itemUseCtx);
@@ -1467,6 +1490,32 @@ static BOOL StartMenu_SelectRetire(FieldTask *fieldTask)
     Heap_Free(menu);
     return FALSE;
 }
+
+#ifdef SDK_PORT
+// Back from the naming screen opened by Rename in the party menu: set the name, then the party menu again
+static BOOL StartMenu_ExitRename(FieldTask *fieldTask)
+{
+    FieldSystem *fieldSystem = FieldTask_GetFieldSystem(fieldTask);
+    StartMenu *menu = FieldTask_GetEnv(fieldTask);
+    NamingScreenArgs *args = menu->taskData;
+    u32 slot = *(u32 *)menu->additionalTaskContext;
+
+    if (args->returnCode == NAMING_SCREEN_CODE_OK) {
+        Pokemon *mon = Party_GetPokemonBySlotIndex(SaveData_GetParty(fieldSystem->saveData), slot);
+        Pokemon_SetValue(mon, MON_DATA_NICKNAME_STRING_AND_FLAG, args->textInputStr);
+        GameRecords_IncrementRecordValue(SaveData_GetGameRecords(fieldSystem->saveData), RECORD_POKEMON_NICKNAMED);
+    }
+
+    NamingScreenArgs_Free(args);
+    Heap_Free(menu->additionalTaskContext);
+    menu->additionalTaskContext = NULL;
+
+    menu->taskData = FieldSystem_OpenPartyMenu(fieldSystem, &menu->fieldMoveContext, slot);
+    StartMenu_SetCallback(menu, StartMenu_ExitPartyMenu);
+
+    return FALSE;
+}
+#endif
 
 static BOOL StartMenu_ExitSummary(FieldTask *fieldTask)
 {

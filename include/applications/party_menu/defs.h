@@ -102,7 +102,10 @@ enum PartyMenuExitCodes {
     PARTY_MENU_EXIT_CODE_TELEPORT,
     PARTY_MENU_EXIT_CODE_DIG,
     PARTY_MENU_EXIT_CODE_SWEET_SCENT,
-    PARTY_MENU_EXIT_CODE_CHATTER
+    PARTY_MENU_EXIT_CODE_CHATTER,
+#ifdef SDK_PORT
+    PARTY_MENU_EXIT_CODE_RENAME, // port: Rename in the field menu, the naming screen opens
+#endif
 };
 
 #define PARTY_MENU_MODE_HIDE_CANCEL_FLAG (1 << 7)
@@ -172,9 +175,18 @@ enum PartyMenuString {
     PARTY_MENU_STR_MOVE1,
     PARTY_MENU_STR_MOVE2,
     PARTY_MENU_STR_MOVE3,
+#ifdef SDK_PORT
+    PARTY_MENU_STR_RENAME,
+#endif
 
     NUM_PARTY_MENU_STRS,
 };
+
+#ifdef SDK_PORT
+// The context menu entry for Rename (port). Entries below PARTY_MENU_STR_MOVE0 are both a string and an
+// action index; this one is past the field moves' actions, see context_menu.c
+#define PARTY_MENU_ENTRY_RENAME 32
+#endif
 
 enum PartyMenuSprite {
     PARTY_MENU_SPRITE_POKE_BALL_MEMB0 = 0,

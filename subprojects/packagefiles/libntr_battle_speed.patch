@@ -24,10 +24,12 @@
      u32 testModePresentMs; /* Test mode: show a frame this often (0: never) */
 --- a/libraries/sim/src/sim_main.cpp
 +++ b/libraries/sim/src/sim_main.cpp
-@@ -139,6 +139,16 @@
-   return (sFastForwardHeld || sFastForwardOn) ? TRUE : FALSE;
- }
+@@ -137,6 +137,16 @@
  
+ extern "C" BOOL SIM_IsFastForwarding(void) {
+   return (sFastForwardHeld || sFastForwardOn) ? TRUE : FALSE;
++}
++
 +static bool sBattleActive = false;
 +
 +extern "C" void SIM_SetBattleActive(BOOL active) {
@@ -36,12 +38,10 @@
 +
 +extern "C" int SIM_BattleSpeedTenths(void) {
 +  return sBattleActive ? (int)s_SIM_config.battleSpeed : 0;
-+}
-+
- extern "C" void SIM_SetFastForward(BOOL on) {
-   sFastForwardOn = on != FALSE;
  }
-@@ -1803,7 +1813,7 @@
+ 
+ extern "C" void SIM_SetFastForward(BOOL on) {
+@@ -1739,11 +1749,15 @@
      const bool paused = SIM::GUI::IsGameLogicPaused();
      // Test mode runs like an unlimited fast-forward that shows a frame every TestModePresentMs
      const bool testMode = SIM_IsTestMode() != FALSE;
@@ -50,18 +50,37 @@
      if (fastForward != sFastForwardSwap) {
        // Fast-forward doesn't wait for the display's refresh
        sFastForwardSwap = fastForward;
-@@ -2444,6 +2454,11 @@
-       if (testMode) {
++#ifndef SDK_BUILD_ANDROID
++      // (on Android the swap interval stays: leaving it at 0 and back left the frame rate halved afterwards, and
++      // the frames shown are limited below anyway)
+       SDL_GL_SetSwapInterval(fastForward ? 0 : s_SIM_config.vsyncInterval);
++#endif
+       sNextVBlankNs = 0;
+     }
+     bool present = !(sSkipNextFrame && !paused);
+@@ -1752,8 +1766,8 @@
+       if (presentNs == 0 || SIM_NowNs() - sLastPresentNs < presentNs) {
+         present = false;
+       }
+-    } else if (fastForward && SIM_NowNs() - sLastPresentNs < 15000000ull) {
+-      present = false; // about 60 frames a second shown, whatever the speed
++    } else if (fastForward && SIM_NowNs() - sLastPresentNs < (SIM_BattleSpeedTenths() > 0 ? 10000000ull : 15000000ull)) {
++      present = false; // about 60 frames a second shown, whatever the speed (the battle speed shows every frame of 1.5x)
+     }
+     sSkipNextFrame = false;
+     sVBlanksThisSecond++;
+@@ -2381,6 +2395,11 @@
          if (s_SIM_config.testModeSpeed > 0) {
            PaceVBlank(16666667ull / s_SIM_config.testModeSpeed); // TestModeSpeed: a cap for scripts
-+        }
+         }
 +      } else if (SIM_BattleSpeedTenths() > 0) {
 +        // The battle speed replaces fast-forward's
 +        if (s_SIM_config.capFrameRate) {
 +          PaceVBlank(16666667ull * 10ull / (u64)SIM_BattleSpeedTenths());
-         }
++        }
        } else if (s_SIM_config.fastForwardSpeed > 0 && s_SIM_config.capFrameRate) {
          PaceVBlank(16666667ull / s_SIM_config.fastForwardSpeed);
+       }
 --- a/libraries/sim/src/sim_settings.cpp
 +++ b/libraries/sim/src/sim_settings.cpp
 @@ -452,6 +452,20 @@

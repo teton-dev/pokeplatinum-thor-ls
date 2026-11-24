@@ -33,6 +33,10 @@
 
 #include "res/text/bank/party_menu.h"
 
+#ifdef SDK_PORT
+#include "constants/charcode.h"
+#endif
+
 #define EVO_COMMENT_ABLE   0
 #define EVO_COMMENT_UNABLE 1
 
@@ -751,6 +755,18 @@ void PartyMenu_LoadContextMenuStrings(PartyMenuApplication *application)
     LoadMenuString(PartyMenu_Text_Set, PARTY_MENU_STR_SET);
     LoadMenuString(PartyMenu_Text_ContextConfirm, PARTY_MENU_STR_CONFIRM);
 
+#ifdef SDK_PORT
+    {
+        static const char text[] = "RENAME";
+        charcode_t chars[NELEMS(text)];
+        for (int i = 0; i < (int)NELEMS(text) - 1; i++) {
+            chars[i] = CHAR_A + (text[i] - 'A');
+        }
+        chars[NELEMS(text) - 1] = CHAR_EOS;
+        String_CopyChars(application->menuStrings[PARTY_MENU_STR_RENAME], chars);
+    }
+#endif
+
 #undef LoadMenuString
 }
 
@@ -778,6 +794,15 @@ void PartyMenu_DrawContextMenu(PartyMenuApplication *application, const u8 *entr
 
     u16 numFieldMoves = 0;
     for (u16 i = 0; i < numEntries; i++) {
+#ifdef SDK_PORT
+        if (entries[i] == PARTY_MENU_ENTRY_RENAME) {
+            StringList_AddFromString(
+                application->contextMenuChoices,
+                application->menuStrings[PARTY_MENU_STR_RENAME],
+                PartyMenu_GetAction(entries[i]));
+            continue;
+        }
+#endif
         if (entries[i] >= PARTY_MENU_STR_MOVE0) {
             StringList_AddFromString(
                 application->contextMenuChoices,
