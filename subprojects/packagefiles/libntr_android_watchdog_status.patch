@@ -1,0 +1,72 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -113,6 +113,9 @@ typedef struct SIM_FrameTimings {
+     float shadowMapCpuMs;
+ 
+     float shownPerSecond;   // frames shown
++    int watchdogFixes;      // Android's pacing watchdog: remedies tried since the start,
++    int watchdogLastRemedy; // the last one (-1: none yet),
++    int watchdogClearedBy;  // and the last that brought the frame rate back (-1: none yet)
+     float vblanksPerSecond; // DS frames run (60 at full speed)
+     float draws3d;          // 3D draw calls per DS frame
+     float uploads2d;        // 2D layer uploads per shown frame (unchanged layers are skipped)
+--- a/libraries/sim/src/sim_gui.cpp
++++ b/libraries/sim/src/sim_gui.cpp
+@@ -1,6 +1,7 @@
+ #include "simulator/sim.h"
+ #include <cfloat>
+ #include <cstdio>
++#include <cstring>
+ #include "simulator/sim_gui.hpp"
+ #include "simulator/sim_files.h"
+ #include "simulator/sim_carts.h"
+@@ -141,6 +142,12 @@ static void PerfOverlay() {
+     char lines[4][200];
+     snprintf(lines[0], sizeof(lines[0]), "%.0f fps shown, game at %.0f/60  (3D draws %.0f, layer uploads %.1f)",
+              t.shownPerSecond, t.vblanksPerSecond, t.draws3d, t.uploads2d);
++    if (t.watchdogFixes > 0) {
++        // Android's pacing watchdog (sim_main.cpp): how often it stepped in, and which remedy last worked
++        const size_t used = strlen(lines[0]);
++        snprintf(lines[0] + used, sizeof(lines[0]) - used, "  watchdog: %d remedies, last %d, cleared by %d",
++                 t.watchdogFixes, t.watchdogLastRemedy, t.watchdogClearedBy);
++    }
+     snprintf(lines[1], sizeof(lines[1]),
+              "CPU ms  game %.1f  3D %.1f  2D %.1f  upload %.1f  2nd screen %.1f (gear %.1f, show %.1f)  menus %.1f  "
+              "other %.1f  wait %.1f  swap %.1f (2nd %.1f)",
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -146,6 +146,7 @@ static int sDrainPresents = 0;
+ // surface is made again. After all three fail it waits 8 seconds (a scene too heavy for the device looks the same).
+ // Logcat tag pokeplatinum says which cleared it.
+ static int sUnstickStep = 0, sUnstickLast = -1, sUnstickWait = 0;
++static int sWatchdogFixes = 0, sWatchdogLastRemedy = -1, sWatchdogClearedBy = -1; // for the frame timings
+ static u64 sWindowStartNs = 0, sWindowSwapNs = 0;
+ static int sWindowFrames = 0;
+ static void PacingWatchdog(bool steady, u64 swapNs) {
+@@ -174,6 +175,7 @@ static void PacingWatchdog(bool steady, u64 swapNs) {
+   const bool stuck = rate < 45.0f && averageSwapNs > 10000000ull;
+   if (!stuck) {
+     if (sUnstickLast >= 0) {
++      sWatchdogClearedBy = sUnstickLast;
+       printf("pacing watchdog: back to full rate after remedy %d\n", sUnstickLast);
+       fflush(stdout); // (stdout reaches logcat through a pipe)
+       sUnstickLast = -1;
+@@ -195,6 +197,8 @@ static void PacingWatchdog(bool steady, u64 swapNs) {
+     SIM_Android_UnstickDisplays(sUnstickStep == 0 ? 0 : 1);
+   }
+   sUnstickLast = sUnstickStep;
++  sWatchdogFixes++;
++  sWatchdogLastRemedy = sUnstickStep;
+   sUnstickStep = (sUnstickStep + 1) % 3;
+   if (sUnstickStep == 0) {
+     sUnstickWait = 8; // all three tried: a scene too heavy for the device looks the same, don't keep at it
+@@ -3751,6 +3755,9 @@ void *SIM_Render(void *arg) {
+       SIM_Smooth(&sTimings.presentSecondaryMs, sLastPresentNs - secondaryPresentNs);
+ #ifdef SDK_BUILD_ANDROID
+       PacingWatchdog(!fastForward && !paused && s_SIM_config.capFrameRate, sLastPresentNs - beforeSwapNs);
++      sTimings.watchdogFixes = sWatchdogFixes;
++      sTimings.watchdogLastRemedy = sWatchdogLastRemedy;
++      sTimings.watchdogClearedBy = sWatchdogClearedBy;
+ #endif
+ 
+       SIM_Smooth(&sTimings.swapMs, sLastPresentNs - beforeSwapNs);
