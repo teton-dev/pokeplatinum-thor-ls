@@ -66,6 +66,16 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
         displayManager.unregisterDisplayListener(this);
     }
 
+    /**
+     * The pacing watchdog's remedies (native, when every swap waits a refresh after fast-forward): 0 the lower screen's
+     * window draws a frame, as when the settings open over it, which ended the stall; 1 its surface is made again.
+     */
+    void unstick(int step) {
+        if (presentation != null) {
+            presentation.unstick(step);
+        }
+    }
+
     /** Places the lower screen again: the game's window moved to another display (see PlatinumActivity). */
     void refresh() {
         if (wanted) {
@@ -174,6 +184,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
     static native void nativeTouch(boolean down, float x, float y);
 
     private static final class ScreenPresentation extends Presentation {
+        private SurfaceView surfaceView;
         private int touchPointerId = -1;
         private android.widget.FrameLayout frame;
         private View overlay;
@@ -194,6 +205,21 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             overlay = view;
             return true;
+        }
+
+        void unstick(int step) {
+            if (frame == null) {
+                return;
+            }
+            if (step == 0 || surfaceView == null) {
+                View blank = new View(getContext());
+                frame.addView(blank, new android.widget.FrameLayout.LayoutParams(1, 1));
+                frame.postDelayed(() -> frame.removeView(blank), 250);
+            } else {
+                frame.removeView(surfaceView);
+                frame.addView(surfaceView, 0, new android.widget.FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            }
         }
 
         void releaseOverlay() {
@@ -234,7 +260,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                 window.setAttributes(params);
             }
 
-            SurfaceView surfaceView = new SurfaceView(getContext());
+            surfaceView = new SurfaceView(getContext());
             surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
                 @Override
                 public void surfaceCreated(SurfaceHolder holder) {

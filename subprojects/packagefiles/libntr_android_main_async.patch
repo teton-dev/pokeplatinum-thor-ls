@@ -1,0 +1,188 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -93,6 +93,7 @@ typedef struct SIM_FrameTimings {
+     float drawMs;      // compositing both screens, GUI
+     float capWaitMs;   // frame limiter sleep
+     float swapMs;      // buffer swap (vsync wait, driver)
++    float presentSecondaryMs; // part of it: the second display's swap, right after the main one's (Android)
+ 
+     // Parts of drawMs
+     float g2Ms;        // 2D layers (sprites, backgrounds) drawn on the CPU
+--- a/include/simulator/sim_android.h
++++ b/include/simulator/sim_android.h
+@@ -29,6 +29,9 @@ void SIM_Android_RestartApp(void);
+ void SIM_Android_GameThreadStarted(void);
+ // A frame's work (everything but the frame limiter's wait and the swap) took workNs
+ void SIM_Android_ReportFrameWork(long long workNs);
++// The pacing watchdog's remedies on the lower screen (PlatinumActivity.unstickDisplays): 0 its window draws a frame,
++// 1 its surface is made again
++void SIM_Android_UnstickDisplays(int step);
+ // What the frame timings show about it: the cores the game runs on, and whether the
+ // system takes performance hints
+ const char *SIM_Android_CpuInfo(void);
+--- a/include/simulator/sim_display.h
++++ b/include/simulator/sim_display.h
+@@ -37,6 +37,9 @@ void SIM_Display_EndSecondary(void);
+ // has been released too, so the swap doesn't wait. Swapped before the main window's wait it stalled up to a refresh,
+ // and the two waits one after the other made 30 frames a second on 60 Hz panels. A no-op elsewhere.
+ void SIM_Display_PresentSecondary(void);
++// Android: the main window's swap interval back to 0 when its EGL surface is new (a surface Android recreates starts at
++// 1, and its vsync wait with the second screen's made 30 frames a second). Cheap; call before each main swap.
++void SIM_Display_KeepMainAsync(void);
+ 
+ // Gives the display code a look at SDL events (desktop second window input/close).
+ // Returns TRUE if the event belonged to the secondary output and must not be handled
+--- a/libraries/sim/src/sim_android.cpp
++++ b/libraries/sim/src/sim_android.cpp
+@@ -183,6 +183,23 @@ extern "C" void SIM_Android_ReportFrameWork(long long workNs) {
+   }
+ }
+ 
++extern "C" void SIM_Android_UnstickDisplays(int step) {
++  JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
++  jobject activity = (jobject)SDL_AndroidGetActivity();
++  if (env == nullptr || activity == nullptr) {
++    return;
++  }
++  jclass activityClass = env->GetObjectClass(activity);
++  jmethodID method = env->GetMethodID(activityClass, "unstickDisplays", "(I)V");
++  if (method != nullptr) {
++    env->CallVoidMethod(activity, method, (jint)step);
++  } else {
++    env->ExceptionClear();
++  }
++  env->DeleteLocalRef(activityClass);
++  env->DeleteLocalRef(activity);
++}
++
+ extern "C" const char *SIM_Android_CpuInfo(void) {
+   return sCpuInfo;
+ }
+--- a/libraries/sim/src/sim_display.cpp
++++ b/libraries/sim/src/sim_display.cpp
+@@ -403,6 +403,18 @@ extern "C" void SIM_Display_EndSecondary(void) {
+ #endif
+ }
+ 
++extern "C" void SIM_Display_KeepMainAsync(void) {
++#ifdef SDK_BUILD_ANDROID
++  static EGLSurface sAsyncSurface = EGL_NO_SURFACE;
++  const EGLSurface current = eglGetCurrentSurface(EGL_DRAW);
++  if (current != EGL_NO_SURFACE && current != sAsyncSurface) {
++    eglSwapInterval(eglGetCurrentDisplay(), 0);
++    sAsyncSurface = current;
++    DISPLAY_LOG("Main surface %p: swap interval 0", (void *)current);
++  }
++#endif
++}
++
+ extern "C" void SIM_Display_PresentSecondary(void) {
+ #ifdef SDK_BUILD_ANDROID
+   if (sPendingSurface == EGL_NO_SURFACE) {
+--- a/libraries/sim/src/sim_gui.cpp
++++ b/libraries/sim/src/sim_gui.cpp
+@@ -143,9 +143,9 @@ static void PerfOverlay() {
+              t.shownPerSecond, t.vblanksPerSecond, t.draws3d, t.uploads2d);
+     snprintf(lines[1], sizeof(lines[1]),
+              "CPU ms  game %.1f  3D %.1f  2D %.1f  upload %.1f  2nd screen %.1f (gear %.1f, show %.1f)  menus %.1f  "
+-             "other %.1f  wait %.1f  swap %.1f",
++             "other %.1f  wait %.1f  swap %.1f (2nd %.1f)",
+              t.gameMs, t.g3SubmitMs, t.g2Ms, t.uploadMs, t.secondaryMs, t.companionMs, t.secondarySwapMs, t.guiMs,
+-             other, t.capWaitMs, t.swapMs);
++             other, t.capWaitMs, t.swapMs, t.presentSecondaryMs);
+     if (t.gpu3dMs >= 0.0f) {
+         snprintf(lines[2], sizeof(lines[2]), "GPU ms  3D %.1f  top %.1f  bottom %.1f", t.gpu3dMs, t.gpuMainMs,
+                  t.gpuSecondaryMs);
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -133,6 +133,53 @@ static bool sFastForwardHeld = false;    // a hold button is down
+ static bool sFastForwardOn = false;      // switched on (toggle button, or the game)
+ static bool sFastForwardJoyDown = false; // the controller's button (axes repeat their down events)
+ static bool sFastForwardSwap = false;    // the swap interval is 0 for it
++#ifdef SDK_BUILD_ANDROID
++// Android: frames not shown so the main window's buffer queue drains. After fast-forward it stayed a frame too deep:
++// every swap waited a refresh for a free buffer (20 ms, 30 frames a second on the Duo) until a pause let it empty
++static int sDrainPresents = 0;
++static int sSlowSwaps = 0; // frames in a row whose swap took most of a refresh
++
++// The pacing watchdog: on the Duo, after fast-forward, the main window's swap could take a whole refresh every frame
++// (30 frames a second, the game at half speed) until the settings were opened over the lower screen. A second of
++// such swaps at the game's speed and the watchdog tries a remedy, then the next one a second and a half later while
++// it lasts: 0 the lower screen's window draws a frame (what the settings do), 1 a few frames aren't shown, 2 the lower
++// screen's surface is made again. Logcat tag pokeplatinum says which cleared it.
++static int sUnstickStep = 0, sUnstickLast = -1, sUnstickWait = 0, sFastSwaps = 0;
++static void PacingWatchdog(bool steady, bool slowSwap) {
++  if (sUnstickWait > 0) {
++    sUnstickWait--;
++  }
++  if (!steady) {
++    sSlowSwaps = 0;
++    sFastSwaps = 0;
++    return;
++  }
++  if (slowSwap) {
++    sFastSwaps = 0;
++    if (++sSlowSwaps >= 60 && sUnstickWait == 0) {
++      sSlowSwaps = 0;
++      printf("pacing watchdog: swaps take a refresh (half rate), remedy %d\n", sUnstickStep);
++      fflush(stdout); // (stdout goes to logcat through a pipe: flushed or it waits)
++      if (sUnstickStep == 1) {
++        sDrainPresents = 6;
++      } else {
++        SIM_Android_UnstickDisplays(sUnstickStep == 0 ? 0 : 1);
++      }
++      sUnstickLast = sUnstickStep;
++      sUnstickStep = (sUnstickStep + 1) % 3;
++      sUnstickWait = 90;
++    }
++  } else {
++    sSlowSwaps = 0;
++    if (sUnstickLast >= 0 && ++sFastSwaps >= 60) {
++      printf("pacing watchdog: back to full rate after remedy %d\n", sUnstickLast);
++      fflush(stdout);
++      sUnstickLast = -1;
++      sUnstickStep = 0;
++    }
++  }
++}
++#endif
+ static u64 sNextVBlankNs = 0;            // fast-forward pacing
+ static u64 sLastPresentNs = 0;
+ 
+@@ -2923,8 +2970,19 @@ void *SIM_Render(void *arg) {
+       SDL_GL_SetSwapInterval(fastForward ? 0 : s_SIM_config.vsyncInterval);
+ #endif
+       sNextVBlankNs = 0;
++#ifdef SDK_BUILD_ANDROID
++      if (!fastForward) {
++        sDrainPresents = 2;
++      }
++#endif
+     }
+     bool present = !(sSkipNextFrame && !paused);
++#ifdef SDK_BUILD_ANDROID
++    if (present && !fastForward && sDrainPresents > 0) {
++      sDrainPresents--;
++      present = false;
++    }
++#endif
+     if (testMode && !paused) {
+       const u64 presentNs = (u64)s_SIM_config.testModePresentMs * 1000000ull;
+       if (presentNs == 0 || SIM_NowNs() - sLastPresentNs < presentNs) {
+@@ -3592,9 +3650,16 @@ void *SIM_Render(void *arg) {
+     if (present) {
+       SIM_Smooth(&sTimings.capWaitMs, beforeSwapNs - sBeforeWaitNs);
+ 
++      SIM_Display_KeepMainAsync();
+       SDL_GL_SwapWindow(window);
++      const u64 secondaryPresentNs = SIM_NowNs();
+       SIM_Display_PresentSecondary();
+       sLastPresentNs = SIM_NowNs();
++      SIM_Smooth(&sTimings.presentSecondaryMs, sLastPresentNs - secondaryPresentNs);
++#ifdef SDK_BUILD_ANDROID
++      PacingWatchdog(!fastForward && !paused && s_SIM_config.capFrameRate,
++                     secondaryPresentNs - beforeSwapNs > 12000000ull);
++#endif
+ 
+       SIM_Smooth(&sTimings.swapMs, sLastPresentNs - beforeSwapNs);
+       NextLayerSet();

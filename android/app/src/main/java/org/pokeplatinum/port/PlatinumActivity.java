@@ -303,6 +303,16 @@ public class PlatinumActivity extends SDLActivity {
      * Called from native code (sim_carts.cpp) after switching to another game: start the
      * app again in a fresh process, which then enters that game's directory.
      */
+    /** Called from native code (the pacing watchdog, SDL thread): see SecondaryScreen.unstick. */
+    @SuppressWarnings("unused")
+    public void unstickDisplays(int step) {
+        runOnUiThread(() -> {
+            if (secondaryScreen != null) {
+                secondaryScreen.unstick(step);
+            }
+        });
+    }
+
     @SuppressWarnings("unused")
     public void restartApp() {
         Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
