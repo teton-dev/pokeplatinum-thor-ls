@@ -1,0 +1,7 @@
+# Enhanced graphics in Jubilife City (buildings' sun shadows, highlights on the sprites): from the turtwig fixture, with
+# TEST_CONFIG="EnhancedShadows=true EnhancedHighlights=true" and POKEPLATINUM_ENHANCED_HOUR=H
+mash A until free
+jump 3 180 777
+until free timeout 3000
+wait 40
+shot jubilife

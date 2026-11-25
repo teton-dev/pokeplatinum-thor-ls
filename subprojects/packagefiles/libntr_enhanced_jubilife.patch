@@ -1,0 +1,427 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -107,6 +107,10 @@
+     float gpu3dMs;        // the 3D scene
+     float gpuMainMs;      // the main window
+     float gpuSecondaryMs; // the second display
++    // Enhanced graphics' passes, GPU ms (not part of gpu3dMs): sun shadows, highlights, water, atmosphere, grade, glow;
++    // and the shadow map's casters placed on the CPU
++    float gpuEnhancedMs[6];
++    float shadowMapCpuMs;
+ 
+     float shownPerSecond;   // frames shown
+     float vblanksPerSecond; // DS frames run (60 at full speed)
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -298,7 +298,8 @@
+ #ifndef GL_GPU_DISJOINT_EXT
+ #define GL_GPU_DISJOINT_EXT 0x8FBB
+ #endif
+-enum GpuPart { GPU_3D, GPU_MAIN, GPU_SECONDARY, GPU_PART_COUNT };
++enum GpuPart { GPU_3D, GPU_MAIN, GPU_SECONDARY, GPU_SHADOW, GPU_HIGHLIGHT, GPU_WATER, GPU_ATMOSPHERE, GPU_GRADE, GPU_BLOOM,
++               GPU_PART_COUNT };
+ static constexpr int kGpuQueryRing = 8;
+ static bool sGpuTimers = false;
+ static GLuint sGpuQueries[GPU_PART_COUNT][kGpuQueryRing];
+@@ -308,6 +309,9 @@
+ 
+ static void GpuTimersInit() {
+   sTimings.gpu3dMs = sTimings.gpuMainMs = sTimings.gpuSecondaryMs = -1.0f;
++  for (float &ms : sTimings.gpuEnhancedMs) {
++    ms = -1.0f;
++  }
+ #ifdef SIM_GLES
+   GLint count = 0;
+   glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+@@ -321,6 +325,9 @@
+   if (sGpuTimers) {
+     glGenQueries(GPU_PART_COUNT * kGpuQueryRing, &sGpuQueries[0][0]);
+     sTimings.gpu3dMs = sTimings.gpuMainMs = sTimings.gpuSecondaryMs = 0.0f;
++    for (float &ms : sTimings.gpuEnhancedMs) {
++      ms = 0.0f;
++    }
+   }
+   while (glGetError() != GL_NO_ERROR) {
+   }
+@@ -358,7 +365,9 @@
+ #ifdef SIM_GLES
+   glGetIntegerv(GL_GPU_DISJOINT_EXT, &disjoint);
+ #endif
+-  float *targets[GPU_PART_COUNT] = {&sTimings.gpu3dMs, &sTimings.gpuMainMs, &sTimings.gpuSecondaryMs};
++  float *targets[GPU_PART_COUNT] = {&sTimings.gpu3dMs,           &sTimings.gpuMainMs,         &sTimings.gpuSecondaryMs,
++                                    &sTimings.gpuEnhancedMs[0], &sTimings.gpuEnhancedMs[1], &sTimings.gpuEnhancedMs[2],
++                                    &sTimings.gpuEnhancedMs[3], &sTimings.gpuEnhancedMs[4], &sTimings.gpuEnhancedMs[5]};
+   for (int part = 0; part < GPU_PART_COUNT; part++) {
+     for (int slot = 0; slot < kGpuQueryRing; slot++) {
+       if (!sGpuQueryPending[part][slot]) {
+@@ -440,7 +449,14 @@
+ static GLuint g3SunShadowMarchProgramID, g3SunShadowCleanProgramID, g3SunShadowApplyProgramID;
+ // The sun shadow map: the casters drawn from the sun into a depth texture, and the pass that looks the pixels up in it
+ static GLuint g3SunMapProgramID, g3SunReceiveProgramID, g3SunMapTex, g3SunMapFbo, g3SunMapVertexArray, g3SunMapBuffer;
+-static constexpr int kSunMapSize = 2048;
++// 1024 texels across: the pixels are looked up a DS pixel at a time, so finer gains nothing (2048 cost the Duo ~4x the
++// clear and store)
++static constexpr int kSunMapSize = 1024;
++// The map of this frame, for the atmosphere's light shafts (it reads the same map): made, and the sun's view it was drawn in
++static bool sSunMapMade = false;
++static float sSunMapRight[3], sSunMapUp[3], sSunMapBounds[4], sSunMapDepth[2];
++// The shadow mask the later passes read: the cleaned one, or the map's own (it needs no cleaning)
++static GLuint sSunMaskTex = 0;
+ static GLuint g3SunShadowTex, g3SunShadowFbo, g3SunShadowCleanTex, g3SunShadowCleanFbo;
+ static int sSunShadowW, sSunShadowH;
+ static float sSunCamera[10];
+@@ -2074,6 +2090,7 @@
+     sSunCameraSet = false;
+   }
+   sSunShadowMade = false;
++  sSunMapMade = false;
+ }
+ 
+ 
+@@ -2169,6 +2186,10 @@
+   glBindVertexArray(g3SunMapVertexArray);
+   glBindBuffer(GL_ARRAY_BUFFER, g3SunMapBuffer);
+   glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(sPlaced.size() * sizeof(float)), sPlaced.data(), GL_STREAM_DRAW);
++  // Each caster pushed away from the sun by its slope in the map: a surface the sun grazes (a roof's far slope) otherwise
++  // half-shades itself in dots, as its depth in the map and its own disagree by up to a map texel times that slope
++  glEnable(GL_POLYGON_OFFSET_FILL);
++  glPolygonOffset(2.0f, 4.0f);
+   const GLuint map = g3SunMapProgramID;
+   glUseProgram(map);
+   glActiveTexture(GL_TEXTURE0 + 12);
+@@ -2187,6 +2208,7 @@
+     }
+     glDrawArrays(GL_TRIANGLES, (GLint)batch->start, (GLsizei)batch->count);
+   }
++  glDisable(GL_POLYGON_OFFSET_FILL);
+   glDisable(GL_DEPTH_TEST);
+   return true;
+ }
+@@ -2247,10 +2269,19 @@
+   GLboolean depthMask;
+   glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
+   glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
++  const u64 mapStartNs = SIM_NowNs();
+   const bool mapped = !sMarch && G3SunShadowMap(casters, casterCount, casterBatches, casterBatchCount, lightRight, lightUp,
+                                                  lightBounds, lightDepth);
++  SIM_Smooth(&sTimings.shadowMapCpuMs, SIM_NowNs() - mapStartNs);
+   glDepthFunc(depthFunc);
+   glDepthMask(depthMask);
++  sSunMapMade = mapped;
++  if (mapped) {
++    memcpy(sSunMapRight, lightRight, sizeof(lightRight));
++    memcpy(sSunMapUp, lightUp, sizeof(lightUp));
++    memcpy(sSunMapBounds, lightBounds, sizeof(lightBounds));
++    memcpy(sSunMapDepth, lightDepth, sizeof(lightDepth));
++  }
+   if (!sMarch && !mapped) {
+     // Nothing cast this frame: no 3D shadows (the state is put back as below)
+     glActiveTexture(GL_TEXTURE0);
+@@ -2316,17 +2347,21 @@
+   glBindVertexArray(g3EdgeVertexArray);
+   glDrawArrays(GL_TRIANGLES, 0, 3);
+ 
+-  // 1b. Holes closed, specks dropped (the mask into its twin)
+-  glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowCleanFbo);
+-  glActiveTexture(GL_TEXTURE0 + 12);
+-  glBindTexture(GL_TEXTURE_2D, g3SunShadowTex);
+-  const GLuint clean = g3SunShadowCleanProgramID;
+-  glProgramUniform1i(clean, WaterUniform(clean, "maskTexture"), 12);
+-  glProgramUniform2i(clean, WaterUniform(clean, "dsSize"), dsWidth, dsHeight);
++  // 1b. Holes closed, specks dropped (the mask into its twin): the march's; the map's mask has none, and the clean-up erased
++  // one-pixel shadows (a bridge's cables), so it is used as it is (SIM_SUNSHADOW_CLEAN=1 cleans it too)
+   static const bool sCleanMap = getenv("SIM_SUNSHADOW_CLEAN") != nullptr && getenv("SIM_SUNSHADOW_CLEAN")[0] == '1';
+-  glProgramUniform1i(clean, WaterUniform(clean, "keep"), mapped && !sCleanMap ? 1 : 0);
+-  glUseProgram(clean);
+-  glDrawArrays(GL_TRIANGLES, 0, 3);
++  sSunMaskTex = g3SunShadowTex;
++  if (!mapped || sCleanMap) {
++    glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowCleanFbo);
++    glActiveTexture(GL_TEXTURE0 + 12);
++    glBindTexture(GL_TEXTURE_2D, g3SunShadowTex);
++    const GLuint clean = g3SunShadowCleanProgramID;
++    glProgramUniform1i(clean, WaterUniform(clean, "maskTexture"), 12);
++    glProgramUniform2i(clean, WaterUniform(clean, "dsSize"), dsWidth, dsHeight);
++    glUseProgram(clean);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++    sSunMaskTex = g3SunShadowCleanTex;
++  }
+ 
+   // 2. The multiply, over the viewport, into the 3D colour alone
+   static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+@@ -2334,7 +2369,7 @@
+   glDrawBuffers(1, kBoth);
+   glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
+   glActiveTexture(GL_TEXTURE0 + 12);
+-  glBindTexture(GL_TEXTURE_2D, g3SunShadowCleanTex);
++  glBindTexture(GL_TEXTURE_2D, sSunMaskTex);
+   const GLuint apply = g3SunShadowApplyProgramID;
+   glProgramUniform1i(apply, WaterUniform(apply, "maskTexture"), 12);
+   glProgramUniform2i(apply, WaterUniform(apply, "origin"), sG3Viewport[0], sG3Viewport[1]);
+@@ -2413,7 +2448,7 @@
+   glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
+   glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
+   glActiveTexture(GL_TEXTURE0 + 12);
+-  glBindTexture(GL_TEXTURE_2D, g3SunShadowCleanTex);
++  glBindTexture(GL_TEXTURE_2D, sSunMaskTex);
+   const GLuint light = g3HighlightProgramID;
+   glProgramUniform1i(light, WaterUniform(light, "attrTexture"), kEdgeAttrTexUnit);
+   glProgramUniform1i(light, WaterUniform(light, "shadowTexture"), 12);
+@@ -2442,6 +2477,18 @@
+   glProgramUniform2i(apply, WaterUniform(apply, "origin"), sG3Viewport[0], sG3Viewport[1]);
+   glProgramUniform1i(apply, WaterUniform(apply, "pixelStep"), sScale);
+   glProgramUniform3f(apply, WaterUniform(apply, "sunColor"), sSunLight[0], sSunLight[1], sSunLight[2]);
++  glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
++  glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
++  glProgramUniform1i(apply, WaterUniform(apply, "attrTexture"), kEdgeAttrTexUnit);
++  {
++    // The sun's way on the screen, as the rim looks for it: a step along each axis the direction leans on enough
++    float sx = sSunCamera[4] + 1e-4f, sy = sSunCamera[5] + 1e-4f;
++    const float sl = sqrtf(sx * sx + sy * sy);
++    sx /= sl;
++    sy /= sl;
++    glProgramUniform2i(apply, WaterUniform(apply, "towardSun"), fabsf(sx) > 0.38f ? (sx > 0 ? 1 : -1) : 0,
++                       fabsf(sy) > 0.38f ? (sy > 0 ? 1 : -1) : 0);
++  }
+   glEnable(GL_BLEND);
+   glUseProgram(apply);
+   if (sDebug == 0) {
+@@ -2764,6 +2811,19 @@
+     glProgramUniform4f(march, WaterUniform(march, "projection"), sSunCamera[0], sSunCamera[1], sSunCamera[2], sSunCamera[3]);
+     glProgramUniform1f(march, WaterUniform(march, "xScale"), xScale);
+     glProgramUniform3f(march, WaterUniform(march, "toSun"), sSunCamera[4], sSunCamera[5], sSunCamera[6]);
++    // With the sun shadows' map drawn this frame, each point of the air is looked up in it (4 reads a pixel, not 36)
++    glProgramUniform1i(march, WaterUniform(march, "useMap"), sSunMapMade ? 1 : 0);
++    if (sSunMapMade) {
++      glActiveTexture(GL_TEXTURE0 + 13);
++      glBindTexture(GL_TEXTURE_2D, g3SunMapTex);
++      glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
++      glProgramUniform1i(march, WaterUniform(march, "shadowMap"), 13);
++      glProgramUniform3f(march, WaterUniform(march, "lightRight"), sSunMapRight[0], sSunMapRight[1], sSunMapRight[2]);
++      glProgramUniform3f(march, WaterUniform(march, "lightUp"), sSunMapUp[0], sSunMapUp[1], sSunMapUp[2]);
++      glProgramUniform4f(march, WaterUniform(march, "lightBounds"), sSunMapBounds[0], sSunMapBounds[1], sSunMapBounds[2],
++                         sSunMapBounds[3]);
++      glProgramUniform2f(march, WaterUniform(march, "lightDepth"), sSunMapDepth[0], sSunMapDepth[1]);
++    }
+     glUseProgram(march);
+     glDrawArrays(GL_TRIANGLES, 0, 3);
+   }
+@@ -2954,15 +3014,27 @@
+   G3SIM_DrawItems();
+ 
+   G3EdgeMarking();
++  GpuTimerEnd(); // the 3D scene's GPU time (started after the last frame); the enhanced passes are timed apart
+   G3EnhancedSunPrepare();
++  GpuTimerBegin(GPU_SHADOW);
+   G3EnhancedSunShadow();
++  GpuTimerEnd();
++  GpuTimerBegin(GPU_HIGHLIGHT);
+   G3EnhancedHighlights();
++  GpuTimerEnd();
++  GpuTimerBegin(GPU_WATER);
+   G3EnhancedWater();
++  GpuTimerEnd();
++  GpuTimerBegin(GPU_ATMOSPHERE);
+   G3EnhancedAtmosphere();
++  GpuTimerEnd();
++  GpuTimerBegin(GPU_GRADE);
+   G3EnhancedGrade();
++  GpuTimerEnd();
++  GpuTimerBegin(GPU_BLOOM);
+   G3EnhancedBloom();
++  GpuTimerEnd();
+ 
+-  GpuTimerEnd(); // the 3D scene's GPU time (started after the last frame)
+   GpuTimersCollect();
+ #ifdef SDK_BUILD_ANDROID
+   static bool sThreadSetUp = false;
+--- a/libraries/sim/src/sim_gui.cpp
++++ b/libraries/sim/src/sim_gui.cpp
+@@ -138,7 +138,7 @@
+     if (other < 0.0f) {
+         other = 0.0f;
+     }
+-    char lines[3][200];
++    char lines[4][200];
+     snprintf(lines[0], sizeof(lines[0]), "%.0f fps shown, game at %.0f/60  (3D draws %.0f, layer uploads %.1f)",
+              t.shownPerSecond, t.vblanksPerSecond, t.draws3d, t.uploads2d);
+     snprintf(lines[1], sizeof(lines[1]),
+@@ -152,6 +152,10 @@
+     } else {
+         snprintf(lines[2], sizeof(lines[2]), "GPU ms  (no timer queries on this GPU)");
+     }
++    const float *e = t.gpuEnhancedMs;
++    snprintf(lines[3], sizeof(lines[3]),
++             "Enhanced GPU ms  shadows %.1f (map CPU %.1f)  highlights %.1f  water %.1f  air %.1f  grade %.1f  glow %.1f",
++             e[0], t.shadowMapCpuMs, e[1], e[2], e[3], e[4], e[5]);
+ 
+     ImFont *font = SIM::UI::RegularFont();
+     const float px = SIM::UI::S(12.0f);
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -643,6 +643,14 @@
+     snprintf(text, sizeof(text), "GPU times aren't available on this GPU.");
+   }
+   Note(text);
++  if (t.gpu3dMs >= 0.0f) {
++    const float *e = t.gpuEnhancedMs;
++    snprintf(text, sizeof(text),
++             "Enhanced graphics, GPU ms per frame: sun shadows %.1f (the shadow map's CPU side %.1f), highlights %.1f, "
++             "water %.1f, atmosphere %.1f, time-of-day light %.1f, glow %.1f.",
++             e[0], t.shadowMapCpuMs, e[1], e[2], e[3], e[4], e[5]);
++    Note(text);
++  }
+ #ifdef SDK_BUILD_ANDROID
+   Note(SIM_Android_CpuInfo());
+ #endif
+--- a/libraries/sim/src/shaders/g3_atmosphere_march_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_atmosphere_march_fragment.glsl
+@@ -15,8 +15,28 @@
+ uniform vec4 projection;       // the game's projection: m00, m11, m22, m32
+ uniform float xScale;          // a wide scene libntr narrows
+ uniform vec3 toSun;            // view space, unit length
++// The sun shadows' map, when it was drawn this frame: each point is looked up in it instead of marched
++uniform int useMap;
++uniform sampler2D shadowMap;
++uniform vec3 lightRight;
++uniform vec3 lightUp;
++uniform vec4 lightBounds;
++uniform vec2 lightDepth;
+ out vec4 color;
+ 
++// 1 where the point sees the sun past every caster in the map (or is outside it)
++float OpenInMap(vec3 p)
++{
++    vec2 across = (vec2(dot(p, lightRight), dot(p, lightUp)) - lightBounds.xy) / lightBounds.zw;
++    if (any(lessThan(across, vec2(0.0))) || any(greaterThanEqual(across, vec2(1.0)))) {
++        return 1.0;
++    }
++    float along = (lightDepth.x - dot(p, toSun)) / lightDepth.y;
++    ivec2 size = textureSize(shadowMap, 0);
++    float nearest = texelFetch(shadowMap, ivec2(across * vec2(size)), 0).r;
++    return along - nearest > 1.0 / lightDepth.y ? 0.0 : 1.0;
++}
++
+ // 0: nothing opaque there; otherwise the view distance (positive) of the surface. A sprite counts only when asked
+ float Distance(ivec2 ds, bool withSprites)
+ {
+@@ -41,6 +61,10 @@
+         const float weight[4] = float[4](0.4, 0.3, 0.2, 0.1);
+         for (int k = 0; k < 4; k++) {
+             vec3 p = here * (1.0 - lift[k] / surface);
++            if (useMap == 1) {
++                lit += weight[k] * OpenInMap(p);
++                continue;
++            }
+             float open = 1.0;
+             for (int i = 1; i <= 9; i++) {
+                 vec3 q = p + toSun * (7.0 * float(i));
+--- a/libraries/sim/src/shaders/g3_highlight_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_highlight_fragment.glsl
+@@ -113,14 +113,9 @@
+         // Buildings carry polygon IDs the ground and the trees don't (the DS gives them to outline them): only those glint
+         bool building = fetchedPolygonId != 0;
+         if (sprite) {
+-            // The rim: the pixel's neighbour toward the sun on screen isn't a sprite's pixel
+-            vec2 s = normalize(vec2(toSun.x, toSun.y) + vec2(1e-4));
+-            ivec2 towardSun = ivec2(abs(s.x) > 0.38 ? int(sign(s.x)) : 0, abs(s.y) > 0.38 ? int(sign(s.y)) : 0);
+-            float d2;
+-            bool sprite2;
+-            if (!(Fetch(p + towardSun, d2, sprite2) && sprite2)) {
+-                rim = 0.4;
+-            }
++            // (the sprites' rim is found at full resolution, on the sprite's own pixels: g3_highlight_apply_fragment.glsl;
++            // here only where to look: a sprite's DS pixels and their neighbours, below)
++            rim = 1.0;
+         } else {
+             vec3 here = ViewPosition(p, dist);
+             bool ok1, ok2;
+@@ -147,6 +142,19 @@
+         int id = a.r >> 2;
+         shown = a.a == 0 ? vec3(0.0) : vec3(float(id & 1), float((id >> 1) & 1), float((id >> 2) & 1)) * 0.6 + 0.2 * float((id >> 3) & 3);
+     }
++    // The rim pass looks only near a sprite: a DS pixel next to one counts too (the sprite's edge may fall inside it)
++    if (rim == 0.0) {
++        for (int y = -1; y <= 1 && rim == 0.0; y++) {
++            for (int x = -1; x <= 1; x++) {
++                float d2;
++                bool sprite2;
++                if (Fetch(p + ivec2(x, y), d2, sprite2) && sprite2) {
++                    rim = 1.0;
++                    break;
++                }
++            }
++        }
++    }
+     color = vec4(debugNormals >= 1 ? shown : light, rim);
+ }
+ )""
+--- a/libraries/sim/src/shaders/g3_highlight_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_highlight_apply_fragment.glsl
+@@ -2,15 +2,30 @@
+ #version 420 core
+ 
+ // Enhanced graphics' sun highlights, second pass: at full resolution what the first pass found. Drawn twice: mode 0 brightens
+-// the pixel's own colour (the blend multiplies and adds: dst * (1 + light)), mode 1 adds the sun's colour for the rim. One
+-// texel of the light texture is a DS pixel, never filtered, so the light keeps the pixel grid.
++// the pixel's own colour (the blend multiplies and adds: dst * (1 + light)), mode 1 adds the sun's colour for the sprites'
++// rim. One texel of the light texture is a DS pixel, never filtered, so the light keeps the pixel grid. The rim is found
++// here, at full resolution: a sprite's pixel whose neighbour one sprite pixel (pixelStep) toward the sun isn't the
++// sprite's. Worked out on the DS's grid, which a running sprite crosses in small steps, it flickered from frame to frame;
++// this way it moves with the sprite's own pixels.
+ uniform sampler2D lightTexture;
++uniform sampler2D attrTexture; // polygon ID * 4 + 1 for a sprite in r, a set where opaque
++uniform ivec2 towardSun;       // the sun's way on the screen, in whole steps (-1, 0 or 1 each)
+ uniform ivec2 origin;
+ uniform int pixelStep;
+ uniform int mode;
+ uniform vec3 sunColor;
+ out vec4 color;
+ 
++bool SpriteAt(ivec2 f)
++{
++    ivec2 size = textureSize(attrTexture, 0);
++    if (f.x < 0 || f.y < 0 || f.x >= size.x || f.y >= size.y) {
++        return false;
++    }
++    ivec4 a = ivec4(texelFetch(attrTexture, f, 0) * 255.0 + 0.5);
++    return a.a != 0 && (a.r & 1) == 1;
++}
++
+ void main()
+ {
+     vec4 light = texelFetch(lightTexture, (ivec2(gl_FragCoord.xy) - origin) / pixelStep, 0);
+@@ -20,10 +35,12 @@
+         }
+         color = vec4(light.rgb, 1.0);
+     } else {
+-        if (light.a < 0.01) {
++        ivec2 f = ivec2(gl_FragCoord.xy);
++        // (a: the first pass's mark, near a sprite; most of the screen stops here, on one read of a small texture)
++        if (light.a < 0.5 || !SpriteAt(f) || SpriteAt(f + towardSun * pixelStep)) {
+             discard;
+         }
+-        color = vec4(sunColor * light.a, 1.0);
++        color = vec4(sunColor * 0.4, 1.0);
+     }
+ }
+ )""
+--- a/libraries/sim/src/shaders/g3_sunshadow_clean_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_sunshadow_clean_fragment.glsl
+@@ -7,7 +7,6 @@
+ // it when at least six are: holes close and specks go, the shape of a shadow stays
+ uniform sampler2D maskTexture;
+ uniform ivec2 dsSize;
+-uniform int keep; // 1: the mask as it is (the shadow map's has no holes or specks to clean)
+ out vec4 color;
+ 
+ void main()
+@@ -22,7 +21,7 @@
+     }
+     bool here = texelFetch(maskTexture, p, 0).r > 0.5;
+     vec4 own = texelFetch(maskTexture, p, 0);
+-    bool shadow = own.b < 0.5 && (keep == 1 ? here : (here ? count >= 4 : count >= 6));
++    bool shadow = own.b < 0.5 && (here ? count >= 4 : count >= 6);
+     color = vec4(shadow ? 1.0 : 0.0, own.g, own.b, 1.0);
+ }
+ )""

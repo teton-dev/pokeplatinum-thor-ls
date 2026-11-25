@@ -278,6 +278,23 @@ Order: infrastructure + time-of-day, then sprite shadows, then water, then leave
   **Not done:** casters the game doesn't submit (off-screen chunks it culls) still cast nothing; a scene with far chunks
   loaded spreads the map's texels thinner (they are fitted to all casters); other model objects (boulders, Cut trees,
   berry trees) are not in the caster bracket yet.
+- **Jubilife on the Duo (2026-11-25), `libntr_enhanced_jubilife.patch`.** The owner's report from the Retroid Pocket
+  Duo (Eterna 9100057): Jubilife couldn't hold 60 fps, a building's shadows looked out of place, and the rim on running
+  sprites warbled. (1) The frame-timings overlay and *Settings > Advanced* now time each enhanced pass on the GPU
+  (`gpuEnhancedMs`: shadows, highlights, water, atmosphere, grade, glow; `gpu3dMs` is the scene alone now) and the shadow
+  map's CPU side. On the Duo in Jubilife (all effects on) the 3D took 1.4 ms, the top screen 4.3, the bottom 2.6,
+  atmosphere 2.7, shadows 2.1, highlights 1.7, glow 0.5: about 15.3 of 16.7 ms, 57 fps. Cuts: the shadow map is 1024x1024
+  (pixels are looked up a DS pixel at a time, 2048 bought nothing); the clean-up pass is left out with the map (the mask
+  the later passes read is `sSunMaskTex`); the atmosphere's shafts look each of their four points up in the shadow map
+  when it was drawn this frame (4 reads a pixel instead of 36 marched); the rim pass stops on one read of the DS
+  highlight texture away from sprites. After: 60 fps, game 60/60, 6.7 ms of the frame spare; GPU 3D 2.1, top 4.3,
+  bottom 2.6, shadows 1.2, highlights 2.1, atmosphere 0.8, glow 0.5 (about 13.6 ms). Highlights are now the costliest
+  pass. (2) Jubilife's Pokemon Center roof had dotted self-shadowing on the slope away from the sun: the map's casters are
+  drawn with a slope-scaled polygon offset (2, 4). (3) The rim was worked out on the DS grid fixed to the screen, which a
+  running sprite crosses in small steps; it is now found in the full-resolution apply (`g3_highlight_apply_fragment.glsl`):
+  a sprite's pixel whose neighbour one sprite pixel (pixelStep) toward the sun isn't the sprite's, so it moves with the
+  sprite's own pixels. Test: `tests/scripts/enhanced_jubilife.txt`. Not checked on the device: the rim while running
+  (the owner's eye), other heavy towns (Hearthome, Veilstone), the Thor.
 - **Camera tilt (not a shader; `src/port/camera_tilt.c`)**: *Display > Camera tilt* (0, 6 or 12 degrees lower), applied
   around the field map's draw in `fieldmap.c` (the camera's angle is raised before the view matrix is made, put back after
   the draw), only for perspective cameras looking down at 30 to 75 degrees with no yaw, so scenes that set their own angle are
