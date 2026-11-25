@@ -1,0 +1,685 @@
+--- a/include/simulator/g3_draw.h
++++ b/include/simulator/g3_draw.h
+@@ -47,6 +47,10 @@
+ 	u32 textureId;
+ 	u8 wrap;
+ } G3SIM_CasterBatch_t;
++// Floats per caster vertex: clip x, y, w (view units), s, t, r, g, b, a
++#define G3SIM_CASTER_STRIDE 9
++// The water mask's vertices this frame (before G3SIM_DrawMask empties it)
++const G3SIM_Vertex_t * G3SIM_MaskVerts(u32 * count);
+ void G3SIM_CasterBatchEnd(u32 textureId, u8 wrap);
+ u32 G3SIM_TakeCasters(const float ** verts, const G3SIM_CasterBatch_t ** batches, u32 * batchCount);
+ void G3SIM_ResetCasters(void);
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -171,6 +171,12 @@
+ // Enhanced graphics' sun shadow map: polygons drawn while it is set cast too (besides the land and buildings drawn under
+ // SIM_SetHideBuiltInShadows): models the game draws apart from its land, like signposts
+ void SIM_SetSunCasters(BOOL casts);
++// Around the game's land and buildings (with or without the sun's shadows): their polygons are kept for the water's
++// mirror image (Enhanced graphics' water reflections)
++void SIM_SetLandDrawing(BOOL drawing);
++// Every frame the field is drawn, before the 3D: the game's projection (m00, m11, m22, m32) and the world's up in view
++// space, for the water's mirror image (the sun shadows' camera is only given while the sun is up)
++void SIM_SetEnhancedCamera(float m00, float m11, float m22, float m32, float upX, float upY, float upZ);
+ void SIM_SetEnhancedSun(float shearX, float shearY, u8 strength);
+ // Water reflections (Settings > Display > Water reflections): polygons submitted while SIM_SetPolygonTag(1) is set are not
+ // drawn but make the water mask (the tiles the game says are water, against the scene's depth); the frame's water is
+--- a/include/simulator/sim_shaders.hpp
++++ b/include/simulator/sim_shaders.hpp
+@@ -18,6 +18,8 @@
+ extern const char * G3SunShadowMapVertexShader;
+ extern const char * G3SunShadowMapFragmentShader;
+ extern const char * G3SunShadowReceiveFragmentShader;
++extern const char * G3WaterMirrorVertexShader;
++extern const char * G3WaterMirrorFragmentShader;
+ extern const char * G3SunShadowCleanFragmentShader;
+ extern const char * G3HighlightFragmentShader;
+ extern const char * G3HighlightApplyFragmentShader;
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -189,6 +189,12 @@
+ 	}
+ }
+ 
++const G3SIM_Vertex_t * G3SIM_MaskVerts(u32 * count)
++{
++	*count = s_G3MaskCount;
++	return s_G3MaskVerts;
++}
++
+ u32 G3SIM_MaskVertCount(void)
+ {
+ 	return s_G3MaskCount;
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1640,7 +1640,15 @@
+ }
+ 
+ static bool s_extraCasters = false;
++// The game's land and buildings being drawn (whatever the sun shadows' state): the water's mirror image wants them too
++static bool s_landDrawing = false;
+ 
++extern "C" void SIM_SetLandDrawing(BOOL drawing)
++{
++    G3SIM_FlushArray();
++    s_landDrawing = drawing != FALSE;
++}
++
+ extern "C" void SIM_SetSunCasters(BOOL casts)
+ {
+     G3SIM_FlushArray();
+@@ -1653,12 +1661,12 @@
+ }
+ 
+ // Enhanced graphics' sun shadow map: the casters of this frame, kept whole (before clipping, so what reaches past the screen's
+-// edges still casts) as triangles of clip-space x, y and w in view units and the texture coordinates s and t, for the shadow
+-// map drawn from the sun. The runs of them that share a texture (a batch: libntr flushes when the texture changes) are
++// edges still casts) as triangles of clip-space x, y and w in view units, the texture coordinates s and t and the vertex
++// colour r, g, b, a, for the shadow map drawn from the sun and the water's mirror image (G3SIM_CASTER_STRIDE floats each). The runs of them that share a texture (a batch: libntr flushes when the texture changes) are
+ // told the texture when the batch is drawn (G3SIM_CasterBatchEnd), so the map can leave out the texture's clear texels
+ #define G3SIM_CASTER_MAX_VERTS (6144 * 3)
+ #define G3SIM_CASTER_MAX_BATCHES 1024
+-static float s_casterVerts[G3SIM_CASTER_MAX_VERTS * 5];
++static float s_casterVerts[G3SIM_CASTER_MAX_VERTS * G3SIM_CASTER_STRIDE];
+ static u32 s_casterCount = 0;
+ static G3SIM_CasterBatch_t s_casterBatches[G3SIM_CASTER_MAX_BATCHES];
+ static u32 s_casterBatchCount = 0, s_casterBatchStart = 0;
+@@ -1787,7 +1795,8 @@
+ 
+     // A caster for the sun shadow map: an opaque polygon of the land and buildings (the bracket SIM_SetHideBuiltInShadows
+     // marks, with the shadows shown), not a sprite, not the water mask, not see-through, wholly in front of the camera
+-    if((s_hideBuiltInShadows || s_extraCasters) && s_G3ShadowAlpha > 0.0f && s_spriteDepthBiasTop == 0 && s_polygonTag == 0
++    if((s_hideBuiltInShadows || s_landDrawing || s_extraCasters)
++       && (s_G3ShadowAlpha > 0.0f || SIM_GetConfigPtr()->enhancedWater) && s_spriteDepthBiasTop == 0 && s_polygonTag == 0
+        && !s_SIM_useWBuffer && s_curPolygonAttr.alpha >= 0.99f) {
+         bool front = true;
+         for(int i=0; i < numVerts; i++) {
+@@ -1801,12 +1810,16 @@
+                 }
+                 const int corner[3] = {0, i, i + 1};
+                 for(int c=0; c < 3; c++) {
+-                    float * out = &s_casterVerts[s_casterCount * 5];
++                    float * out = &s_casterVerts[s_casterCount * G3SIM_CASTER_STRIDE];
+                     out[0] = (float)clip[corner[c]].pos[0] / 4096.0f;
+                     out[1] = (float)clip[corner[c]].pos[1] / 4096.0f;
+                     out[2] = (float)clip[corner[c]].pos[3] / 4096.0f;
+                     out[3] = clip[corner[c]].s;
+                     out[4] = clip[corner[c]].t;
++                    out[5] = clip[corner[c]].r;
++                    out[6] = clip[corner[c]].g;
++                    out[7] = clip[corner[c]].b;
++                    out[8] = clip[corner[c]].a;
+                     s_casterCount++;
+                 }
+             }
+--- a/libraries/sim/src/shaders/g3_water_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_water_apply_fragment.glsl
+@@ -14,10 +14,50 @@
+ uniform float time;              // seconds, for the ripple
+ uniform vec3 waterTint;
+ uniform int debugMask;           // SIM_WATER_DEBUG: the mask and the shore distances drawn as colour
++// The planar mirror (the scene drawn mirrored about the water's level, g3_water_mirror_*.glsl), in place of the shore
++// search and the copy of the frame: each water pixel shows what lies at its own place in the mirror image
++uniform int planar;
++uniform sampler2D mirrorImage;   // from the viewport's corner, the viewport's size
++uniform sampler2D maskTexture;   // the water mask, in framebuffer pixels
++uniform sampler2D attrTexture;   // the 3D's attributes (r: polygon ID * 4 + 1 for a sprite), in framebuffer pixels
+ out vec4 color;
+ 
++// The water mask at a pixel of the viewport (the mask is in framebuffer pixels)
++bool WaterAt(ivec2 local)
++{
++    return texelFetch(maskTexture, origin + local, 0).r > 0.5;
++}
++
+ void main()
+ {
++    if (planar == 1) {
++        ivec2 f = ivec2(gl_FragCoord.xy);
++        if (debugMask == 3) {
++            // SIM_WATER_DEBUG=3: the mirror image itself, over the water's bounds
++            vec4 m = texelFetch(mirrorImage, clamp(f - origin, ivec2(0), textureSize(mirrorImage, 0) - 1), 0);
++            color = vec4(m.a > 0.5 ? m.rgb : vec3(1.0, 0.0, 1.0), 1.0);
++            return;
++        }
++        if (texelFetch(maskTexture, f, 0).r < 0.5) {
++            discard;
++        }
++        if (debugMask == 2) {
++            color = vec4(0.0, 1.0, 0.0, 0.5);
++            return;
++        }
++        ivec2 here = f - origin;
++        int row = here.y / pixelStep;
++        // The ripple: whole DS pixels sideways, a DS row at a time
++        int ripple = int(floor(sin(time * 2.4 + float(row) * 0.85) * 1.5 + 0.5));
++        ivec2 size = textureSize(mirrorImage, 0);
++        ivec2 source = clamp(here + ivec2(ripple * pixelStep, 0), ivec2(0), size - 1);
++        vec4 mirrored = texelFetch(mirrorImage, source, 0);
++        if (mirrored.a < 0.5) {
++            discard;
++        }
++        color = vec4(mix(mirrored.rgb, waterTint, 0.25), strength);
++        return;
++    }
+     if (debugMask == 2) {
+         color = vec4(0.0, 1.0, 0.0, 0.5);
+         return;
+@@ -33,22 +73,49 @@
+     if (distanceToShore == 0) {
+         discard;
+     }
+-    // The ripple: whole DS pixels, a row at a time
+-    int ripple = int(floor(sin(time * 2.4 + float(ds.y) * 0.85) * 1.5 + 0.5));
+-    ivec2 sourceDs = ivec2(ds.x + ripple, ds.y + 2 * distanceToShore);
+-    if (sourceDs.x < 0 || sourceDs.x >= dsSize.x || sourceDs.y >= dsSize.y) {
++    // The shore exactly, at full resolution, above this pixel: the first pass found it on the DS's grid, which is fixed
++    // to the screen (a camera that glides in small steps made the mirror jump a DS pixel at a time: the water warbled).
++    // From a little before that guess to a little past it, a search for the first pixel up the column that isn't water
++    int below = max(0, (distanceToShore - 2) * pixelStep); // water (or this pixel itself)
++    int above = (distanceToShore + 1) * pixelStep;         // not water
++    if (WaterAt(local + ivec2(0, below)) == false) {
++        below = 0;
++    }
++    if (WaterAt(local + ivec2(0, above))) {
++        discard; // (no shore where the guess put it)
++    }
++    for (int i = 0; i < 6 && above - below > 1; i++) {
++        int middle = (below + above) / 2;
++        if (WaterAt(local + ivec2(0, middle))) {
++            below = middle;
++        } else {
++            above = middle;
++        }
++    }
++    int shore = above; // pixels up to the first that isn't water
++    // The ripple: whole DS pixels sideways, a DS row at a time counted from the shore (so it moves with the scene)
++    int row = shore / pixelStep;
++    int ripple = int(floor(sin(time * 2.4 + float(row) * 0.85) * 1.5 + 0.5));
++    // Mirrored about the edge between the last water pixel and the shore's first
++    ivec2 source = local + ivec2(ripple * pixelStep, 2 * shore - 1);
++    ivec2 size = textureSize(sceneTexture, 0);
++    if (source.x < 0 || source.x >= size.x || source.y >= size.y) {
+         discard;
+     }
+     // What is mirrored must not be water itself
+-    if (texelFetch(offsetTexture, sourceDs, 0).r > 0.0) {
++    if (WaterAt(source)) {
+         discard;
+     }
+-    ivec2 source = local + ivec2(ripple, 2 * distanceToShore) * pixelStep;
++    // A sprite isn't mirrored: the game draws the people's and Pokemon's reflections itself (they showed twice)
++    ivec4 a = ivec4(texelFetch(attrTexture, origin + source, 0) * 255.0 + 0.5);
++    if (a.a != 0 && (a.r & 1) == 1) {
++        discard;
++    }
+     vec4 scene = texelFetch(sceneTexture, source, 0);
+     if (scene.a < 0.5) {
+         discard;
+     }
+-    float fade = 1.0 - float(distanceToShore) / 40.0;
++    float fade = 1.0 - float(shore) / float(40 * pixelStep);
+     float k = strength * clamp(fade, 0.0, 1.0);
+     color = vec4(mix(scene.rgb, waterTint, 0.25), k);
+ }
+--- a/libraries/sim/src/shaders/g3_water_mirror_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_water_mirror_fragment.glsl
+@@ -0,0 +1,52 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' water, the mirror image: textured as the game draws it (the texel picked as the DS does, the
++// coordinates wrapped as the polygon's texture says, clear texels left out) and coloured by its vertices. Only what
++// stands up: nothing at or below the bank's height (the water, the pond's own walls) and no ground (a surface facing up):
++// a true mirror of a sunken pond shows its far bank as a second, lower plane of grass that hides the fences and trees
++// behind it; left out, the things standing by the water show in it, which is what the eye expects of this view
++uniform sampler2D mirrorTexture;
++uniform int useTexture;
++uniform int wrap; // bits: repeat s, flip s, repeat t, flip t
++in vec2 uv;
++in vec4 tint;
++in float above;
++in vec3 viewPosition;
++uniform vec3 upView;
++out vec4 color;
++
++float Wrap(float c, bool repeatIt, bool flip)
++{
++    if (!repeatIt) {
++        return clamp(c, 0.0, 0.999999);
++    }
++    if (flip) {
++        float m = mod(c, 2.0);
++        return m < 1.0 ? m : 2.0 - m - 0.000001;
++    }
++    return fract(c);
++}
++
++void main()
++{
++    if (above < 4.0) {
++        discard; // the water, the pond's walls, its rim and kerbs (a quarter of a tile)
++    }
++    vec3 n = cross(dFdx(viewPosition), dFdy(viewPosition));
++    if (abs(dot(normalize(n), upView)) > 0.8) {
++        discard; // ground, a flat top
++    }
++    vec4 c = vec4(tint.rgb, 1.0);
++    if (useTexture == 1) {
++        vec2 w = vec2(Wrap(uv.x, (wrap & 1) != 0, (wrap & 2) != 0), Wrap(uv.y, (wrap & 4) != 0, (wrap & 8) != 0));
++        ivec2 size = textureSize(mirrorTexture, 0);
++        vec4 texel = texelFetch(mirrorTexture, min(ivec2(w * vec2(size)), size - 1), 0);
++        if (texel.a < 0.5) {
++            discard;
++        }
++        c.rgb *= texel.rgb;
++    }
++    color = c;
++}
++)""
+--- a/libraries/sim/src/shaders/g3_water_mirror_vertex.glsl
++++ b/libraries/sim/src/shaders/g3_water_mirror_vertex.glsl
+@@ -0,0 +1,34 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' water, the mirror image: the land and buildings' polygons this frame (kept whole as the game sent
++// them, in clip space: x, y and w in view units), back in view space, mirrored about the water's level along the world's
++// up, and projected with the game's own projection, so each lands where its reflection is seen from the camera
++layout (location = 0) in vec3 position; // x and y in clip space, w
++layout (location = 1) in vec2 texCoord;
++layout (location = 2) in vec4 inColor;
++uniform vec4 projection;  // the game's: m00, m11, m22, m32
++uniform vec3 upView;      // the world's up in view space, unit length
++uniform float waterLevel; // the water's height along upView (view units)
++uniform float bankLevel;  // the height of the ground the water lies in (its tiles' height)
++uniform float xScale;     // a wide scene libntr narrows
++out vec2 uv;
++out vec4 tint;
++out float above;          // how far above the bank the point is (what is below it isn't mirrored)
++out vec3 viewPosition;    // unmirrored, for the surface's slope
++
++void main()
++{
++    vec3 p = vec3(position.x / projection.x, position.y / projection.y, -position.z);
++    // Mirrored about the bank, not the water: the things standing by a sunken pond are reflected from where they meet
++    // the ground, not pushed down by twice the pond's drop (which put them, and a second copy of the pond's rim, in the
++    // middle of the water)
++    float height = dot(p, upView) - bankLevel;
++    vec3 m = p - 2.0 * height * upView;
++    above = dot(p, upView) - bankLevel;
++    viewPosition = p;
++    uv = texCoord;
++    tint = inColor;
++    gl_Position = vec4(projection.x * m.x * xScale, projection.y * m.y, projection.z * m.z + projection.w, -m.z);
++}
++)""
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include <string>
+ #include <vector>
++#include <algorithm>
+ #define _POSIX_C_SOURCE 199309L
+ #include <pthread.h>
+ #include <SDL2/SDL.h>
+@@ -446,6 +447,24 @@
+ // Enhanced graphics' water (SIM_SetPolygonTag): the mask of the water tiles, how far up the screen each water pixel's
+ // shore is (at the DS's resolution), and a copy of the frame to mirror from
+ static GLuint g3WaterMaskProgramID, g3WaterMarchProgramID, g3WaterApplyProgramID;
++// The water's planar mirror: the land and buildings drawn mirrored about the water's level into an image of their own
++static GLuint g3WaterMirrorProgramID, g3WaterMirrorTex, g3WaterMirrorDepth, g3WaterMirrorFbo, g3WaterMirrorVertexArray,
++    g3WaterMirrorBuffer;
++static int sWaterMirrorW = 0, sWaterMirrorH = 0;
++// The game's camera for it (SIM_SetEnhancedCamera): m00, m11, m22, m32, then the world's up in view space
++static float sEnhancedCamera[7];
++static bool sEnhancedCameraSet = false;
++
++extern "C" void SIM_SetEnhancedCamera(float m00, float m11, float m22, float m32, float upX, float upY, float upZ) {
++  sEnhancedCamera[0] = m00;
++  sEnhancedCamera[1] = m11;
++  sEnhancedCamera[2] = m22;
++  sEnhancedCamera[3] = m32;
++  sEnhancedCamera[4] = upX;
++  sEnhancedCamera[5] = upY;
++  sEnhancedCamera[6] = upZ;
++  sEnhancedCameraSet = true;
++}
+ static GLuint g3WaterMaskTex, g3WaterMaskFbo, g3WaterOffsetTex, g3WaterOffsetFbo, g3WaterSceneTex, g3WaterSceneFbo;
+ static int sWaterMaskW, sWaterMaskH, sWaterOffsetW, sWaterOffsetH, sWaterSceneW, sWaterSceneH;
+ static u8 sEnhancedWaterStrength = 0;
+@@ -1354,6 +1373,16 @@
+       g3WaterMaskProgramID = glCreateProgram();
+       CompileFragmentShader(fragment, ptr);
+       LinkShader(g3WaterMaskProgramID, myVertexShader, fragment);
++      {
++        GLuint mirrorVertex, mirrorFragment;
++        std::string vsrc = SIM::PrepareShaderSource(SIM::G3WaterMirrorVertexShader);
++        std::string fsrc = SIM::PrepareShaderSource(SIM::G3WaterMirrorFragmentShader);
++        const char *vptr = vsrc.c_str(), *fptr = fsrc.c_str();
++        g3WaterMirrorProgramID = glCreateProgram();
++        CompileVertexShader(mirrorVertex, vptr);
++        CompileFragmentShader(mirrorFragment, fptr);
++        LinkShader(g3WaterMirrorProgramID, mirrorVertex, mirrorFragment);
++      }
+       src = SIM::PrepareShaderSource(SIM::G3WaterMarchFragmentShader);
+       ptr = src.c_str();
+       g3WaterMarchProgramID = glCreateProgram();
+@@ -2128,7 +2157,8 @@
+   sPlaced.resize((size_t)count * 5);
+   float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
+   for (u32 v = 0; v < count; v++) {
+-    const float p[3] = {casters[v * 5] / m00, casters[v * 5 + 1] / m11, -casters[v * 5 + 2]};
++    const float *c = &casters[v * G3SIM_CASTER_STRIDE];
++    const float p[3] = {c[0] / m00, c[1] / m11, -c[2]};
+     const float q[3] = {p[0] * right[0] + p[1] * right[1] + p[2] * right[2], p[0] * up[0] + p[1] * up[1] + p[2] * up[2],
+                         p[0] * L[0] + p[1] * L[1] + p[2] * L[2]};
+     for (int i = 0; i < 3; i++) {
+@@ -2136,8 +2166,8 @@
+       lo[i] = q[i] < lo[i] ? q[i] : lo[i];
+       hi[i] = q[i] > hi[i] ? q[i] : hi[i];
+     }
+-    sPlaced[v * 5 + 3] = casters[v * 5 + 3];
+-    sPlaced[v * 5 + 4] = casters[v * 5 + 4];
++    sPlaced[v * 5 + 3] = c[3];
++    sPlaced[v * 5 + 4] = c[4];
+   }
+   for (int i = 0; i < 3; i++) {
+     lo[i] -= 1.0f;
+@@ -2588,6 +2618,36 @@
+   glDepthMask(GL_FALSE);
+   glProgramUniform1f(g3WaterMaskProgramID, WaterUniform(g3WaterMaskProgramID, "xScale"), xScale);
+   glUseProgram(g3WaterMaskProgramID);
++  // The planar mirror (SIM_WATER_METHOD=screen keeps the older mirror about the shore on the screen): the water's level,
++  // from its quads before they are drawn (and let go), along the world's up in view space: the most common height
++  // The flip about the water's far edge on the screen is the default (the owner's choice: what stands by the water hangs
++  // from its edge, as the eye expects of this view); SIM_WATER_METHOD=planar draws the true mirror image instead
++  static const bool sScreenMirror = getenv("SIM_WATER_METHOD") == nullptr || strcmp(getenv("SIM_WATER_METHOD"), "planar") != 0;
++  bool planar = !sScreenMirror && sEnhancedCameraSet && sEnhancedCamera[0] != 0.0f && sEnhancedCamera[1] != 0.0f;
++  float waterLevel = 0.0f;
++  if (planar) {
++    u32 maskCount = 0;
++    const G3SIM_Vertex_t *maskVerts = G3SIM_MaskVerts(&maskCount);
++    static std::vector<float> sHeights;
++    sHeights.clear();
++    for (u32 i = 0; i < maskCount; i++) {
++      const G3SIM_Vertex_t &v = maskVerts[i];
++      if (v.w <= 0.0f) {
++        continue;
++      }
++      const float p[3] = {v.x * v.w / sEnhancedCamera[0], v.y * v.w / sEnhancedCamera[1], -v.w};
++      sHeights.push_back(p[0] * sEnhancedCamera[4] + p[1] * sEnhancedCamera[5] + p[2] * sEnhancedCamera[6]);
++    }
++    if (sHeights.empty()) {
++      planar = false;
++    } else {
++      std::nth_element(sHeights.begin(), sHeights.begin() + sHeights.size() / 2, sHeights.end());
++      waterLevel = sHeights[sHeights.size() / 2];
++    }
++  }
++  // (the quads stay in their array after G3SIM_DrawMask lets them go, until the next frame's: their count is kept here)
++  u32 maskVertCount = 0;
++  const G3SIM_Vertex_t *maskVertList = G3SIM_MaskVerts(&maskVertCount);
+   float bounds[4];
+   G3SIM_DrawMask(bounds);
+   glDepthMask(GL_TRUE);
+@@ -2604,7 +2664,196 @@
+   x1 = x1 > sG3Viewport[0] + sG3Viewport[2] ? sG3Viewport[0] + sG3Viewport[2] : x1;
+   y1 = y1 > sG3Viewport[1] + sG3Viewport[3] ? sG3Viewport[1] + sG3Viewport[3] : y1;
+ 
+-  if (x1 > x0 && y1 > y0) {
++  // The planar mirror: the land and buildings, mirrored about the water's level, drawn over the water's bounds only into
++  // an image the size of the viewport (the apply reads it at each water pixel's own place)
++  const float *mirrorVerts = nullptr;
++  const G3SIM_CasterBatch_t *mirrorBatches = nullptr;
++  u32 mirrorBatchCount = 0;
++  const u32 mirrorCount = planar ? G3SIM_TakeCasters(&mirrorVerts, &mirrorBatches, &mirrorBatchCount) : 0;
++  const float bankLevel = waterLevel; // the tiles' own height
++  // The water's own level: the game's water tiles stand at the height one walks at by the water (a pond's bank), not
++  // its surface, which can be a tile and a half lower. The surface is the flat polygons the land draws inside the
++  // tiles' footprint, at or below that height: the level is the one with the most area there
++  if (planar && mirrorCount >= 3) {
++    const float *u = &sEnhancedCamera[4];
++    // Two axes along the ground: view x made level, and the one across it
++    float ax[3] = {1.0f - u[0] * u[0], -u[0] * u[1], -u[0] * u[2]};
++    const float axl = sqrtf(ax[0] * ax[0] + ax[1] * ax[1] + ax[2] * ax[2]);
++    for (float &c : ax) {
++      c /= axl;
++    }
++    const float az[3] = {u[1] * ax[2] - u[2] * ax[1], u[2] * ax[0] - u[0] * ax[2], u[0] * ax[1] - u[1] * ax[0]};
++    auto toView = [&](const float *c, float p[3]) {
++      p[0] = c[0] / sEnhancedCamera[0];
++      p[1] = c[1] / sEnhancedCamera[1];
++      p[2] = -c[2];
++    };
++    auto dot3 = [](const float *a, const float *b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; };
++    // The tiles' footprint (their box along the ground)
++    float lo[2] = {1e30f, 1e30f}, hi[2] = {-1e30f, -1e30f};
++    {
++      for (u32 i = 0; i < maskVertCount; i++) {
++        const G3SIM_Vertex_t &v = maskVertList[i];
++        if (v.w <= 0.0f) {
++          continue;
++        }
++        const float p[3] = {v.x * v.w / sEnhancedCamera[0], v.y * v.w / sEnhancedCamera[1], -v.w};
++        const float a = dot3(p, ax), b = dot3(p, az);
++        lo[0] = a < lo[0] ? a : lo[0];
++        hi[0] = a > hi[0] ? a : hi[0];
++        lo[1] = b < lo[1] ? b : lo[1];
++        hi[1] = b > hi[1] ? b : hi[1];
++      }
++    }
++    // Flat triangles there, their area by height (half units)
++    static std::vector<std::pair<int, float>> sAreas;
++    sAreas.clear();
++    for (u32 t = 0; t + 2 < mirrorCount; t += 3) {
++      float p[3][3], h[3];
++      for (int k = 0; k < 3; k++) {
++        toView(&mirrorVerts[(t + k) * G3SIM_CASTER_STRIDE], p[k]);
++        h[k] = dot3(p[k], u);
++      }
++      const float hMin = fminf(h[0], fminf(h[1], h[2])), hMax = fmaxf(h[0], fmaxf(h[1], h[2]));
++      if (hMax - hMin > 0.5f || hMax > waterLevel + 0.5f || hMin < waterLevel - 64.0f) {
++        continue;
++      }
++      const float ca = (dot3(p[0], ax) + dot3(p[1], ax) + dot3(p[2], ax)) / 3.0f;
++      const float cb = (dot3(p[0], az) + dot3(p[1], az) + dot3(p[2], az)) / 3.0f;
++      if (ca < lo[0] || ca > hi[0] || cb < lo[1] || cb > hi[1]) {
++        continue;
++      }
++      const float e1a = dot3(p[1], ax) - dot3(p[0], ax), e1b = dot3(p[1], az) - dot3(p[0], az);
++      const float e2a = dot3(p[2], ax) - dot3(p[0], ax), e2b = dot3(p[2], az) - dot3(p[0], az);
++      const float area = fabsf(e1a * e2b - e1b * e2a) * 0.5f;
++      const int key = (int)floorf(hMin * 2.0f + 0.5f);
++      bool found = false;
++      for (auto &entry : sAreas) {
++        if (entry.first == key) {
++          entry.second += area;
++          found = true;
++          break;
++        }
++      }
++      if (!found) {
++        sAreas.push_back({key, area});
++      }
++    }
++    float best = 0.0f;
++    for (const auto &entry : sAreas) {
++      if (entry.second > best) {
++        best = entry.second;
++        waterLevel = (float)entry.first * 0.5f;
++      }
++    }
++  }
++  if (planar && mirrorCount >= 3 && x1 > x0 && y1 > y0) {
++    const int vw = sG3Viewport[2], vh = sG3Viewport[3];
++    if (g3WaterMirrorFbo == 0) {
++      glGenFramebuffers(1, &g3WaterMirrorFbo);
++      glGenRenderbuffers(1, &g3WaterMirrorDepth);
++      glGenVertexArrays(1, &g3WaterMirrorVertexArray);
++      glGenBuffers(1, &g3WaterMirrorBuffer);
++      glBindVertexArray(g3WaterMirrorVertexArray);
++      glBindBuffer(GL_ARRAY_BUFFER, g3WaterMirrorBuffer);
++      const GLsizei stride = G3SIM_CASTER_STRIDE * sizeof(float);
++      glEnableVertexAttribArray(0);
++      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void *)0);
++      glEnableVertexAttribArray(1);
++      glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void *)(3 * sizeof(float)));
++      glEnableVertexAttribArray(2);
++      glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void *)(5 * sizeof(float)));
++    }
++    if (sWaterMirrorW != vw || sWaterMirrorH != vh) {
++      sWaterMirrorW = vw;
++      sWaterMirrorH = vh;
++      if (g3WaterMirrorTex != 0) {
++        glDeleteTextures(1, &g3WaterMirrorTex);
++      }
++      g3WaterMirrorTex = WaterTexture(GL_RGBA8, vw, vh, GL_RGBA);
++      glBindRenderbuffer(GL_RENDERBUFFER, g3WaterMirrorDepth);
++      glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, vw, vh);
++      glBindFramebuffer(GL_FRAMEBUFFER, g3WaterMirrorFbo);
++      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3WaterMirrorTex, 0);
++      glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, g3WaterMirrorDepth);
++    }
++    glBindFramebuffer(GL_FRAMEBUFFER, g3WaterMirrorFbo);
++    static const GLenum kFirst = GL_COLOR_ATTACHMENT0;
++    glDrawBuffers(1, &kFirst);
++    glViewport(0, 0, vw, vh);
++    glEnable(GL_SCISSOR_TEST);
++    glScissor(x0 - sG3Viewport[0], y0 - sG3Viewport[1], x1 - x0, y1 - y0);
++    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
++    glDepthMask(GL_TRUE);
++    glClearDepthf(1.0f);
++    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
++    glEnable(GL_DEPTH_TEST);
++    glDepthFunc(GL_LESS);
++    glDisable(GL_BLEND);
++    glDisable(GL_CULL_FACE);
++    const GLuint mirror = g3WaterMirrorProgramID;
++    glProgramUniform4f(mirror, WaterUniform(mirror, "projection"), sEnhancedCamera[0], sEnhancedCamera[1],
++                       sEnhancedCamera[2], sEnhancedCamera[3]);
++    glProgramUniform3f(mirror, WaterUniform(mirror, "upView"), sEnhancedCamera[4], sEnhancedCamera[5], sEnhancedCamera[6]);
++    glProgramUniform1f(mirror, WaterUniform(mirror, "waterLevel"), waterLevel);
++    glProgramUniform1f(mirror, WaterUniform(mirror, "bankLevel"), bankLevel);
++    glProgramUniform1f(mirror, WaterUniform(mirror, "xScale"), xScale);
++    glProgramUniform1i(mirror, WaterUniform(mirror, "mirrorTexture"), 12);
++    glUseProgram(mirror);
++    glBindVertexArray(g3WaterMirrorVertexArray);
++    glBindBuffer(GL_ARRAY_BUFFER, g3WaterMirrorBuffer);
++    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)mirrorCount * G3SIM_CASTER_STRIDE * sizeof(float), mirrorVerts,
++                 GL_STREAM_DRAW);
++    glActiveTexture(GL_TEXTURE0 + 12);
++    for (u32 b = 0; b < mirrorBatchCount; b++) {
++      const G3SIM_CasterBatch_t *batch = &mirrorBatches[b];
++      if (batch->start + batch->count > mirrorCount) {
++        continue;
++      }
++      const bool textured = batch->textureId != 0 && glIsTexture(batch->textureId);
++      glProgramUniform1i(mirror, WaterUniform(mirror, "useTexture"), textured ? 1 : 0);
++      glProgramUniform1i(mirror, WaterUniform(mirror, "wrap"), batch->wrap);
++      if (textured) {
++        glBindTexture(GL_TEXTURE_2D, batch->textureId);
++      }
++      glDrawArrays(GL_TRIANGLES, (GLint)batch->start, (GLsizei)batch->count);
++    }
++    glDisable(GL_DEPTH_TEST);
++    glDepthFunc(depthFunc);
++    glDisable(GL_SCISSOR_TEST);
++
++    // The apply: each water pixel (the mask at full resolution) shows the mirror image at its place
++    static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++    glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++    glDrawBuffers(1, kBoth);
++    glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++    glEnable(GL_SCISSOR_TEST);
++    glScissor(x0, y0, x1 - x0, y1 - y0);
++    const GLuint apply = g3WaterApplyProgramID;
++    glActiveTexture(GL_TEXTURE0 + 13);
++    glBindTexture(GL_TEXTURE_2D, g3WaterMirrorTex);
++    glActiveTexture(GL_TEXTURE0 + 14);
++    glBindTexture(GL_TEXTURE_2D, g3WaterMaskTex);
++    glProgramUniform1i(apply, WaterUniform(apply, "planar"), 1);
++    glProgramUniform1i(apply, WaterUniform(apply, "mirrorImage"), 13);
++    glProgramUniform1i(apply, WaterUniform(apply, "maskTexture"), 14);
++    glProgramUniform2i(apply, WaterUniform(apply, "origin"), sG3Viewport[0], sG3Viewport[1]);
++    glProgramUniform1i(apply, WaterUniform(apply, "pixelStep"), sScale);
++    glProgramUniform1f(apply, WaterUniform(apply, "strength"), (float)sEnhancedWaterStrength / 255.0f);
++    glProgramUniform1f(apply, WaterUniform(apply, "time"), (float)(SIM_NowNs() / 125000000ull) * 0.125f);
++    glProgramUniform3f(apply, WaterUniform(apply, "waterTint"), 0.15f, 0.3f, 0.55f);
++    static const int sMirrorDebug = (getenv("SIM_WATER_DEBUG") != nullptr && getenv("SIM_WATER_DEBUG")[0] != 0) ? atoi(getenv("SIM_WATER_DEBUG")) : 0;
++    glProgramUniform1i(apply, WaterUniform(apply, "debugMask"), sMirrorDebug);
++    glEnable(GL_BLEND);
++    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
++    glUseProgram(apply);
++    glBindVertexArray(g3EdgeVertexArray);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++    glDisable(GL_SCISSOR_TEST);
++    glDrawBuffers(2, kBoth);
++    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++  } else if (!planar && x1 > x0 && y1 > y0) {
++    glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "planar"), 0);
+     // 2. The distance to the shore, one fragment per DS pixel
+     glBindFramebuffer(GL_FRAMEBUFFER, g3WaterOffsetFbo);
+     glViewport(0, 0, dsWidth, dsHeight);
+@@ -2620,11 +2869,21 @@
+     glBindVertexArray(g3EdgeVertexArray);
+     glDrawArrays(GL_TRIANGLES, 0, 3);
+ 
+-    // 3. A copy of the frame to mirror from
+-    glBindFramebuffer(GL_READ_FRAMEBUFFER, g3FrameBuffer);
+-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g3WaterSceneFbo);
+-    glBlitFramebuffer(sG3Viewport[0], sG3Viewport[1], sG3Viewport[0] + sG3Viewport[2], sG3Viewport[1] + sG3Viewport[3],
+-                      0, 0, sG3Viewport[2], sG3Viewport[3], GL_COLOR_BUFFER_BIT, GL_NEAREST);
++    // 3. A copy of the frame to mirror from: only what the mirror can read, the water's bounds and up to twice the
++    // longest reach above them (and the ripple's two DS pixels either side), not the whole frame
++    {
++      const int pad = 2 * sScale;
++      const int cx0 = (x0 - pad > sG3Viewport[0] ? x0 - pad : sG3Viewport[0]) - sG3Viewport[0];
++      const int cx1 = (x1 + pad < sG3Viewport[0] + sG3Viewport[2] ? x1 + pad : sG3Viewport[0] + sG3Viewport[2]) - sG3Viewport[0];
++      const int cy0 = y0 - sG3Viewport[1];
++      const int top = y1 + 2 * 40 * sScale;
++      const int cy1 = (top < sG3Viewport[1] + sG3Viewport[3] ? top : sG3Viewport[1] + sG3Viewport[3]) - sG3Viewport[1];
++      glBindFramebuffer(GL_READ_FRAMEBUFFER, g3FrameBuffer);
++      glReadBuffer(GL_COLOR_ATTACHMENT0);
++      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g3WaterSceneFbo);
++      glBlitFramebuffer(sG3Viewport[0] + cx0, sG3Viewport[1] + cy0, sG3Viewport[0] + cx1, sG3Viewport[1] + cy1, cx0, cy0, cx1,
++                        cy1, GL_COLOR_BUFFER_BIT, GL_NEAREST);
++    }
+ 
+     // 4. The mirror, over the water's bounds, into the 3D colour alone
+     static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+@@ -2639,6 +2898,14 @@
+     glBindTexture(GL_TEXTURE_2D, g3WaterSceneTex);
+     glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "offsetTexture"), 12);
+     glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "sceneTexture"), 13);
++    // The mask at full resolution, for the shore's exact place
++    glActiveTexture(GL_TEXTURE0 + 14);
++    glBindTexture(GL_TEXTURE_2D, g3WaterMaskTex);
++    glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "maskTexture"), 14);
++    // The attributes, to leave the sprites out of the mirror (the game draws their reflections itself)
++    glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
++    glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
++    glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "attrTexture"), kEdgeAttrTexUnit);
+     glProgramUniform2i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "origin"), sG3Viewport[0],
+                        sG3Viewport[1]);
+     glProgramUniform1i(g3WaterApplyProgramID, WaterUniform(g3WaterApplyProgramID, "pixelStep"), sScale);
+--- a/libraries/sim/src/sim_shaders.cpp
++++ b/libraries/sim/src/sim_shaders.cpp
+@@ -56,6 +56,14 @@
+ #include "shaders/g3_sunshadow_receive_fragment.glsl"
+ ;
+ 
++const char * G3WaterMirrorVertexShader =
++#include "shaders/g3_water_mirror_vertex.glsl"
++;
++
++const char * G3WaterMirrorFragmentShader =
++#include "shaders/g3_water_mirror_fragment.glsl"
++;
++
+ const char * G3SunShadowCleanFragmentShader =
+ #include "shaders/g3_sunshadow_clean_fragment.glsl"
+ ;

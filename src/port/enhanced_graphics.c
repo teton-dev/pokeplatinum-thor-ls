@@ -91,10 +91,22 @@ static float sSpriteShear[2] = { 0.0f, 0.24f };
 
 void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera)
 {
-    if (!sSunLit || projection == NULL || camera == NULL) {
+    if (projection == NULL || camera == NULL) {
         return;
     }
     const float k = 1.0f / 4096.0f;
+    // The camera for the water's mirror image, by day and by night
+    {
+        const float ux = camera->_10 * k, uy = camera->_11 * k, uz = camera->_12 * k;
+        const float upLength = sqrtf(ux * ux + uy * uy + uz * uz);
+        if (upLength > 0.0001f) {
+            SIM_SetEnhancedCamera(projection->_00 * k, projection->_11 * k, projection->_22 * k, projection->_32 * k,
+                ux / upLength, uy / upLength, uz / upLength);
+        }
+    }
+    if (!sSunLit) {
+        return;
+    }
     float x = sSunWorld[0], y = sSunWorld[1], z = sSunWorld[2];
     // The 3D's sun casts as the sprites' shadows lean: a thing as tall as a sprite throws a shadow as long, the same way.
     // A sprite's shadow moves (4/3) shx (NDC x is 4/3 of NDC y on a 4:3 screen) across and shy up the screen per unit of
@@ -131,12 +143,13 @@ void EnhancedGraphics_LandDrawing(BOOL drawing)
     // The commands already sent are drawn as they were
     NNS_G3dGeFlushBuffer();
     SIM_SetHideBuiltInShadows(drawing && sSunShadows);
+    SIM_SetLandDrawing(drawing);
 }
 
 void EnhancedGraphics_CasterDrawing(BOOL drawing)
 {
     NNS_G3dGeFlushBuffer();
-    SIM_SetSunCasters(drawing && sSunShadows);
+    SIM_SetSunCasters(drawing); // (kept for the water's mirror image too: libntr keeps them only when one wants them)
 }
 
 BOOL EnhancedGraphics_SunShadowsShown(void)

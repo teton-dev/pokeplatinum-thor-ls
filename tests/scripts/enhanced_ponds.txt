@@ -1,0 +1,7 @@
+# Enhanced graphics water reflections on Route 204 South's sunken ponds (the planar mirror; the water 24 units below the bank),
+# with TEST_CONFIG="EnhancedWater=true" (SIM_WATER_DEBUG=3 shows the mirror image), from the turtwig fixture
+mash A until free
+jump 345 175 728
+until free timeout 3000
+wait 40
+shot pond

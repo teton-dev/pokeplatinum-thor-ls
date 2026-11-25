@@ -295,6 +295,30 @@ Order: infrastructure + time-of-day, then sprite shadows, then water, then leave
   a sprite's pixel whose neighbour one sprite pixel (pixelStep) toward the sun isn't the sprite's, so it moves with the
   sprite's own pixels. Test: `tests/scripts/enhanced_jubilife.txt`. Not checked on the device: the rim while running
   (the owner's eye), other heavy towns (Hearthome, Veilstone), the Thor.
+- **Planar water reflections (2026-11-25), `libntr_enhanced_water_mirror.patch`.** The owner found the water reflections
+  slow and full of the usual screen-space faults (only what is on the screen, mirrored about wherever the water's edge
+  is on the screen, smears); cube maps were weighed and passed over (they suit far surroundings, not a flat pond with its
+  bank a tile away). The water now shows a real mirror image: the land and buildings' polygons (the shadow map's
+  capture, now with vertex colours, `G3SIM_CASTER_STRIDE` 9 floats, kept whenever reflections or sun shadows want them,
+  by day and night: `SIM_SetLandDrawing` around the land, the signposts' bracket ungated) are drawn mirrored about the
+  water's level with the game's own projection (`SIM_SetEnhancedCamera`, every field frame) into a viewport-sized image,
+  over the water's bounds only, textured as the DS draws them, nothing at or below the level; each water pixel reads its
+  own place in it, with the old whole-DS-pixel ripple. No copy of the frame, no shore search. **The level:** the game's
+  water tiles (the mask) stand at the bank's height, which on Route 204's sunken ponds is 24 units (a tile and a half)
+  above the water; mirrored about that, the reflections landed on the grass. The level is now the flat captured polygons
+  inside the tiles' footprint at or below that height, the height with the most area (the water's own surface).
+  `SIM_WATER_METHOD=screen` brings the old mirror back; `SIM_WATER_DEBUG=3` shows the mirror image over the water's
+  bounds. On the Duo by Route 204's ponds the water pass took 0.6 ms (the first version, before the level fix). Checked
+  on the desktop: Canalave's canal (the bridge's underside, braces and pillars), Lake Verity's cliffs (no smears), Route
+  204's ponds (grass, path, the trees' undersides; the fence north of the left pond is hidden behind the pond's wall from
+  every point of the water, as it would be). **Known:** one level per view; what the game doesn't draw isn't mirrored;
+  people and Pokemon keep the game's own reflections.
+  **Later the same day (owner's choice):** the flip about the water's far edge on the screen is the default again, as the
+  eye expects of this view: the shore is found at full resolution above each pixel (on the DS grid the mirror jumped a DS
+  pixel at a time as the camera glided) and only the part of the frame the mirror can read is copied.
+  `SIM_WATER_METHOD=planar` draws the planar mirror, now about the bank (the tiles' height) and of things standing only
+  (no ground, nothing at or below the bank): a true mirror of a sunken pond showed its far bank as a second plane of
+  grass hiding the fences and trees. Not yet re-checked on the Duo or the Thor.
 - **Camera tilt (not a shader; `src/port/camera_tilt.c`)**: *Display > Camera tilt* (0, 6 or 12 degrees lower), applied
   around the field map's draw in `fieldmap.c` (the camera's angle is raised before the view matrix is made, put back after
   the draw), only for perspective cameras looking down at 30 to 75 degrees with no yaw, so scenes that set their own angle are
