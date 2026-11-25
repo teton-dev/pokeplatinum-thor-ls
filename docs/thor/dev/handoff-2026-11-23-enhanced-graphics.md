@@ -9,8 +9,8 @@ Android, nothing has run on the Thor, and no GPU cost has been measured. The pla
 | Effect | Setting | libntr patch | Port code |
 |---|---|---|---|
 | Time-of-day tint / vignette | Display > Time-of-day light | `libntr_enhanced_grade.patch` | `src/port/enhanced_graphics.c` |
-| Sprite sun shadows (on the feet, DS texel grid) | Sun shadows | `..._shadows.patch`, `..._shadow_grid.patch` | `billboard.c`, `Billboard.castsShadow` |
-| 3D scenery sun shadows (trees, signs, houses) | Sun shadows | `..._sun_shadows_3d.patch` | `EnhancedGraphics_SetCamera`, `LandDrawing` in `fieldmap.c` |
+| Sprite sun shadows (on the feet, sprite's texels, lean in sub-texel steps) | Sun shadows | `..._shadows.patch`, `..._shadow_grid.patch`, `..._shadow_res.patch` | `billboard.c`, `Billboard.castsShadow` |
+| 3D scenery sun shadows (trees, signs, houses; DS-res mask, edges blended at full res) | Sun shadows | `..._sun_shadows_3d.patch`, `..._shadow_res.patch` | `EnhancedGraphics_SetCamera`, `LandDrawing` in `fieldmap.c` |
 | Sun highlights (buildings, sprite rim) | | `..._highlights.patch` | |
 | Water reflections (mask from tile data, shore march, mirror) | Water reflections | `..._water.patch` | `EnhancedGraphics_DrawWaterMask` in `fieldmap.c` |
 | Atmosphere (haze by screen height, sun shafts) | Atmosphere | `..._atmosphere.patch` | `SetAir` in `enhanced_graphics.c` |
@@ -21,7 +21,7 @@ libntr pass order in `SIM_Render`: edge marking, sun prepare, sun shadow, highli
 bloom. Passes are skipped with MSAA or a W-buffer.
 
 Patch order in `subprojects/libntr.wrap` (`diff_files`): pacing, grade, shadows, water, shadow_grid,
-sun_shadows_3d, highlights, atmosphere (the last has been appended after the others). **Another session has
+sun_shadows_3d, highlights, atmosphere, shadow_res (the last two appended after the others). **Another session has
 overwritten these entries before: re-check the line before committing.**
 
 ## Open problems, most important first
@@ -63,7 +63,8 @@ overwritten these entries before: re-check the line before committing.**
 - Verify libntr patches: `git archive HEAD` of `subprojects/libntr` into a fresh dir, apply every patch in
   `diff_files` order, `diff -rq` against the checkout (ignore `.orig`, `.meson-subproject-wrap-hash.txt`). In zsh run
   it under `bash -c`; `rm -rf $VAR` is blocked, so use a fresh dir name each time.
-- Pixel art must never be filtered: integer DS-pixel offsets, `texelFetch`, nearest blits. AA stays off; 4 to 6x
+- Pixel art must never be filtered: integer DS-pixel offsets, `texelFetch`, nearest blits. Exception (owner, 2026-11-24):
+  shadows' edges follow the internal resolution (`libntr_enhanced_shadow_res.patch`; the plan's progress log says how). AA stays off; 4 to 6x
   internal resolution replaces it. Everything must stay widescreen-safe (`xScale`).
 
 ## Files touched this stretch (uncommitted)

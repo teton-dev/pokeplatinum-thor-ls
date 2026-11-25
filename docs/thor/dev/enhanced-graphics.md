@@ -221,9 +221,27 @@ Order: infrastructure + time-of-day, then sprite shadows, then water, then leave
   `libntr_enhanced_highlights.patch`). Both Canalave posts give even bands with rounded tips; the bridge, Twinleaf's
   houses and Route 201's trees are the same or better, and the Route 201 sign's shadow is now right. The unused `rayStep`
   is gone. `SIM_SUNSHADOW_DEBUG` also shows why a pixel is shadowed (close behind / width test / rejected).
+  Re-shot at 4x with every enhanced setting on (`enhanced_posts.txt`, 16:00): shadows, reflections, highlights, haze and
+  glow together look right.
 - **GLES (2026-11-24, not yet on the Thor):** all 20 enhanced shaders pass `glslangValidator` as GLSL ES 3.20 (one fix: a
   `const` initialised from a runtime value in the highlights shader). The C++ side's GL calls and texture formats are
   GLES 3.0-safe. Still to do: build the APK, run it on the Thor, measure each pass's frame time at 4x and 6x.
+- **Shadow edges at the internal resolution (2026-11-24, owner's decision), `libntr_enhanced_shadow_res.patch`.** The
+  owner found the shadows' DS-pixel edges coarse next to the 4x-6x scenery and asked for their edges to scale with the
+  resolution, sprites keeping their texel shape. This reverses the "shadows on the DS grid" rule for shadows only (the
+  art itself is still never filtered). Sprites: each texel row of the shadow is cut into `scale` sub-rows and shifted by
+  whole sub-texels (`shadowSubdivide` in `g3_fragment.glsl`), so a slanted edge has steps `scale` times smaller while
+  every sub-cell still takes its alpha from one texel. 3D: the mask is still marched and cleaned a DS pixel at a time;
+  the apply pass blends the four nearest mask texels by the pixel's place among them and shades where that passes one
+  half, so DS stairs become smooth edges of small pixels (corners get a slight bevel; the shapes stay the mask's).
+  No extra cost: four reads per pixel in the apply. At 1x both reduce exactly to the old output (checked: the 1x shots
+  differ only where NPCs walked). Checked at 4x in Canalave (posts, the bridge's thin brace shadows stay continuous),
+  Twinleaf and Route 201 (no fringe on sprites next to 3D shadows), at 16:9, and with `SIM_SUNSHADOW_DEBUG` 1-3.
+  **Tried and dropped:** marching the mask at the internal resolution itself. It combs: on rough occluders (tree crowns,
+  the sign) neighbouring small pixels' rays land on different march steps and width verdicts, giving 1-pixel streaks
+  along the shadows' edges; measuring the width from the DS pixel's centre didn't cure it and added stray lines. It
+  would also cost the square of the scale (16x the march at 4x). The 3D shadows' detail stays a DS pixel; only their
+  edges are finer.
 - **Camera tilt (not a shader; `src/port/camera_tilt.c`)**: *Display > Camera tilt* (0, 6 or 12 degrees lower), applied
   around the field map's draw in `fieldmap.c` (the camera's angle is raised before the view matrix is made, put back after
   the draw), only for perspective cameras looking down at 30 to 75 degrees with no yaw, so scenes that set their own angle are

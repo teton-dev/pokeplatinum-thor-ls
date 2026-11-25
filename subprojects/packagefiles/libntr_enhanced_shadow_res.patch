@@ -1,0 +1,76 @@
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include <simulator/g3_handler.h>
+ #include <simulator/assert.h>
++#include <simulator/sim.h>
+ #include <string.h>
+ #include <time.h>
+ #include <stddef.h>
+@@ -690,6 +691,7 @@
+ 		glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+ 		glDepthMask(GL_FALSE);
+ 		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("shadowMode"), 1);
++		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("shadowSubdivide"), SIM_GetInternalScale());
+ 		glProgramUniform4f(g3shaderProgramID, G3SIM_Uniform("shadowColor"), 0.04f, 0.06f, 0.14f, s_G3ShadowAlpha);
+ 		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("useTexture"), 1);
+ 		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("polygonMode"), 0);
+--- a/libraries/sim/src/shaders/g3_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_fragment.glsl
+@@ -26,6 +26,7 @@
+ // coordinates are then the shadow's own: u across the sprite's width, v up its height, 0 to 1
+ uniform vec4 shadowParams0;
+ uniform vec4 shadowParams1;
++uniform int shadowSubdivide; // sub-texel steps of the shadow's lean (the internal resolution scale; 1: whole texels)
+ layout(location = 0) out vec4 color;
+ layout(location = 1) out vec4 attr;
+ 
+@@ -43,7 +44,12 @@
+             discard;
+         }
+         float rowCentre = (floor(v * rows) + 0.5) / rows;
+-        float shift = floor(shadowParams1.x * (rowCentre - shadowParams1.y) * columns + 0.5) / columns;
++        // The lean is laid down on a finer grid at higher internal resolutions: each texel row is cut into
++        // shadowSubdivide sub-rows, each shifted by whole sub-texels, so the steps of a slanted edge are that many
++        // times smaller while every sub-cell still takes its alpha from one texel (the sprite's shape)
++        float k = float(max(shadowSubdivide, 1));
++        float subRowCentre = (floor(v * rows * k) + 0.5) / (rows * k);
++        float shift = floor(shadowParams1.x * (subRowCentre - shadowParams1.y) * columns * k + 0.5) / (columns * k);
+         float u = fragTexCoord.x - shift;
+         if( u < 0.0 || u >= 1.0 ) {
+             discard;
+--- a/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
+@@ -3,7 +3,10 @@
+ 
+ // Enhanced graphics' sun shadows of the scene's 3D, second pass: at full resolution, the pixels the first pass found in shadow
+ // are multiplied by the shadow's tone (the blend multiplies, so nothing is read from the frame). One texel of the mask is a
+-// DS pixel, never filtered, so the shadow's edges are DS pixels.
++// DS pixel; the shadow's edges are drawn at the internal resolution: the mask's four nearest texels are blended by where
++// this pixel falls among them and the shadow is where that passes one half, so a stair of DS pixels becomes a smooth edge
++// of small pixels (at 1x it is the mask itself). The shape stays the mask's, worked out a DS pixel at a time (a march per
++// small pixel made combs of streaks on rough things like a tree's crown, and costs the square of the scale).
+ uniform sampler2D maskTexture;
+ uniform ivec2 origin;
+ uniform int pixelStep;
+@@ -24,7 +27,18 @@
+         color = vec4(vec3(mask.g), 1.0);
+         return;
+     }
+-    if (mask.r < 0.5) {
++    // The edge: the four texels around this pixel's place in the mask, blended (by hand: the mask stays unfiltered for
++    // the other passes); never over what the march left alone (b: a sprite, or nothing drawn)
++    vec2 at = (gl_FragCoord.xy - vec2(origin)) / float(pixelStep) - 0.5;
++    ivec2 corner = ivec2(floor(at));
++    vec2 f = at - vec2(corner);
++    ivec2 last = textureSize(maskTexture, 0) - 1;
++    float r00 = texelFetch(maskTexture, clamp(corner, ivec2(0), last), 0).r;
++    float r10 = texelFetch(maskTexture, clamp(corner + ivec2(1, 0), ivec2(0), last), 0).r;
++    float r01 = texelFetch(maskTexture, clamp(corner + ivec2(0, 1), ivec2(0), last), 0).r;
++    float r11 = texelFetch(maskTexture, clamp(corner + ivec2(1, 1), ivec2(0), last), 0).r;
++    float shade = mix(mix(r00, r10, f.x), mix(r01, r11, f.x), f.y);
++    if (mask.b > 0.5 || shade < 0.5) {
+         if (debugMask == 1) {
+             color = vec4(1.0);
+             return;
