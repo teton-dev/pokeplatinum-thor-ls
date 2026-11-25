@@ -185,7 +185,7 @@ caves, buildings and battles stay as the game draws them. It costs one cheap pas
 
 *Settings > Display > Sun shadows* gives the people and Pokemon outdoors a shadow away
 from the sun (long in the morning and evening, short at noon, none at night) in place of
-their round blob; trees, signs and houses cast shadows too, in place of the ones their models have. *Water reflections* mirrors what stands along the far shore of lakes,
+their round blob; trees, signs, mailboxes and houses cast shadows too, projected from their real shapes, in place of the ones their models have. *Water reflections* mirrors what stands along the far shore of lakes,
 the sea and rivers in the water, with a small ripple. Both keep the art's pixels at any 3D
 resolution (the shadows' edges get finer with it, a sprite's shadow keeping its sprite's shape) and are off by default; they work best with a higher *3D resolution* and
 *Smooth 3D edges* off (water reflections don't draw with it on).

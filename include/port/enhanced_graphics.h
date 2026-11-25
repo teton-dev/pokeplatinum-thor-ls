@@ -29,6 +29,8 @@ BOOL EnhancedGraphics_SunShadowsShown(void);
 // shadow polygons are not drawn while the sun's are shown
 void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera);
 void EnhancedGraphics_LandDrawing(BOOL drawing);
+// Around other models that should cast the sun's shadows (signposts, mailboxes: map objects drawn as models)
+void EnhancedGraphics_CasterDrawing(BOOL drawing);
 
 #ifdef __cplusplus
 }

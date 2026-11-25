@@ -11,6 +11,10 @@
 #include "overworld_anim_manager.h"
 #include "simple3d.h"
 
+#ifdef SDK_PORT
+#include "port/enhanced_graphics.h"
+#endif
+
 typedef struct {
     u32 unk_00;
     Simple3DModel unk_04;
@@ -248,7 +252,14 @@ static void ov5_021F1310(OverworldAnimManager *param0, void *param1)
     VecFx32 v1;
 
     OverworldAnimManager_GetPosition(param0, &v1);
+#ifdef SDK_PORT
+    // Enhanced graphics: signposts and mailboxes cast sun shadows (the shadow map's casters)
+    EnhancedGraphics_CasterDrawing(TRUE);
+#endif
     Simple3D_DrawRenderObjWithPos(v0->unk_18, &v1);
+#ifdef SDK_PORT
+    EnhancedGraphics_CasterDrawing(FALSE);
+#endif
 }
 
 static const OverworldAnimManagerFuncs Unk_ov5_0220021C = {

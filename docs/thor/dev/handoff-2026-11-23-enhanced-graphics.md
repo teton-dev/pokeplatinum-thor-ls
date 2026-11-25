@@ -10,7 +10,7 @@ Android, nothing has run on the Thor, and no GPU cost has been measured. The pla
 |---|---|---|---|
 | Time-of-day tint / vignette | Display > Time-of-day light | `libntr_enhanced_grade.patch` | `src/port/enhanced_graphics.c` |
 | Sprite sun shadows (on the feet, sprite's texels, lean in sub-texel steps) | Sun shadows | `..._shadows.patch`, `..._shadow_grid.patch`, `..._shadow_res.patch` | `billboard.c`, `Billboard.castsShadow` |
-| 3D scenery sun shadows (trees, signs, houses; DS-res mask, edges blended at full res) | Sun shadows | `..._sun_shadows_3d.patch`, `..._shadow_res.patch` | `EnhancedGraphics_SetCamera`, `LandDrawing` in `fieldmap.c` |
+| 3D scenery sun shadows (trees, signs, houses; shadow map from the sun since 2026-11-25, DS-res mask, edges blended at full res) | Sun shadows | `..._sun_shadows_3d.patch`, `..._shadow_res.patch`, `..._shadow_map.patch` | `EnhancedGraphics_SetCamera`, `LandDrawing` in `fieldmap.c` |
 | Sun highlights (buildings, sprite rim) | | `..._highlights.patch` | |
 | Water reflections (mask from tile data, shore march, mirror) | Water reflections | `..._water.patch` | `EnhancedGraphics_DrawWaterMask` in `fieldmap.c` |
 | Atmosphere (haze by screen height, sun shafts) | Atmosphere | `..._atmosphere.patch` | `SetAir` in `enhanced_graphics.c` |
@@ -21,7 +21,7 @@ libntr pass order in `SIM_Render`: edge marking, sun prepare, sun shadow, highli
 bloom. Passes are skipped with MSAA or a W-buffer.
 
 Patch order in `subprojects/libntr.wrap` (`diff_files`): pacing, grade, shadows, water, shadow_grid,
-sun_shadows_3d, highlights, atmosphere, shadow_res (the last two appended after the others). **Another session has
+sun_shadows_3d, highlights, atmosphere, shadow_res, shadow_map (the last three appended after the others). **Another session has
 overwritten these entries before: re-check the line before committing.**
 
 ## Open problems, most important first

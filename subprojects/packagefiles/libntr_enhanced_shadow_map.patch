@@ -1,0 +1,604 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -160,6 +160,9 @@
+ // While the game draws its land and buildings: the faint shadow polygons they carry (alpha 12 of 31 or less, untextured or
+ // 4-colour) aren't drawn, as the sun's shadows take their place (only while SIM_SetEnhancedSun's strength is above 0)
+ void SIM_SetHideBuiltInShadows(BOOL hide);
++// Enhanced graphics' sun shadow map: polygons drawn while it is set cast too (besides the land and buildings drawn under
++// SIM_SetHideBuiltInShadows): models the game draws apart from its land, like signposts
++void SIM_SetSunCasters(BOOL casts);
+ void SIM_SetEnhancedSun(float shearX, float shearY, u8 strength);
+ // Water reflections (Settings > Display > Water reflections): polygons submitted while SIM_SetPolygonTag(1) is set are not
+ // drawn but make the water mask (the tiles the game says are water, against the scene's depth); the frame's water is
+--- a/include/simulator/g3_draw.h
++++ b/include/simulator/g3_draw.h
+@@ -40,6 +40,16 @@
+ 	float shx, shy;
+ } G3SIM_ShadowQuad_t;
+ void G3SIM_AddShadowQuad(const G3SIM_ShadowQuad_t * quad);
++// Enhanced graphics' sun shadow map: a run of casters sharing a texture (0: none) and its wrapping (bits: repeat s, flip s,
++// repeat t, flip t)
++typedef struct {
++	u32 start, count;
++	u32 textureId;
++	u8 wrap;
++} G3SIM_CasterBatch_t;
++void G3SIM_CasterBatchEnd(u32 textureId, u8 wrap);
++u32 G3SIM_TakeCasters(const float ** verts, const G3SIM_CasterBatch_t ** batches, u32 * batchCount);
++void G3SIM_ResetCasters(void);
+ void G3SIM_DrawArray();
+ void G3SIM_DrawCleanUp();
+ void G3SIM_DrawInit();
+--- a/include/simulator/sim_shaders.hpp
++++ b/include/simulator/sim_shaders.hpp
+@@ -15,6 +15,9 @@
+ extern const char * G3WaterMarchFragmentShader;
+ extern const char * G3WaterApplyFragmentShader;
+ extern const char * G3SunShadowMarchFragmentShader;
++extern const char * G3SunShadowMapVertexShader;
++extern const char * G3SunShadowMapFragmentShader;
++extern const char * G3SunShadowReceiveFragmentShader;
+ extern const char * G3SunShadowCleanFragmentShader;
+ extern const char * G3HighlightFragmentShader;
+ extern const char * G3HighlightApplyFragmentShader;
+--- a/libraries/sim/src/sim_shaders.cpp
++++ b/libraries/sim/src/sim_shaders.cpp
+@@ -44,6 +44,18 @@
+ #include "shaders/g3_sunshadow_march_fragment.glsl"
+ ;
+ 
++const char * G3SunShadowMapVertexShader =
++#include "shaders/g3_sunshadow_map_vertex.glsl"
++;
++
++const char * G3SunShadowMapFragmentShader =
++#include "shaders/g3_sunshadow_map_fragment.glsl"
++;
++
++const char * G3SunShadowReceiveFragmentShader =
++#include "shaders/g3_sunshadow_receive_fragment.glsl"
++;
++
+ const char * G3SunShadowCleanFragmentShader =
+ #include "shaders/g3_sunshadow_clean_fragment.glsl"
+ ;
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1638,12 +1638,73 @@
+     G3SIM_FlushArray();
+     s_hideBuiltInShadows = hide != FALSE;
+ }
++
++static bool s_extraCasters = false;
+ 
++extern "C" void SIM_SetSunCasters(BOOL casts)
++{
++    G3SIM_FlushArray();
++    s_extraCasters = casts != FALSE;
++}
++
+ extern "C" int G3SIM_SpriteDrawing(void)
+ {
+     return s_spriteDepthBiasTop != 0;
++}
++
++// Enhanced graphics' sun shadow map: the casters of this frame, kept whole (before clipping, so what reaches past the screen's
++// edges still casts) as triangles of clip-space x, y and w in view units and the texture coordinates s and t, for the shadow
++// map drawn from the sun. The runs of them that share a texture (a batch: libntr flushes when the texture changes) are
++// told the texture when the batch is drawn (G3SIM_CasterBatchEnd), so the map can leave out the texture's clear texels
++#define G3SIM_CASTER_MAX_VERTS (6144 * 3)
++#define G3SIM_CASTER_MAX_BATCHES 1024
++static float s_casterVerts[G3SIM_CASTER_MAX_VERTS * 5];
++static u32 s_casterCount = 0;
++static G3SIM_CasterBatch_t s_casterBatches[G3SIM_CASTER_MAX_BATCHES];
++static u32 s_casterBatchCount = 0, s_casterBatchStart = 0;
++static bool s_casterOverflow = false;
++
++extern "C" void G3SIM_CasterBatchEnd(u32 textureId, u8 wrap)
++{
++    if(s_casterCount == s_casterBatchStart) {
++        return;
++    }
++    if(s_casterBatchCount < G3SIM_CASTER_MAX_BATCHES) {
++        G3SIM_CasterBatch_t * batch = &s_casterBatches[s_casterBatchCount++];
++        batch->start = s_casterBatchStart;
++        batch->count = s_casterCount - s_casterBatchStart;
++        batch->textureId = textureId;
++        batch->wrap = wrap;
++    } else {
++        s_casterOverflow = true;
++    }
++    s_casterBatchStart = s_casterCount;
+ }
+ 
++// A new 3D frame (its first command after a swap, where the 3D buffer is cleared too): its casters start afresh, so with
++// several game frames to a drawn one (fast-forward) the map holds only the frame on the screen
++extern "C" void G3SIM_ResetCasters(void)
++{
++    s_casterCount = 0;
++    s_casterBatchCount = 0;
++    s_casterBatchStart = 0;
++}
++
++// The casters of the frame so far (they stay until the next frame starts)
++extern "C" u32 G3SIM_TakeCasters(const float **verts, const G3SIM_CasterBatch_t **batches, u32 *batchCount)
++{
++    G3SIM_CasterBatchEnd(0, 0); // any left over: untextured
++    const u32 count = s_casterCount;
++    *verts = s_casterVerts;
++    *batches = s_casterBatches;
++    *batchCount = s_casterBatchCount;
++    if(s_casterOverflow) {
++        fprintf(stderr, "[sunshadow] more casters than %d vertices this frame; the rest were left out\n", G3SIM_CASTER_MAX_VERTS);
++        s_casterOverflow = false;
++    }
++    return count;
++}
++
+ extern "C" int G3SIM_HideBuiltInShadows(void)
+ {
+     return s_hideBuiltInShadows && s_G3ShadowAlpha > 0.0f;
+@@ -1724,6 +1785,34 @@
+         }
+     }
+ 
++    // A caster for the sun shadow map: an opaque polygon of the land and buildings (the bracket SIM_SetHideBuiltInShadows
++    // marks, with the shadows shown), not a sprite, not the water mask, not see-through, wholly in front of the camera
++    if((s_hideBuiltInShadows || s_extraCasters) && s_G3ShadowAlpha > 0.0f && s_spriteDepthBiasTop == 0 && s_polygonTag == 0
++       && !s_SIM_useWBuffer && s_curPolygonAttr.alpha >= 0.99f) {
++        bool front = true;
++        for(int i=0; i < numVerts; i++) {
++            front &= clip[i].pos[3] > 0;
++        }
++        if(front) {
++            for(int i=1; i + 1 < numVerts; i++) {
++                if(s_casterCount + 3 > G3SIM_CASTER_MAX_VERTS) {
++                    s_casterOverflow = true;
++                    break;
++                }
++                const int corner[3] = {0, i, i + 1};
++                for(int c=0; c < 3; c++) {
++                    float * out = &s_casterVerts[s_casterCount * 5];
++                    out[0] = (float)clip[corner[c]].pos[0] / 4096.0f;
++                    out[1] = (float)clip[corner[c]].pos[1] / 4096.0f;
++                    out[2] = (float)clip[corner[c]].pos[3] / 4096.0f;
++                    out[3] = clip[corner[c]].s;
++                    out[4] = clip[corner[c]].t;
++                    s_casterCount++;
++                }
++            }
++        }
++    }
++
+     // Clipped in clip space: what is left has -w <= x, y, z <= w, so W >= 0 and the divide below stays on screen
+     numVerts = ClipVertices(clip, numVerts, TRUE);
+     if(numVerts < 3) {
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -320,7 +320,8 @@
+ void G3SIM_FlushArray()
+ {
+ 	if(s_G3DrawCurVertIdx == 0) {
+-		// No verts to draw
++		// No verts to draw (casters wholly off the screen are kept, untextured)
++		G3SIM_CasterBatchEnd(0, 0);
+ 		return;
+ 	}
+ 	u64 start = G3SIM_NowNs();
+@@ -427,6 +428,8 @@
+ 		texture->Activate();
+ 
+ 		G3SIM_ApplyTexWrap(&s_texImageParam);
++		G3SIM_CasterBatchEnd(texture->GetTextureID(), (u8)((s_texImageParam.repeatS ? 1 : 0) | (s_texImageParam.flipS ? 2 : 0)
++		                                                  | (s_texImageParam.repeatT ? 4 : 0) | (s_texImageParam.flipT ? 8 : 0)));
+ 
+ 
+ 		GLint texUnitLoc = G3SIM_Uniform("myTexture");
+@@ -440,6 +443,7 @@
+ 	{
+ 		//Disable texture in the shader
+ 		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("useTexture") , 0);							
++		G3SIM_CasterBatchEnd(0, 0);
+ 	}
+ 
+ 	// Set the polygon mode in the shader
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -370,6 +370,9 @@
+ static u8 sEnhancedWaterStrength = 0;
+ // Enhanced graphics' sun shadows of the 3D: the march (at the DS's resolution) and the multiply
+ static GLuint g3SunShadowMarchProgramID, g3SunShadowCleanProgramID, g3SunShadowApplyProgramID;
++// The sun shadow map: the casters drawn from the sun into a depth texture, and the pass that looks the pixels up in it
++static GLuint g3SunMapProgramID, g3SunReceiveProgramID, g3SunMapTex, g3SunMapFbo, g3SunMapVertexArray, g3SunMapBuffer;
++static constexpr int kSunMapSize = 2048;
+ static GLuint g3SunShadowTex, g3SunShadowFbo, g3SunShadowCleanTex, g3SunShadowCleanFbo;
+ static int sSunShadowW, sSunShadowH;
+ static float sSunCamera[10];
+@@ -1227,6 +1230,21 @@
+       g3BloomApplyProgramID = glCreateProgram();
+       CompileFragmentShader(fragment, ptr);
+       LinkShader(g3BloomApplyProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3SunShadowReceiveFragmentShader);
++      ptr = src.c_str();
++      g3SunReceiveProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3SunReceiveProgramID, edgeVertexShader, fragment);
++      {
++        GLuint mapVertex, mapFragment;
++        std::string vsrc = SIM::PrepareShaderSource(SIM::G3SunShadowMapVertexShader);
++        std::string fsrc = SIM::PrepareShaderSource(SIM::G3SunShadowMapFragmentShader);
++        const char *vptr = vsrc.c_str(), *fptr = fsrc.c_str();
++        g3SunMapProgramID = glCreateProgram();
++        CompileVertexShader(mapVertex, vptr);
++        CompileFragmentShader(mapFragment, fptr);
++        LinkShader(g3SunMapProgramID, mapVertex, mapFragment);
++      }
+       src = SIM::PrepareShaderSource(SIM::G3SunShadowCleanFragmentShader);
+       ptr = src.c_str();
+       g3SunShadowCleanProgramID = glCreateProgram();
+@@ -1988,9 +2006,130 @@
+     sSunCameraSet = false;
+   }
+   sSunShadowMade = false;
++}
++
++
++// The sun shadow map, drawn from this frame's casters (see G3SIM_TakeCasters): each vertex back in view space (the game's
++// projection undone: x = x_clip / m00, y = y_clip / m11, z = -w), then in the sun's view, an orthographic one along toSun
++// fitted to the casters. Fills the uniforms the receive pass needs; false when there is nothing to draw
++static bool G3SunShadowMap(const float *casters, u32 count, const G3SIM_CasterBatch_t *batches, u32 batchCount,
++                           float right[3], float up[3], float bounds[4], float depth[2]) {
++  if (count < 3) {
++    return false;
++  }
++  const float m00 = sSunCamera[0], m11 = sSunCamera[1];
++  const float L[3] = {sSunCamera[4], sSunCamera[5], sSunCamera[6]};
++  if (m00 == 0.0f || m11 == 0.0f) {
++    return false;
++  }
++  // The sun's axes: right = helper x L, up = L x right
++  const float helper[3] = {fabsf(L[1]) < 0.9f ? 0.0f : 1.0f, fabsf(L[1]) < 0.9f ? 1.0f : 0.0f, 0.0f};
++  right[0] = helper[1] * L[2] - helper[2] * L[1];
++  right[1] = helper[2] * L[0] - helper[0] * L[2];
++  right[2] = helper[0] * L[1] - helper[1] * L[0];
++  const float rl = sqrtf(right[0] * right[0] + right[1] * right[1] + right[2] * right[2]);
++  for (int i = 0; i < 3; i++) {
++    right[i] /= rl;
++  }
++  up[0] = L[1] * right[2] - L[2] * right[1];
++  up[1] = L[2] * right[0] - L[0] * right[2];
++  up[2] = L[0] * right[1] - L[1] * right[0];
++
++  static std::vector<float> sPlaced;
++  sPlaced.resize((size_t)count * 5);
++  float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
++  for (u32 v = 0; v < count; v++) {
++    const float p[3] = {casters[v * 5] / m00, casters[v * 5 + 1] / m11, -casters[v * 5 + 2]};
++    const float q[3] = {p[0] * right[0] + p[1] * right[1] + p[2] * right[2], p[0] * up[0] + p[1] * up[1] + p[2] * up[2],
++                        p[0] * L[0] + p[1] * L[1] + p[2] * L[2]};
++    for (int i = 0; i < 3; i++) {
++      sPlaced[v * 5 + i] = q[i];
++      lo[i] = q[i] < lo[i] ? q[i] : lo[i];
++      hi[i] = q[i] > hi[i] ? q[i] : hi[i];
++    }
++    sPlaced[v * 5 + 3] = casters[v * 5 + 3];
++    sPlaced[v * 5 + 4] = casters[v * 5 + 4];
++  }
++  for (int i = 0; i < 3; i++) {
++    lo[i] -= 1.0f;
++    hi[i] += 1.0f;
++  }
++  bounds[0] = lo[0];
++  bounds[1] = lo[1];
++  bounds[2] = hi[0] - lo[0];
++  bounds[3] = hi[1] - lo[1];
++  depth[0] = hi[2];           // nearest the sun
++  depth[1] = hi[2] - lo[2];
++  for (u32 v = 0; v < count; v++) {
++    float *q = &sPlaced[v * 5];
++    q[0] = (q[0] - bounds[0]) / bounds[2] * 2.0f - 1.0f;
++    q[1] = (q[1] - bounds[1]) / bounds[3] * 2.0f - 1.0f;
++    q[2] = (depth[0] - q[2]) / depth[1] * 2.0f - 1.0f;
++  }
++
++  if (g3SunMapFbo == 0) {
++    glGenTextures(1, &g3SunMapTex);
++    glBindTexture(GL_TEXTURE_2D, g3SunMapTex);
++    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, kSunMapSize, kSunMapSize, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,
++                 NULL);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    glGenFramebuffers(1, &g3SunMapFbo);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3SunMapFbo);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, g3SunMapTex, 0);
++    static const GLenum kNone = GL_NONE;
++    glDrawBuffers(1, &kNone);
++    glReadBuffer(GL_NONE);
++    glGenVertexArrays(1, &g3SunMapVertexArray);
++    glGenBuffers(1, &g3SunMapBuffer);
++    glBindVertexArray(g3SunMapVertexArray);
++    glBindBuffer(GL_ARRAY_BUFFER, g3SunMapBuffer);
++    glEnableVertexAttribArray(0);
++    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
++    glEnableVertexAttribArray(1);
++    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
++  }
++  glBindFramebuffer(GL_FRAMEBUFFER, g3SunMapFbo);
++  glViewport(0, 0, kSunMapSize, kSunMapSize);
++  glEnable(GL_DEPTH_TEST);
++  glDepthFunc(GL_LESS);
++  glDepthMask(GL_TRUE);
++  glClearDepthf(1.0f);
++  glClear(GL_DEPTH_BUFFER_BIT);
++  glBindVertexArray(g3SunMapVertexArray);
++  glBindBuffer(GL_ARRAY_BUFFER, g3SunMapBuffer);
++  glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(sPlaced.size() * sizeof(float)), sPlaced.data(), GL_STREAM_DRAW);
++  const GLuint map = g3SunMapProgramID;
++  glUseProgram(map);
++  glActiveTexture(GL_TEXTURE0 + 12);
++  glProgramUniform1i(map, WaterUniform(map, "casterTexture"), 12);
++  for (u32 b = 0; b < batchCount; b++) {
++    const G3SIM_CasterBatch_t *batch = &batches[b];
++    if (batch->start + batch->count > count) {
++      continue;
++    }
++    // (a texture freed since its batch was drawn, when texture packs change, draws untextured this once)
++    const bool textured = batch->textureId != 0 && glIsTexture(batch->textureId);
++    glProgramUniform1i(map, WaterUniform(map, "useTexture"), textured ? 1 : 0);
++    glProgramUniform1i(map, WaterUniform(map, "wrap"), batch->wrap);
++    if (textured) {
++      glBindTexture(GL_TEXTURE_2D, batch->textureId);
++    }
++    glDrawArrays(GL_TRIANGLES, (GLint)batch->start, (GLsizei)batch->count);
++  }
++  glDisable(GL_DEPTH_TEST);
++  return true;
+ }
+ 
+ static void G3EnhancedSunShadow() {
++  // This frame's casters (they start afresh with each 3D frame: G3SIM_ResetCasters)
++  const float *casters = nullptr;
++  const G3SIM_CasterBatch_t *casterBatches = nullptr;
++  u32 casterBatchCount = 0;
++  const u32 casterCount = G3SIM_TakeCasters(&casters, &casterBatches, &casterBatchCount);
++  static const bool sMarch = getenv("SIM_SUNSHADOW_METHOD") != nullptr && strcmp(getenv("SIM_SUNSHADOW_METHOD"), "march") == 0;
+   const bool drawn = sSunFrameDrawn;
+   const bool cameraSet = sSunFrameCamera;
+   if (!drawn || !cameraSet || !s_SIM_config.enhancedShadows || s_G3ShadowAlpha <= 0.0f || sSamples != 0 ||
+@@ -2033,7 +2172,35 @@
+   glDisable(GL_CULL_FACE);
+   glDisable(GL_BLEND);
+ 
+-  // 1. The march, one fragment per DS pixel
++  // 1. The shadow map, and each DS pixel looked up in it (or, with SIM_SUNSHADOW_METHOD=march, the older march through
++  // the depth buffer)
++  float lightRight[3], lightUp[3], lightBounds[4], lightDepth[2];
++  GLint depthFunc;
++  GLboolean depthMask;
++  glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
++  glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
++  const bool mapped = !sMarch && G3SunShadowMap(casters, casterCount, casterBatches, casterBatchCount, lightRight, lightUp,
++                                                 lightBounds, lightDepth);
++  glDepthFunc(depthFunc);
++  glDepthMask(depthMask);
++  if (!sMarch && !mapped) {
++    // Nothing cast this frame: no 3D shadows (the state is put back as below)
++    glActiveTexture(GL_TEXTURE0);
++    glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++    glBindVertexArray(vertexArray);
++    glUseProgram(g3shaderProgramID);
++    if (cullFace) {
++      glEnable(GL_CULL_FACE);
++    }
++    if (depthTest) {
++      glEnable(GL_DEPTH_TEST);
++    }
++    if (blend) {
++      glEnable(GL_BLEND);
++    }
++    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
++    return;
++  }
+   glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowFbo);
+   glViewport(0, 0, dsWidth, dsHeight);
+   glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
+@@ -2051,9 +2218,33 @@
+   // thicker than a tree stop counting
+   glProgramUniform3f(march, WaterUniform(march, "march"), 2.0f, 2.0f, 120.0f);
+   glProgramUniform1i(march, WaterUniform(march, "steps"), 40);
++  if (mapped) {
++    const GLuint receive = g3SunReceiveProgramID;
++    glActiveTexture(GL_TEXTURE0 + 12);
++    glBindTexture(GL_TEXTURE_2D, g3SunMapTex);
++    glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
++    glProgramUniform1i(receive, WaterUniform(receive, "attrTexture"), kEdgeAttrTexUnit);
++    glProgramUniform1i(receive, WaterUniform(receive, "shadowMap"), 12);
++    glProgramUniform2i(receive, WaterUniform(receive, "origin"), sG3Viewport[0], sG3Viewport[1]);
++    glProgramUniform1i(receive, WaterUniform(receive, "pixelStep"), sScale);
++    glProgramUniform2i(receive, WaterUniform(receive, "dsSize"), dsWidth, dsHeight);
++    glProgramUniform4f(receive, WaterUniform(receive, "projection"), sSunCamera[0], sSunCamera[1], sSunCamera[2],
++                       sSunCamera[3]);
++    glProgramUniform1f(receive, WaterUniform(receive, "xScale"), xScale);
++    glProgramUniform3f(receive, WaterUniform(receive, "lightRight"), lightRight[0], lightRight[1], lightRight[2]);
++    glProgramUniform3f(receive, WaterUniform(receive, "lightUp"), lightUp[0], lightUp[1], lightUp[2]);
++    glProgramUniform3f(receive, WaterUniform(receive, "toSun"), sSunCamera[4], sSunCamera[5], sSunCamera[6]);
++    glProgramUniform4f(receive, WaterUniform(receive, "lightBounds"), lightBounds[0], lightBounds[1], lightBounds[2],
++                       lightBounds[3]);
++    glProgramUniform2f(receive, WaterUniform(receive, "lightDepth"), lightDepth[0], lightDepth[1]);
++    // A surface's own depth in the map is off by up to a map texel times its slope to the sun, and the depth buffer's
++    // (16 bits here) a little: a unit (a sixteenth of a tile) clears both without lifting the shadows off their casters
++    glProgramUniform1f(receive, WaterUniform(receive, "bias"), 1.0f);
++    glProgramUniform1i(receive, WaterUniform(receive, "debugMode"), sDebug);
++  }
+   glProgramUniform1i(march, WaterUniform(march, "debugMode"), sDebug);
+   glProgramUniform3f(march, WaterUniform(march, "upView"), sSunCamera[7], sSunCamera[8], sSunCamera[9]);
+-  glUseProgram(march);
++  glUseProgram(mapped ? g3SunReceiveProgramID : march);
+   glBindVertexArray(g3EdgeVertexArray);
+   glDrawArrays(GL_TRIANGLES, 0, 3);
+ 
+@@ -2064,6 +2255,8 @@
+   const GLuint clean = g3SunShadowCleanProgramID;
+   glProgramUniform1i(clean, WaterUniform(clean, "maskTexture"), 12);
+   glProgramUniform2i(clean, WaterUniform(clean, "dsSize"), dsWidth, dsHeight);
++  static const bool sCleanMap = getenv("SIM_SUNSHADOW_CLEAN") != nullptr && getenv("SIM_SUNSHADOW_CLEAN")[0] == '1';
++  glProgramUniform1i(clean, WaterUniform(clean, "keep"), mapped && !sCleanMap ? 1 : 0);
+   glUseProgram(clean);
+   glDrawArrays(GL_TRIANGLES, 0, 3);
+ 
+@@ -3527,6 +3720,7 @@
+ void SIM_Begin3DCommand() {
+   if (s3DClearPending) {
+     s3DClearPending = false;
++    G3SIM_ResetCasters();
+     // The 3D buffer, whichever is bound: a game's vblank handler runs while the screen's own
+     // buffer is bound (after the frame is drawn, before it's shown), and a clear there blacked
+     // out the whole frame (Platinum's PC boxes, whose vblank handler sends matrix commands)
+--- a/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
+@@ -23,7 +23,7 @@
+         color = w < 0.1 ? vec4(1.0) : w < 0.5 ? vec4(0.0, 0.0, 1.0, 1.0) : w < 0.8 ? vec4(0.0, 0.7, 0.0, 1.0) : vec4(1.0, 0.0, 0.0, 1.0);
+         return;
+     }
+-    if (debugMask == 2) {
++    if (debugMask == 2 || debugMask >= 4) {
+         color = vec4(vec3(mask.g), 1.0);
+         return;
+     }
+--- a/libraries/sim/src/shaders/g3_sunshadow_clean_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_sunshadow_clean_fragment.glsl
+@@ -7,6 +7,7 @@
+ // it when at least six are: holes close and specks go, the shape of a shadow stays
+ uniform sampler2D maskTexture;
+ uniform ivec2 dsSize;
++uniform int keep; // 1: the mask as it is (the shadow map's has no holes or specks to clean)
+ out vec4 color;
+ 
+ void main()
+@@ -21,7 +22,7 @@
+     }
+     bool here = texelFetch(maskTexture, p, 0).r > 0.5;
+     vec4 own = texelFetch(maskTexture, p, 0);
+-    bool shadow = own.b < 0.5 && (here ? count >= 4 : count >= 6);
++    bool shadow = own.b < 0.5 && (keep == 1 ? here : (here ? count >= 4 : count >= 6));
+     color = vec4(shadow ? 1.0 : 0.0, own.g, own.b, 1.0);
+ }
+ )""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_sunshadow_map_vertex.glsl
+@@ -0,0 +1,15 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' sun shadow map: the casters, already placed in the sun's view on the CPU (x, y across the map, z the
++// depth along the sun's rays, nearest the sun smallest), drawn into a depth texture; their texture coordinates passed on
++layout (location = 0) in vec3 position;
++layout (location = 1) in vec2 texCoord;
++out vec2 uv;
++
++void main()
++{
++    uv = texCoord;
++    gl_Position = vec4(position, 1.0);
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_sunshadow_map_fragment.glsl
+@@ -0,0 +1,34 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' sun shadow map: depth only, but a textured caster leaves out its clear texels (a tree's crown is a
++// box with a round picture on it: its shadow is the picture's shape). The texel is picked as the DS does (no filtering),
++// the coordinates wrapped as the polygon's texture says
++uniform sampler2D casterTexture;
++uniform int useTexture;
++uniform int wrap; // bits: repeat s, flip s, repeat t, flip t
++in vec2 uv;
++
++float Wrap(float c, bool repeatIt, bool flip)
++{
++    if (!repeatIt) {
++        return clamp(c, 0.0, 0.999999);
++    }
++    if (flip) {
++        float m = mod(c, 2.0);
++        return m < 1.0 ? m : 2.0 - m - 0.000001;
++    }
++    return fract(c);
++}
++
++void main()
++{
++    if (useTexture == 1) {
++        vec2 c = vec2(Wrap(uv.x, (wrap & 1) != 0, (wrap & 2) != 0), Wrap(uv.y, (wrap & 4) != 0, (wrap & 8) != 0));
++        ivec2 size = textureSize(casterTexture, 0);
++        if (texelFetch(casterTexture, min(ivec2(c * vec2(size)), size - 1), 0).a < 0.5) {
++            discard;
++        }
++    }
++}
++)""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_sunshadow_receive_fragment.glsl
+@@ -0,0 +1,58 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' sun shadows of the scene's 3D, first pass, one fragment per DS pixel: the pixel's place in the scene,
++// rebuilt from the depth the 3D shader left in the attribute texture, is looked up in the shadow map drawn from the sun
++// (the land and buildings' opaque polygons, whole); it is in shadow when something lies nearer the sun along its ray. A
++// real projection of the casters, so a post's shadow is as wide as the post. The sprites are in the depth buffer too but
++// don't receive (they have shadows of their own, from their pictures). Writes what the march wrote (r shadow, g the
++// distance's bands for SIM_SUNSHADOW_DEBUG=2, b set where nothing is shaded), for the clean-up and apply passes.
++uniform sampler2D attrTexture; // polygon ID * 4 + 1 for a sprite in r, the depth's high and low bytes in g and b, a set where opaque
++uniform sampler2D shadowMap;   // depth along the sun's rays, 0 nearest the sun
++uniform ivec2 origin;          // the 3D viewport's corner in the framebuffer
++uniform int pixelStep;         // framebuffer pixels per DS pixel
++uniform ivec2 dsSize;
++uniform vec4 projection;       // the game's projection: m00, m11, m22, m32
++uniform float xScale;          // a wide scene libntr narrows
++uniform vec3 lightRight;       // the sun's view: its axes in view space (toward the sun last)
++uniform vec3 lightUp;
++uniform vec3 toSun;
++uniform vec4 lightBounds;      // across the map: x and y of its corner, and its width and height (view units)
++uniform vec2 lightDepth;       // along the rays: the nearest (toward the sun) and the span
++uniform float bias;            // how much nearer the sun a caster must be (view units)
++uniform int debugMode;
++out vec4 color;
++
++float Distance(ivec2 ds)
++{
++    ivec4 a = ivec4(texelFetch(attrTexture, origin + ds * pixelStep + ivec2(pixelStep / 2), 0) * 255.0 + 0.5);
++    if (a.a == 0 || (a.r & 1) == 1) {
++        return 0.0;
++    }
++    float ndcz = float(a.g * 256 + a.b) / 65535.0 * 2.0 - 1.0;
++    return projection.w / (ndcz + projection.z);
++}
++
++void main()
++{
++    ivec2 ds = ivec2(gl_FragCoord.xy);
++    float distanceHere = Distance(ds);
++    float shadow = 0.0;
++    float probe = 0.0; // SIM_SUNSHADOW_DEBUG=4: the map's depth here; 5: the pixel's own (they match on lit ground)
++    if (distanceHere > 0.0) {
++        vec2 ndc = ((vec2(ds) + 0.5) / vec2(dsSize)) * 2.0 - 1.0;
++        vec3 here = vec3(ndc.x / xScale * distanceHere / projection.x, ndc.y * distanceHere / projection.y, -distanceHere);
++        vec2 across = (vec2(dot(here, lightRight), dot(here, lightUp)) - lightBounds.xy) / lightBounds.zw;
++        float along = (lightDepth.x - dot(here, toSun)) / lightDepth.y;
++        if (all(greaterThanEqual(across, vec2(0.0))) && all(lessThan(across, vec2(1.0)))) {
++            ivec2 size = textureSize(shadowMap, 0);
++            float nearest = texelFetch(shadowMap, ivec2(across * vec2(size)), 0).r;
++            probe = debugMode == 4 ? nearest : along;
++            if (along - nearest > bias / lightDepth.y) {
++                shadow = 1.0;
++            }
++        }
++    }
++    color = vec4(shadow, debugMode >= 4 ? fract(probe * 8.0) : fract(distanceHere / 16.0), distanceHere > 0.0 ? 0.0 : 1.0, 1.0);
++}
++)""

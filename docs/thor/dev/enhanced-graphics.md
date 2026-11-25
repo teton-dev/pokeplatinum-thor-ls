@@ -242,6 +242,42 @@ Order: infrastructure + time-of-day, then sprite shadows, then water, then leave
   along the shadows' edges; measuring the width from the DS pixel's centre didn't cure it and added stray lines. It
   would also cost the square of the scale (16x the march at 4x). The 3D shadows' detail stays a DS pixel; only their
   edges are finer.
+- **3D shadows from a real shadow map (2026-11-25), `libntr_enhanced_shadow_map.patch`.** The owner pointed at the post's
+  shadow: a lobe along its top that the post's body doesn't explain. `SIM_SUNSHADOW_DEBUG=3` showed the whole band passed
+  the march's width test: the march can't know how thick a thing is along the view (a post seen from above is deeper
+  than it is wide), so each allowance only moved the error (fat wedges, then a thin shaft with a fat tip, then the lobe
+  from dividing by the view angle). Now libntr keeps the casters themselves: in `G3SIM_SubmitPolygon`, before clipping
+  (so what reaches past the screen's edges still casts), every opaque polygon drawn inside the land bracket
+  (`SIM_SetHideBuiltInShadows`) or a new caster bracket (`SIM_SetSunCasters`: the game sets it around signposts and
+  mailboxes, which are map objects drawn as models by `ov5_021F10E8.c`, after the land) is kept as triangles of clip x,
+  y, w and texture s, t; sprites, the water mask and translucent polygons are not. Each run of them is told its batch's
+  texture and wrapping when the batch is flushed (`G3SIM_CasterBatchEnd`). Once a frame (`G3SunShadowMap` in
+  `sim_main.cpp`) the vertices go back to view space (x / m00, y / m11, z = -w), then into an orthographic view along
+  the sun fitted to them, and are drawn into a 2048x2048 depth texture, texture by texture, leaving out clear texels (tree
+  crowns are boxes with round pictures; untextured, their shadows were boxes). The receive pass
+  (`g3_sunshadow_receive_fragment.glsl`) puts each DS pixel's surface in the sun's view and compares; bias 1 unit. It
+  writes the march's mask, so the soft-edged apply and the highlights are unchanged; the clean-up is skipped for it (it
+  erased the bridge cables' one-pixel shadows, and the map has none of the march's holes or specks;
+  `SIM_SUNSHADOW_CLEAN=1` puts it back). The casters start afresh with each 3D frame, where libntr clears the 3D buffer
+  (`SIM_Begin3DCommand` after a swap: `G3SIM_ResetCasters`), so fast-forward's several game frames to a drawn one don't
+  pile up in the map. **The 3D's sun now follows the sprites' shadows** (`EnhancedGraphics_SetCamera`): with no limit on
+  length, the map showed the old `sSunWorld` gave 3D things shadows about 2.3 times as long per unit of height as the
+  sprites' at 16:00 (the march had hidden it: it stopped at 82 units). The sun is now worked out from the sprites' lean
+  (`sSpriteShear`, what `SIM_SetEnhancedSun` gets) through the camera: (4/3) shx east and, northward, what reaches shy up
+  the screen per unit of height (view y of world z). A post's shadow is now as long as the player's beside it, the sign's
+  as the NPC's; the highlights and atmosphere use the same sun.
+  `SIM_SUNSHADOW_METHOD=march` brings the old march back (the code is kept until the map is proven on a device);
+  `SIM_SUNSHADOW_DEBUG=4` and `=5` show the map's depth and each pixel's own (they match on lit ground).
+  Checked at 4x: both Canalave posts give bands as wide as the post with no lobe; the bridge's braces, cables and truss
+  cast; Route 201's trees cast crown-shaped shadows and the sign casts; Twinleaf's house (its roof's west slope in shadow
+  at 9:00) and mailbox; no acne on flat ground at 9:00, 12:00 or 16:00; 1x, 16:9 and camera tilt look right. Not
+  checked: a walk while shadows are on (the test's jump spots leave the player where walks are blocked), fast-forward on
+  a device. The canal's water now takes the shadows of the walls and the building to its
+  west. Cost: one CPU pass over at most 18k vertices, a 2048x2048 depth clear and draw, one lookup per DS pixel, about a
+  batch's worth of draw calls; likely cheaper than the march but unmeasured on the Thor and Duo (16 MB of depth texture).
+  **Not done:** casters the game doesn't submit (off-screen chunks it culls) still cast nothing; a scene with far chunks
+  loaded spreads the map's texels thinner (they are fitted to all casters); other model objects (boulders, Cut trees,
+  berry trees) are not in the caster bracket yet.
 - **Camera tilt (not a shader; `src/port/camera_tilt.c`)**: *Display > Camera tilt* (0, 6 or 12 degrees lower), applied
   around the field map's draw in `fieldmap.c` (the camera's angle is raised before the view matrix is made, put back after
   the draw), only for perspective cameras looking down at 30 to 75 degrees with no yaw, so scenes that set their own angle are

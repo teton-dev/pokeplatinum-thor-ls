@@ -86,6 +86,8 @@ static BOOL sSunShadows = FALSE;
 static BOOL sSunLit = FALSE; // the sun is up (and a setting that reads the game's camera is on)
 // Toward the sun, in the world (x east, y up, z south), unit length
 static float sSunWorld[3] = { 0.0f, 1.0f, 0.0f };
+// The sprites' shadows' lean (SIM_SetEnhancedSun): sideways in NDC x per NDC y of height, and up the screen per height
+static float sSpriteShear[2] = { 0.0f, 0.24f };
 
 void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera)
 {
@@ -93,7 +95,19 @@ void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera
         return;
     }
     const float k = 1.0f / 4096.0f;
-    const float x = sSunWorld[0], y = sSunWorld[1], z = sSunWorld[2];
+    float x = sSunWorld[0], y = sSunWorld[1], z = sSunWorld[2];
+    // The 3D's sun casts as the sprites' shadows lean: a thing as tall as a sprite throws a shadow as long, the same way.
+    // A sprite's shadow moves (4/3) shx (NDC x is 4/3 of NDC y on a 4:3 screen) across and shy up the screen per unit of
+    // its height, in view units; on the ground that is shx' east per unit of height (the camera has no yaw: view x is
+    // world x) and, northward, whatever reaches shy up the screen through the camera's pitch (view y of world z, _21)
+    if (camera->_00 > 0 && camera->_21 < -0.05f * 4096.0f) {
+        const float east = (4.0f / 3.0f) * sSpriteShear[0] / (camera->_00 * k);
+        const float north = sSpriteShear[1] / (-camera->_21 * k);
+        const float n = sqrtf(east * east + 1.0f + north * north);
+        x = -east / n;
+        y = 1.0f / n;
+        z = north / n;
+    }
     // The matrices are the DS's, for row vectors: a world direction is multiplied on the left
     float vx = (x * camera->_00 + y * camera->_10 + z * camera->_20) * k;
     float vy = (x * camera->_01 + y * camera->_11 + z * camera->_21) * k;
@@ -119,6 +133,12 @@ void EnhancedGraphics_LandDrawing(BOOL drawing)
     SIM_SetHideBuiltInShadows(drawing && sSunShadows);
 }
 
+void EnhancedGraphics_CasterDrawing(BOOL drawing)
+{
+    NNS_G3dGeFlushBuffer();
+    SIM_SetSunCasters(drawing && sSunShadows);
+}
+
 BOOL EnhancedGraphics_SunShadowsShown(void)
 {
     return sSunShadows;
@@ -139,7 +159,9 @@ static void SetSun(float hour)
     }
     const float fromNoon = hour - 12.0f;
     const float away = fromNoon < 0.0f ? -fromNoon : fromNoon;
-    SIM_SetEnhancedSun(fromNoon * 0.12f, 0.24f + 0.03f * away, (u8)strength);
+    sSpriteShear[0] = fromNoon * 0.12f;
+    sSpriteShear[1] = 0.24f + 0.03f * away;
+    SIM_SetEnhancedSun(sSpriteShear[0], sSpriteShear[1], (u8)strength);
     sSunShadows = strength >= 30.0f && SIM_GetConfigPtr()->enhancedShadows;
     const BOOL wantsLight = SIM_GetConfigPtr()->enhancedHighlights || SIM_GetConfigPtr()->enhancedAtmosphere;
     sSunLit = strength >= 30.0f && (SIM_GetConfigPtr()->enhancedShadows || wantsLight);
