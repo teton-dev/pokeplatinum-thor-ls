@@ -95,7 +95,7 @@
                   t.gpuSecondaryMs);
 --- a/libraries/sim/src/sim_main.cpp
 +++ b/libraries/sim/src/sim_main.cpp
-@@ -133,6 +133,53 @@ static bool sFastForwardHeld = false;    // a hold button is down
+@@ -133,6 +133,74 @@ static bool sFastForwardHeld = false;    // a hold button is down
  static bool sFastForwardOn = false;      // switched on (toggle button, or the game)
  static bool sFastForwardJoyDown = false; // the controller's button (axes repeat their down events)
  static bool sFastForwardSwap = false;    // the swap interval is 0 for it
@@ -103,53 +103,74 @@
 +// Android: frames not shown so the main window's buffer queue drains. After fast-forward it stayed a frame too deep:
 +// every swap waited a refresh for a free buffer (20 ms, 30 frames a second on the Duo) until a pause let it empty
 +static int sDrainPresents = 0;
-+static int sSlowSwaps = 0; // frames in a row whose swap took most of a refresh
 +
-+// The pacing watchdog: on the Duo, after fast-forward, the main window's swap could take a whole refresh every frame
-+// (30 frames a second, the game at half speed) until the settings were opened over the lower screen. A second of
-+// such swaps at the game's speed and the watchdog tries a remedy, then the next one a second and a half later while
-+// it lasts: 0 the lower screen's window draws a frame (what the settings do), 1 a few frames aren't shown, 2 the lower
-+// screen's surface is made again. Logcat tag pokeplatinum says which cleared it.
-+static int sUnstickStep = 0, sUnstickLast = -1, sUnstickWait = 0, sFastSwaps = 0;
-+static void PacingWatchdog(bool steady, bool slowSwap) {
-+  if (sUnstickWait > 0) {
-+    sUnstickWait--;
-+  }
++// The pacing watchdog: on the Duo, after fast-forward, the swaps could take a whole refresh every frame (30 frames a
++// second, the game at half speed) until the settings were opened over the lower screen. Judged a second at a time (a
++// frame-by-frame count missed it: some swaps came in just under a refresh): under 45 frames shown with swaps averaging
++// over 10 ms at the game's speed is stuck, and the watchdog tries a remedy, the next one a second later while it lasts:
++// 0 the lower screen's window draws a frame (what the settings do), 1 a few frames aren't shown, 2 the lower screen's
++// surface is made again. After all three fail it waits 8 seconds (a scene too heavy for the device looks the same).
++// Logcat tag pokeplatinum says which cleared it.
++static int sUnstickStep = 0, sUnstickLast = -1, sUnstickWait = 0;
++static u64 sWindowStartNs = 0, sWindowSwapNs = 0;
++static int sWindowFrames = 0;
++static void PacingWatchdog(bool steady, u64 swapNs) {
++  const u64 now = SIM_NowNs();
 +  if (!steady) {
-+    sSlowSwaps = 0;
-+    sFastSwaps = 0;
++    sWindowStartNs = 0;
 +    return;
 +  }
-+  if (slowSwap) {
-+    sFastSwaps = 0;
-+    if (++sSlowSwaps >= 60 && sUnstickWait == 0) {
-+      sSlowSwaps = 0;
-+      printf("pacing watchdog: swaps take a refresh (half rate), remedy %d\n", sUnstickStep);
-+      fflush(stdout); // (stdout goes to logcat through a pipe: flushed or it waits)
-+      if (sUnstickStep == 1) {
-+        sDrainPresents = 6;
-+      } else {
-+        SIM_Android_UnstickDisplays(sUnstickStep == 0 ? 0 : 1);
-+      }
-+      sUnstickLast = sUnstickStep;
-+      sUnstickStep = (sUnstickStep + 1) % 3;
-+      sUnstickWait = 90;
-+    }
-+  } else {
-+    sSlowSwaps = 0;
-+    if (sUnstickLast >= 0 && ++sFastSwaps >= 60) {
++  if (sWindowStartNs == 0) {
++    sWindowStartNs = now;
++    sWindowFrames = 0;
++    sWindowSwapNs = 0;
++    return;
++  }
++  sWindowFrames++;
++  sWindowSwapNs += swapNs;
++  const u64 elapsed = now - sWindowStartNs;
++  if (elapsed < 1000000000ull) {
++    return;
++  }
++  const float rate = (float)sWindowFrames * 1e9f / (float)elapsed;
++  const u64 averageSwapNs = sWindowFrames > 0 ? sWindowSwapNs / (u64)sWindowFrames : 0;
++  sWindowStartNs = now;
++  sWindowFrames = 0;
++  sWindowSwapNs = 0;
++  const bool stuck = rate < 45.0f && averageSwapNs > 10000000ull;
++  if (!stuck) {
++    if (sUnstickLast >= 0) {
 +      printf("pacing watchdog: back to full rate after remedy %d\n", sUnstickLast);
-+      fflush(stdout);
++      fflush(stdout); // (stdout reaches logcat through a pipe)
 +      sUnstickLast = -1;
-+      sUnstickStep = 0;
 +    }
++    sUnstickStep = 0;
++    sUnstickWait = 0;
++    return;
++  }
++  if (sUnstickWait > 0) {
++    sUnstickWait--;
++    return;
++  }
++  printf("pacing watchdog: %.0f frames a second, swaps %.1f ms: remedy %d\n", rate, averageSwapNs / 1e6,
++         sUnstickStep);
++  fflush(stdout);
++  if (sUnstickStep == 1) {
++    sDrainPresents = 6;
++  } else {
++    SIM_Android_UnstickDisplays(sUnstickStep == 0 ? 0 : 1);
++  }
++  sUnstickLast = sUnstickStep;
++  sUnstickStep = (sUnstickStep + 1) % 3;
++  if (sUnstickStep == 0) {
++    sUnstickWait = 8; // all three tried: a scene too heavy for the device looks the same, don't keep at it
 +  }
 +}
 +#endif
  static u64 sNextVBlankNs = 0;            // fast-forward pacing
  static u64 sLastPresentNs = 0;
  
-@@ -2923,8 +2970,19 @@ void *SIM_Render(void *arg) {
+@@ -2923,8 +2991,19 @@ void *SIM_Render(void *arg) {
        SDL_GL_SetSwapInterval(fastForward ? 0 : s_SIM_config.vsyncInterval);
  #endif
        sNextVBlankNs = 0;
@@ -169,7 +190,7 @@
      if (testMode && !paused) {
        const u64 presentNs = (u64)s_SIM_config.testModePresentMs * 1000000ull;
        if (presentNs == 0 || SIM_NowNs() - sLastPresentNs < presentNs) {
-@@ -3592,9 +3650,16 @@ void *SIM_Render(void *arg) {
+@@ -3592,9 +3671,15 @@ void *SIM_Render(void *arg) {
      if (present) {
        SIM_Smooth(&sTimings.capWaitMs, beforeSwapNs - sBeforeWaitNs);
  
@@ -180,8 +201,7 @@
        sLastPresentNs = SIM_NowNs();
 +      SIM_Smooth(&sTimings.presentSecondaryMs, sLastPresentNs - secondaryPresentNs);
 +#ifdef SDK_BUILD_ANDROID
-+      PacingWatchdog(!fastForward && !paused && s_SIM_config.capFrameRate,
-+                     secondaryPresentNs - beforeSwapNs > 12000000ull);
++      PacingWatchdog(!fastForward && !paused && s_SIM_config.capFrameRate, sLastPresentNs - beforeSwapNs);
 +#endif
  
        SIM_Smooth(&sTimings.swapMs, sLastPresentNs - beforeSwapNs);
