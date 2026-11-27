@@ -329,6 +329,9 @@ gen5_args = [
     # Pointers passed as integers: libntr takes the emulated registers' addresses as u64, which is right. The
     # warnings are the list to check for pointers cut to 32 bits
     '-Wno-error=int-conversion',
+    # pokebw2's s32/u32 are long, 32 bits on Windows (win64): the same size as the int * some of its functions take, but
+    # GCC 14+ makes the pointer mismatch an error
+    '-Wno-error=incompatible-pointer-types',
 ]
 
 foreach path : gen5_patched

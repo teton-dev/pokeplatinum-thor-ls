@@ -9,14 +9,30 @@
 # first launch, exactly like the PC releases.
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+# (pwd -W under MSYS2: S:/... paths, which the native Windows meson, cmake and NDK read; elsewhere plain pwd)
+ROOT=$(cd "$(dirname "$0")/../.." && { pwd -W 2>/dev/null || pwd; })
 BUILD=${BUILD_ANDROID:-$ROOT/build_android}
 API=29
 ABI=arm64-v8a
 SDL_VERSION=${SDL_VERSION:-2.30.11}
 ENET_VERSION=${ENET_VERSION:-v1.3.18}
 NDK=${ANDROID_NDK_HOME:?Set ANDROID_NDK_HOME to your Android NDK}
-TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/${NDK_HOST_TAG:-$(uname -s | tr A-Z a-z)-x86_64}
+# The NDK's host: darwin-x86_64 (universal), linux-x86_64, or windows-x86_64 under MSYS2 (docs/thor/dev/desktop-windows.md)
+case "$(uname -s)" in
+MSYS*|MINGW*|UCRT*|CLANG*) HOST_DEFAULT=windows-x86_64 ;;
+*) HOST_DEFAULT=$(uname -s | tr A-Z a-z)-x86_64 ;;
+esac
+TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/${NDK_HOST_TAG:-$HOST_DEFAULT}
+# On Windows the NDK's per-API compiler names are .cmd wrappers: call clang itself with the target, and the tools by .exe
+if [ -f "$TOOLCHAIN/bin/clang.exe" ]; then
+    EXE=.exe
+    CC_ENTRY="[toolchain / 'clang.exe', '--target=aarch64-linux-android$API']"
+    CXX_ENTRY="[toolchain / 'clang++.exe', '--target=aarch64-linux-android$API']"
+else
+    EXE=
+    CC_ENTRY="toolchain / 'aarch64-linux-android$API-clang'"
+    CXX_ENTRY="toolchain / 'aarch64-linux-android$API-clang++'"
+fi
 DEPS=$BUILD/deps
 PREFIX=$DEPS/prefix
 MESON="python3 $ROOT/subprojects/meson-1.12.0/meson.py"
@@ -62,12 +78,12 @@ toolchain = '$TOOLCHAIN/bin'
 prefix = '$PREFIX'
 
 [binaries]
-c = toolchain / 'aarch64-linux-android$API-clang'
-cpp = toolchain / 'aarch64-linux-android$API-clang++'
-ar = toolchain / 'llvm-ar'
-strip = toolchain / 'llvm-strip'
-nm = toolchain / 'llvm-nm'
-objcopy = toolchain / 'llvm-objcopy'
+c = $CC_ENTRY
+cpp = $CXX_ENTRY
+ar = toolchain / 'llvm-ar$EXE'
+strip = toolchain / 'llvm-strip$EXE'
+nm = toolchain / 'llvm-nm$EXE'
+objcopy = toolchain / 'llvm-objcopy$EXE'
 
 [built-in options]
 # The decompiled game code type-puns and relies on wrapping signed arithmetic (as the
@@ -108,7 +124,7 @@ $MESON compile -C "$BUILD/meson" --ninja-args=-k,0 main
 APP=$ROOT/android/app/src/main
 JNI=$APP/jniLibs/$ABI
 mkdir -p "$JNI" "$APP/assets" "$APP/java/org/libsdl"
-"$TOOLCHAIN/bin/llvm-strip" --strip-unneeded -o "$JNI/libmain.so" "$BUILD/meson/main.so"
+"$TOOLCHAIN/bin/llvm-strip$EXE" --strip-unneeded -o "$JNI/libmain.so" "$BUILD/meson/main.so"
 cp "$PREFIX/lib/libSDL2.so" "$JNI/"
 rm -rf "$APP/java/org/libsdl/app"
 cp -r "$DEPS/SDL/android-project/app/src/main/java/org/libsdl/app" "$APP/java/org/libsdl/"

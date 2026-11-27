@@ -698,7 +698,7 @@ elif (build_target == 'android')
 # Nothing to package: the APK contains only code, and game files are extracted from the
 # player's own ROM on first launch. See android/README.md.
 elif (build_target == 'nx')
-copy_files_script = files('tools/scripts/copy_pc_files.sh')
+copy_files_script = find_program('tools/scripts/copy_pc_files.sh') # (a shell script: find_program runs it through its #! on Windows)
 
 pokeplatinum_nds = custom_target('pokeplatinum.us',
     output: 'pokeplatinum.us',
@@ -721,7 +721,7 @@ pokeplatinum_nds = custom_target('pokeplatinum.us',
 )
 else
 # Copy files into 'pc' folder
-copy_files_script = files('tools/scripts/copy_pc_files.sh')
+copy_files_script = find_program('tools/scripts/copy_pc_files.sh') # (a shell script: find_program runs it through its #! on Windows)
 
 pokeplatinum_nds = custom_target('pokeplatinum.us',
     output: 'pokeplatinum.us',

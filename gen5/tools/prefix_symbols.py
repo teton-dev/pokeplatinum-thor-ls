@@ -31,5 +31,10 @@ with tempfile.TemporaryDirectory(dir=os.path.dirname(os.path.abspath(output))) a
         renamed = os.path.join(work, f"{index:04}_{path.name}")
         subprocess.run([objcopy, f"--redefine-syms={renames}", str(path), renamed], check=True)
         objects.append(renamed)
-    subprocess.run([*cc, "-r", "-nostdlib", "-o", output, *objects], check=True)
+    # The objects in a response file (gcc and clang read @file): their paths together are longer than a Windows
+    # command line may be
+    response = os.path.join(work, "objects.rsp")
+    with open(response, "w") as out:
+        out.write("\n".join('"' + o.replace("\\", "/") + '"' for o in objects))
+    subprocess.run([*cc, "-r", "-nostdlib", "-o", output, "@" + response], check=True)
 os.remove(renames)

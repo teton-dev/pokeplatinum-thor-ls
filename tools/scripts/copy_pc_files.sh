@@ -20,7 +20,7 @@ cp $BUILDDIR/main $OUTPUTDIR/main
 if [[ "$4" == "-nx" ]]; then
   /opt/devkitpro/tools/bin/elf2nro $OUTPUTDIR/main $OUTPUTDIR/pokeplatinum.nro
 else
-  if [[ "$(uname -s)" =~ ^MSYS_NT.* ]]; then
+  if [[ "$(uname -s)" =~ ^(MSYS|MINGW|UCRT|CLANG)[0-9]*_NT ]]; then # any MSYS2 environment
     cp -u /ucrt64/bin/SDL2.dll $OUTPUTDIR/SDL2.dll
     cp -u /ucrt64/bin/libwinpthread-1.dll $OUTPUTDIR/libwinpthread-1.dll
     cp -u /ucrt64/bin/libenet-7.dll $OUTPUTDIR/libenet-7.dll

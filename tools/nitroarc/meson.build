@@ -6,7 +6,8 @@ nitroarc_cflags = [
 
 build_target = get_option('build_target')
 
-if (build_target != 'win64')
+# (nor when these host tools are built on Windows for another target, the Android APK: long is 32 bits there)
+if (build_target != 'win64' and build_machine.system() != 'windows')
 	nitroarc_cflags += [
 	    '-Wall',
 	    '-Wextra',
@@ -33,8 +34,8 @@ nitroarc_dep = declare_dependency(
     ),
 )
 
-if (build_target == 'win64')
-shlwapi_lib = meson.get_compiler('c').find_library('shlwapi')
+if (build_target == 'win64' or build_machine.system() == 'windows') # (a host tool: also for the APK built on Windows)
+shlwapi_lib = meson.get_compiler('c', native: true).find_library('shlwapi')
 
 shlwapi_dep = declare_dependency(dependencies: [shlwapi_lib])
 

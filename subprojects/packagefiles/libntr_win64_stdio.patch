@@ -1,0 +1,14 @@
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -4289,6 +4289,11 @@
+ #endif
+ 
+ int main(int argc, char *argv[]) {
++#ifdef _WIN32
++  // Windows' C runtime allows 512 open FILE streams by default; a game that keeps its archives open (HeartGold and
++  // SoulSilver) runs past that where Linux and Android allow many more
++  _setmaxstdio(8192);
++#endif
+ #ifdef SDK_BUILD_NX
+   // Start up libnx sockets
+   socketInitializeDefault();

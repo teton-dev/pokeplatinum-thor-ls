@@ -1,0 +1,15 @@
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -1014,7 +1014,11 @@
+ void *SIM_RenderInit(void *arg) {
+ 
+   if (SIM_IsTestMode()) {
+-#ifndef SDK_BUILD_ANDROID
++#if defined(_WIN32)
++    if (getenv("SDL_AUDIODRIVER") == NULL) { // unless the environment names a driver (no setenv on Windows)
++      _putenv_s("SDL_AUDIODRIVER", "dummy");
++    }
++#elif !defined(SDK_BUILD_ANDROID)
+     setenv("SDL_AUDIODRIVER", "dummy", 0); // unless the environment names a driver
+ #endif
+     printf("libntr: test mode: DS frames at %ux speed at most (0: unlimited), a frame shown every %u ms, "

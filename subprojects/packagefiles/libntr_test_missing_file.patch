@@ -1,0 +1,29 @@
+--- a/libraries/fs/src/fs_file.c
++++ b/libraries/fs/src/fs_file.c
+@@ -13,6 +13,13 @@
+ #include <nitro/fs.h>
+ 
+ #include "../include/rom.h"
++#ifdef SDK_PORT
++#include <simulator/sim.h>
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#endif
+ #include "../include/util.h"
+ #include "../include/command.h"
+ 
+@@ -545,6 +552,12 @@
+ 	}
+ 	else
+ 	{
++        // Test runs (LIBNTR_TEST_MODE): name the file and stop, rather than wait on a dialog nobody will answer
++        if (SIM_IsTestMode()) {
++            fprintf(stderr, "[test] FAIL: the ROM's file %s is missing from the data folder (%s)\n", path, strerror(errno));
++            fflush(stderr);
++            exit(1);
++        }
+         #if FS_FILE_OPEN_DEBUG
+         char messageBuf[200] = {0};
+         snprintf(messageBuf, 199, "Failed to open file '%s'.", path);

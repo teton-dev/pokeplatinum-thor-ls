@@ -16,6 +16,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#define mkdir(path, mode) _mkdir(path) // no permissions on Windows
+#endif
 
 #include "gen5.h"
 #include "port/gen5_rom.h"
