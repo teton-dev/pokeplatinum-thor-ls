@@ -1,0 +1,430 @@
+--- a/include/simulator/g3_draw.h
++++ b/include/simulator/g3_draw.h
+@@ -52,6 +52,8 @@
+ // The water mask's vertices this frame (before G3SIM_DrawMask empties it)
+ const G3SIM_Vertex_t * G3SIM_MaskVerts(u32 * count);
+ void G3SIM_CasterBatchEnd(u32 textureId, u8 wrap);
++// Casters kept since the last batch ended (polygons wholly off the screen, which drew nothing)
++int G3SIM_CastersPending(void);
+ u32 G3SIM_TakeCasters(const float ** verts, const G3SIM_CasterBatch_t ** batches, u32 * batchCount);
+ void G3SIM_ResetCasters(void);
+ void G3SIM_DrawArray();
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -154,6 +154,9 @@
+ // the depth buffer is marched toward the sun at the DS's resolution and the pixels in shadow darkened.
+ void SIM_SetEnhancedShadowCamera(float m00, float m11, float m22, float m32, float sunX, float sunY, float sunZ,
+                                  float upX, float upY, float upZ);
++// The world's origin in view space (the camera matrix's translation, as floats), every frame the field is drawn: the sun's
++// shadow map is held on a grid fixed to the world with it, so its texels don't slide under the scene as the camera moves
++void SIM_SetEnhancedWorldOrigin(float x, float y, float z);
+ // Sun highlights (Settings > Display > Sun highlights), every frame: the sun's light, its color times how strong it is now
+ // (0: none, as at night or indoors). With SIM_SetEnhancedShadowCamera's view (the same call) the depth buffer's surfaces
+ // that are flat and not the ground glint and sheen in that color, and the sprites get a rim of it on the sun's side.
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -325,11 +325,13 @@
+ 
+ void G3SIM_FlushArray()
+ {
+-	if(s_G3DrawCurVertIdx == 0) {
+-		// No verts to draw (casters wholly off the screen are kept, untextured)
++	if(s_G3DrawCurVertIdx == 0 && !G3SIM_CastersPending()) {
+ 		G3SIM_CasterBatchEnd(0, 0);
+ 		return;
+ 	}
++	// (with no verts but casters wholly off the screen, the batch's texture is still set up, so their shadows keep the
++	// shape of their pictures: a tree's crown off the edge casts its round shadow onto the screen, not its box. Nothing is
++	// drawn: the draw of no vertices is skipped below)
+ 	u64 start = G3SIM_NowNs();
+ 	G3SIM_FlushArrayInner();
+ 	sG3SubmitNs += G3SIM_NowNs() - start;
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1689,6 +1689,11 @@
+     s_casterBatchStart = s_casterCount;
+ }
+ 
++extern "C" int G3SIM_CastersPending(void)
++{
++    return s_casterCount > s_casterBatchStart;
++}
++
+ // A new 3D frame (its first command after a swap, where the 3D buffer is cleared too): its casters start afresh, so with
+ // several game frames to a drawn one (fast-forward) the map holds only the frame on the screen
+ extern "C" void G3SIM_ResetCasters(void)
+--- a/libraries/sim/src/shaders/g3_highlight_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_highlight_fragment.glsl
+@@ -14,6 +14,7 @@
+ // is added (the sprites' rim, which has to show on outlines).
+ uniform sampler2D attrTexture;   // polygon ID * 4 + 1 for a sprite in r, the depth's high and low bytes in g and b, a set where opaque
+ uniform sampler2D shadowTexture; // the sun shadows' mask (r: in shadow), when it was made this frame
++uniform int shadowScale;         // its texels per DS pixel (1 or 2)
+ uniform int useShadow;
+ uniform ivec2 origin;
+ uniform int pixelStep;
+@@ -132,7 +133,7 @@
+                 light = sunColor * clamp(0.9 * glint + 0.3 * facing * facing + 0.25 * sheen, 0.0, 0.8);
+             }
+         }
+-        if (useShadow == 1 && texelFetch(shadowTexture, p, 0).r > 0.5) {
++        if (useShadow == 1 && texelFetch(shadowTexture, p * shadowScale + shadowScale / 2, 0).r > 0.5) {
+             light = vec3(0.0);
+             rim = 0.0;
+         }
+--- a/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_sunshadow_apply_fragment.glsl
+@@ -9,7 +9,7 @@
+ // small pixel made combs of streaks on rough things like a tree's crown, and costs the square of the scale).
+ uniform sampler2D maskTexture;
+ uniform ivec2 origin;
+-uniform int pixelStep;
++uniform float pixelStep; // framebuffer pixels per mask texel
+ uniform vec3 tone;  // the multiplier at the shadow's full strength
+ uniform int debugMask; // SIM_SUNSHADOW_DEBUG: 1 paints the mask, 2 the distances as grey bands,
+                        // 3 which test decided (blue close behind, green wide enough, red rejected only by the width)
+@@ -17,7 +17,7 @@
+ 
+ void main()
+ {
+-    vec4 mask = texelFetch(maskTexture, (ivec2(gl_FragCoord.xy) - origin) / pixelStep, 0);
++    vec4 mask = texelFetch(maskTexture, ivec2((gl_FragCoord.xy - vec2(origin)) / pixelStep), 0);
+     if (debugMask == 3) {
+         float w = mask.g;
+         color = w < 0.1 ? vec4(1.0) : w < 0.5 ? vec4(0.0, 0.0, 1.0, 1.0) : w < 0.8 ? vec4(0.0, 0.7, 0.0, 1.0) : vec4(1.0, 0.0, 0.0, 1.0);
+@@ -29,7 +29,7 @@
+     }
+     // The edge: the four texels around this pixel's place in the mask, blended (by hand: the mask stays unfiltered for
+     // the other passes); never over what the march left alone (b: a sprite, or nothing drawn)
+-    vec2 at = (gl_FragCoord.xy - vec2(origin)) / float(pixelStep) - 0.5;
++    vec2 at = (gl_FragCoord.xy - vec2(origin)) / pixelStep - 0.5;
+     ivec2 corner = ivec2(floor(at));
+     vec2 f = at - vec2(corner);
+     ivec2 last = textureSize(maskTexture, 0) - 1;
+@@ -38,13 +38,16 @@
+     float r01 = texelFetch(maskTexture, clamp(corner + ivec2(0, 1), ivec2(0), last), 0).r;
+     float r11 = texelFetch(maskTexture, clamp(corner + ivec2(1, 1), ivec2(0), last), 0).r;
+     float shade = mix(mix(r00, r10, f.x), mix(r01, r11, f.x), f.y);
+-    if (mask.b > 0.5 || shade < 0.5) {
++    // The map's mask is soft (filtered lookups): its edge eased in over a small band, so it moves smoothly with the scene
++    // as the camera glides instead of stepping a DS pixel at a time; the march's (yes or no) comes out as before
++    float strength = smoothstep(0.2, 0.8, shade);
++    if (mask.b > 0.5 || strength <= 0.0) {
+         if (debugMask == 1) {
+             color = vec4(1.0);
+             return;
+         }
+         discard;
+     }
+-    color = debugMask == 1 ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(tone, 1.0);
++    color = debugMask == 1 ? vec4(strength, 0.0, 0.0, 1.0) : vec4(mix(vec3(1.0), tone, strength), 1.0);
+ }
+ )""
+--- a/libraries/sim/src/shaders/g3_sunshadow_receive_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_sunshadow_receive_fragment.glsl
+@@ -5,13 +5,19 @@
+ // rebuilt from the depth the 3D shader left in the attribute texture, is looked up in the shadow map drawn from the sun
+ // (the land and buildings' opaque polygons, whole); it is in shadow when something lies nearer the sun along its ray. A
+ // real projection of the casters, so a post's shadow is as wide as the post. The sprites are in the depth buffer too but
+-// don't receive (they have shadows of their own, from their pictures). Writes what the march wrote (r shadow, g the
+-// distance's bands for SIM_SUNSHADOW_DEBUG=2, b set where nothing is shaded), for the clean-up and apply passes.
++// don't receive (they have shadows of their own, from their pictures).
++// Steady while the camera moves: the map's texels are fixed to the world (G3SunShadowMap snaps them), the point looked up
++// is pushed off its surface along the surface's normal by about a map texel (more where the sun grazes it), so a surface
++// doesn't shade itself in a pattern that crawls, and the result is filtered (four comparisons, each the hardware's 2x2):
++// a value between 0 and 1 that moves smoothly as the world slides under the DS pixel grid, rather than a yes or no that
++// flips a DS pixel at a time. Writes r the shadow (0 to 1), g the distance's bands for SIM_SUNSHADOW_DEBUG=2, b set where
++// nothing is shaded, for the apply pass.
+ uniform sampler2D attrTexture; // polygon ID * 4 + 1 for a sprite in r, the depth's high and low bytes in g and b, a set where opaque
+-uniform sampler2D shadowMap;   // depth along the sun's rays, 0 nearest the sun
++uniform highp sampler2DShadow shadowMap; // depth along the sun's rays, 0 nearest the sun, compared (LEQUAL: 1 lit)
++uniform sampler2D shadowMapRaw;  // the same, read plain (SIM_SUNSHADOW_DEBUG=4)
+ uniform ivec2 origin;          // the 3D viewport's corner in the framebuffer
+-uniform int pixelStep;         // framebuffer pixels per DS pixel
+-uniform ivec2 dsSize;
++uniform float pixelStep;       // framebuffer pixels per mask texel (a DS pixel, or half of one)
++uniform ivec2 dsSize;          // the mask's size
+ uniform vec4 projection;       // the game's projection: m00, m11, m22, m32
+ uniform float xScale;          // a wide scene libntr narrows
+ uniform vec3 lightRight;       // the sun's view: its axes in view space (toward the sun last)
+@@ -20,12 +26,16 @@
+ uniform vec4 lightBounds;      // across the map: x and y of its corner, and its width and height (view units)
+ uniform vec2 lightDepth;       // along the rays: the nearest (toward the sun) and the span
+ uniform float bias;            // how much nearer the sun a caster must be (view units)
++uniform float texelSize;       // one map texel (view units)
+ uniform int debugMode;
+ out vec4 color;
+ 
+ float Distance(ivec2 ds)
+ {
+-    ivec4 a = ivec4(texelFetch(attrTexture, origin + ds * pixelStep + ivec2(pixelStep / 2), 0) * 255.0 + 0.5);
++    if (any(lessThan(ds, ivec2(0))) || any(greaterThanEqual(ds, dsSize))) {
++        return 0.0;
++    }
++    ivec4 a = ivec4(texelFetch(attrTexture, origin + ivec2((vec2(ds) + 0.5) * pixelStep), 0) * 255.0 + 0.5);
+     if (a.a == 0 || (a.r & 1) == 1) {
+         return 0.0;
+     }
+@@ -33,6 +43,27 @@
+     return projection.w / (ndcz + projection.z);
+ }
+ 
++vec3 ViewPosition(ivec2 ds, float d)
++{
++    vec2 ndc = ((vec2(ds) + 0.5) / vec2(dsSize)) * 2.0 - 1.0;
++    return vec3(ndc.x / xScale * d / projection.x, ndc.y * d / projection.y, -d);
++}
++
++// The step to the neighbour on the side whose depth jumps least (an edge's far side is another surface); zero when
++// neither side has one
++vec3 Tangent(ivec2 ds, vec3 here, float distanceHere, ivec2 axis)
++{
++    float dPlus = Distance(ds + axis), dMinus = Distance(ds - axis);
++    bool plus = dPlus > 0.0 && (dMinus <= 0.0 || abs(dPlus - distanceHere) <= abs(dMinus - distanceHere));
++    if (plus) {
++        return ViewPosition(ds + axis, dPlus) - here;
++    }
++    if (dMinus > 0.0) {
++        return here - ViewPosition(ds - axis, dMinus);
++    }
++    return vec3(0.0);
++}
++
+ void main()
+ {
+     ivec2 ds = ivec2(gl_FragCoord.xy);
+@@ -40,16 +71,34 @@
+     float shadow = 0.0;
+     float probe = 0.0; // SIM_SUNSHADOW_DEBUG=4: the map's depth here; 5: the pixel's own (they match on lit ground)
+     if (distanceHere > 0.0) {
+-        vec2 ndc = ((vec2(ds) + 0.5) / vec2(dsSize)) * 2.0 - 1.0;
+-        vec3 here = vec3(ndc.x / xScale * distanceHere / projection.x, ndc.y * distanceHere / projection.y, -distanceHere);
+-        vec2 across = (vec2(dot(here, lightRight), dot(here, lightUp)) - lightBounds.xy) / lightBounds.zw;
+-        float along = (lightDepth.x - dot(here, toSun)) / lightDepth.y;
++        vec3 here = ViewPosition(ds, distanceHere);
++        // The surface's normal (toward the camera), from the neighbours; the sun's direction where it can't be told
++        vec3 normal = toSun;
++        vec3 c = cross(Tangent(ds, here, distanceHere, ivec2(1, 0)), Tangent(ds, here, distanceHere, ivec2(0, 1)));
++        if (dot(c, c) > 1e-8) {
++            normal = normalize(c);
++            if (dot(normal, -here) < 0.0) {
++                normal = -normal;
++            }
++        }
++        float facing = clamp(dot(normal, toSun), 0.0, 1.0);
++        float grazing = sqrt(1.0 - facing * facing);
++        // Off the surface by half a texel to two, the more the sun grazes it
++        vec3 at = here + normal * texelSize * (0.5 + 1.5 * grazing);
++        vec2 across = (vec2(dot(at, lightRight), dot(at, lightUp)) - lightBounds.xy) / lightBounds.zw;
++        float along = (lightDepth.x - dot(at, toSun)) / lightDepth.y;
+         if (all(greaterThanEqual(across, vec2(0.0))) && all(lessThan(across, vec2(1.0)))) {
+-            ivec2 size = textureSize(shadowMap, 0);
+-            float nearest = texelFetch(shadowMap, ivec2(across * vec2(size)), 0).r;
+-            probe = debugMode == 4 ? nearest : along;
+-            if (along - nearest > bias / lightDepth.y) {
+-                shadow = 1.0;
++            vec2 texel = 1.0 / vec2(textureSize(shadowMap, 0));
++            float reference = along - bias / lightDepth.y;
++            float lit = texture(shadowMap, vec3(across + vec2(-0.5, -0.5) * texel, reference))
++                      + texture(shadowMap, vec3(across + vec2(0.5, -0.5) * texel, reference))
++                      + texture(shadowMap, vec3(across + vec2(-0.5, 0.5) * texel, reference))
++                      + texture(shadowMap, vec3(across + vec2(0.5, 0.5) * texel, reference));
++            shadow = 1.0 - lit * 0.25;
++            if (debugMode >= 4) {
++                ivec2 size = textureSize(shadowMapRaw, 0);
++                float nearest = texelFetch(shadowMapRaw, ivec2(across * vec2(size)), 0).r;
++                probe = debugMode == 4 ? nearest : along;
+             }
+         }
+     }
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -478,10 +478,30 @@
+ // The map of this frame, for the atmosphere's light shafts (it reads the same map): made, and the sun's view it was drawn in
+ static bool sSunMapMade = false;
+ static float sSunMapRight[3], sSunMapUp[3], sSunMapBounds[4], sSunMapDepth[2];
++// The map held still in the world (SIM_SetEnhancedWorldOrigin): where the world's origin is in view space this frame,
++// so the map's corner can be snapped to whole texels of a grid fixed to the world, and its size, which changes only in
++// steps (a map refitted to the casters every frame slid and stretched its texels under the scene: edges that crawl as
++// the camera moves)
++static float sWorldOrigin[3] = {0.0f, 0.0f, 0.0f};
++static bool sWorldOriginSet = false;
++static float sSunMapSpan = 0.0f; // the map's width and height (view units), kept while the casters fit
++// The map read with comparisons (filtered: each lookup the hardware's 2x2), bound for the receive pass only, so the
++// atmosphere's plain reads of the same texture are untouched
++static GLuint g3SunMapCompareSampler = 0;
++
++extern "C" void SIM_SetEnhancedWorldOrigin(float x, float y, float z) {
++  sWorldOrigin[0] = x;
++  sWorldOrigin[1] = y;
++  sWorldOrigin[2] = z;
++  sWorldOriginSet = true;
++}
+ // The shadow mask the later passes read: the cleaned one, or the map's own (it needs no cleaning)
+ static GLuint sSunMaskTex = 0;
+ static GLuint g3SunShadowTex, g3SunShadowFbo, g3SunShadowCleanTex, g3SunShadowCleanFbo;
+ static int sSunShadowW, sSunShadowH;
++// The map's mask is looked up at twice the DS's resolution when the internal one allows (a shadow a DS pixel wide, a
++// post's or a cable's, otherwise flickers as the scene slides under the DS grid); the march's stays at the DS's
++static int sSunMaskScale = 1;
+ static float sSunCamera[10];
+ static float sSunLight[3] = {0.0f, 0.0f, 0.0f};
+ static bool sSunFrameDrawn = false, sSunFrameCamera = false, sSunShadowMade = false;
+@@ -2177,10 +2197,35 @@
+     lo[i] -= 1.0f;
+     hi[i] += 1.0f;
+   }
+-  bounds[0] = lo[0];
+-  bounds[1] = lo[1];
+-  bounds[2] = hi[0] - lo[0];
+-  bounds[3] = hi[1] - lo[1];
++  // Square, in steps of 64 units (four tiles): grown at once when the casters need more, shrunk only when they need
++  // under three quarters of it, so a texel stays the same size from frame to frame
++  const float needed = fmaxf(hi[0] - lo[0], hi[1] - lo[1]) + 4.0f; // (room for the snap: up to a texel each way)
++  if (sSunMapSpan < needed || needed < sSunMapSpan * 0.75f) {
++    sSunMapSpan = ceilf(needed / 64.0f) * 64.0f;
++  }
++  const float span = sSunMapSpan;
++  const float texel = span / (float)kSunMapSize;
++  // The corner on whole texels of a grid fixed to the world: the world's origin, seen from the sun, is where the grid
++  // starts (the camera only moves, so the sun's axes stay put while the view slides). Without the origin, on the casters
++  float originRight = 0.0f, originUp = 0.0f;
++  if (sWorldOriginSet) {
++    originRight = sWorldOrigin[0] * right[0] + sWorldOrigin[1] * right[1] + sWorldOrigin[2] * right[2];
++    originUp = sWorldOrigin[0] * up[0] + sWorldOrigin[1] * up[1] + sWorldOrigin[2] * up[2];
++  }
++  const float cornerX = 0.5f * (lo[0] + hi[0]) - 0.5f * span, cornerY = 0.5f * (lo[1] + hi[1]) - 0.5f * span;
++  bounds[0] = floorf((cornerX - originRight) / texel) * texel + originRight;
++  bounds[1] = floorf((cornerY - originUp) / texel) * texel + originUp;
++  bounds[2] = span;
++  bounds[3] = span;
++  // SIM_SUNSHADOW_LOG=1: the sun's axes, the map's size and where its texel grid stands against the world, each frame (a
++  // map held still keeps the axes and span the same and the grid's phase at 0 while the camera moves)
++  static const bool sLog = getenv("SIM_SUNSHADOW_LOG") != nullptr && getenv("SIM_SUNSHADOW_LOG")[0] == '1';
++  if (sLog) {
++    printf("[sunshadow] right %.9f %.9f %.9f up %.9f %.9f %.9f toSun %.9f %.9f %.9f span %.1f origin %.4f %.4f "
++           "phase %.5f %.5f\n",
++           right[0], right[1], right[2], up[0], up[1], up[2], L[0], L[1], L[2], span, originRight, originUp,
++           fmodf((bounds[0] - originRight) / texel, 1.0f), fmodf((bounds[1] - originUp) / texel, 1.0f));
++  }
+   depth[0] = hi[2];           // nearest the sun
+   depth[1] = hi[2] - lo[2];
+   for (u32 v = 0; v < count; v++) {
+@@ -2269,19 +2314,25 @@
+     glGenFramebuffers(1, &g3SunShadowFbo);
+     glGenFramebuffers(1, &g3SunShadowCleanFbo);
+   }
+-  if (sSunShadowW != dsWidth || sSunShadowH != dsHeight) {
+-    sSunShadowW = dsWidth;
+-    sSunShadowH = dsHeight;
++  static const bool sMarchMask = getenv("SIM_SUNSHADOW_METHOD") != nullptr && strcmp(getenv("SIM_SUNSHADOW_METHOD"), "march") == 0;
++  // SIM_SUNSHADOW_MASK_SCALE=1 keeps the map's mask at the DS's resolution (to time the difference on a device)
++  static const int sMaskScaleWanted = getenv("SIM_SUNSHADOW_MASK_SCALE") != nullptr ? atoi(getenv("SIM_SUNSHADOW_MASK_SCALE")) : 2;
++  const int maskScale = (!sMarchMask && sScale >= 2 && sMaskScaleWanted >= 2) ? 2 : 1;
++  sSunMaskScale = maskScale;
++  const int maskWidth = dsWidth * maskScale, maskHeight = dsHeight * maskScale;
++  if (sSunShadowW != maskWidth || sSunShadowH != maskHeight) {
++    sSunShadowW = maskWidth;
++    sSunShadowH = maskHeight;
+     if (g3SunShadowTex != 0) {
+       glDeleteTextures(1, &g3SunShadowTex);
+     }
+-    g3SunShadowTex = WaterTexture(GL_RGBA8, dsWidth, dsHeight, GL_RGBA);
++    g3SunShadowTex = WaterTexture(GL_RGBA8, maskWidth, maskHeight, GL_RGBA);
+     glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowFbo);
+     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3SunShadowTex, 0);
+     if (g3SunShadowCleanTex != 0) {
+       glDeleteTextures(1, &g3SunShadowCleanTex);
+     }
+-    g3SunShadowCleanTex = WaterTexture(GL_RGBA8, dsWidth, dsHeight, GL_RGBA);
++    g3SunShadowCleanTex = WaterTexture(GL_RGBA8, maskWidth, maskHeight, GL_RGBA);
+     glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowCleanFbo);
+     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3SunShadowCleanTex, 0);
+   }
+@@ -2339,7 +2390,7 @@
+     return;
+   }
+   glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowFbo);
+-  glViewport(0, 0, dsWidth, dsHeight);
++  glViewport(0, 0, maskWidth, maskHeight);
+   glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
+   glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
+   const GLuint march = g3SunShadowMarchProgramID;
+@@ -2357,14 +2408,29 @@
+   glProgramUniform1i(march, WaterUniform(march, "steps"), 40);
+   if (mapped) {
+     const GLuint receive = g3SunReceiveProgramID;
++    if (g3SunMapCompareSampler == 0) {
++      glGenSamplers(1, &g3SunMapCompareSampler);
++      glSamplerParameteri(g3SunMapCompareSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++      glSamplerParameteri(g3SunMapCompareSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++      glSamplerParameteri(g3SunMapCompareSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++      glSamplerParameteri(g3SunMapCompareSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++      glSamplerParameteri(g3SunMapCompareSampler, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
++      glSamplerParameteri(g3SunMapCompareSampler, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
++    }
++    // The map twice: compared and filtered (12), and plain for the debug views (13)
+     glActiveTexture(GL_TEXTURE0 + 12);
+     glBindTexture(GL_TEXTURE_2D, g3SunMapTex);
++    glBindSampler(12, g3SunMapCompareSampler);
++    glActiveTexture(GL_TEXTURE0 + 13);
++    glBindTexture(GL_TEXTURE_2D, g3SunMapTex);
+     glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
+     glProgramUniform1i(receive, WaterUniform(receive, "attrTexture"), kEdgeAttrTexUnit);
+     glProgramUniform1i(receive, WaterUniform(receive, "shadowMap"), 12);
++    glProgramUniform1i(receive, WaterUniform(receive, "shadowMapRaw"), 13);
++    glProgramUniform1f(receive, WaterUniform(receive, "texelSize"), lightBounds[2] / (float)kSunMapSize);
+     glProgramUniform2i(receive, WaterUniform(receive, "origin"), sG3Viewport[0], sG3Viewport[1]);
+-    glProgramUniform1i(receive, WaterUniform(receive, "pixelStep"), sScale);
+-    glProgramUniform2i(receive, WaterUniform(receive, "dsSize"), dsWidth, dsHeight);
++    glProgramUniform1f(receive, WaterUniform(receive, "pixelStep"), (float)sScale / (float)maskScale);
++    glProgramUniform2i(receive, WaterUniform(receive, "dsSize"), maskWidth, maskHeight);
+     glProgramUniform4f(receive, WaterUniform(receive, "projection"), sSunCamera[0], sSunCamera[1], sSunCamera[2],
+                        sSunCamera[3]);
+     glProgramUniform1f(receive, WaterUniform(receive, "xScale"), xScale);
+@@ -2375,8 +2441,9 @@
+                        lightBounds[3]);
+     glProgramUniform2f(receive, WaterUniform(receive, "lightDepth"), lightDepth[0], lightDepth[1]);
+     // A surface's own depth in the map is off by up to a map texel times its slope to the sun, and the depth buffer's
+-    // (16 bits here) a little: a unit (a sixteenth of a tile) clears both without lifting the shadows off their casters
+-    glProgramUniform1f(receive, WaterUniform(receive, "bias"), 1.0f);
++    // (16 bits here) a little: the receive pass pushes the point off its surface by a texel or two (the more, the more the
++    // sun grazes it), and half a unit more along the rays clears the rest without lifting shadows off their casters
++    glProgramUniform1f(receive, WaterUniform(receive, "bias"), 0.5f);
+     glProgramUniform1i(receive, WaterUniform(receive, "debugMode"), sDebug);
+   }
+   glProgramUniform1i(march, WaterUniform(march, "debugMode"), sDebug);
+@@ -2384,6 +2451,7 @@
+   glUseProgram(mapped ? g3SunReceiveProgramID : march);
+   glBindVertexArray(g3EdgeVertexArray);
+   glDrawArrays(GL_TRIANGLES, 0, 3);
++  glBindSampler(12, 0); // the map's plain reads again (the atmosphere's shafts)
+ 
+   // 1b. Holes closed, specks dropped (the mask into its twin): the march's; the map's mask has none, and the clean-up erased
+   // one-pixel shadows (a bridge's cables), so it is used as it is (SIM_SUNSHADOW_CLEAN=1 cleans it too)
+@@ -2395,7 +2463,7 @@
+     glBindTexture(GL_TEXTURE_2D, g3SunShadowTex);
+     const GLuint clean = g3SunShadowCleanProgramID;
+     glProgramUniform1i(clean, WaterUniform(clean, "maskTexture"), 12);
+-    glProgramUniform2i(clean, WaterUniform(clean, "dsSize"), dsWidth, dsHeight);
++    glProgramUniform2i(clean, WaterUniform(clean, "dsSize"), maskWidth, maskHeight);
+     glUseProgram(clean);
+     glDrawArrays(GL_TRIANGLES, 0, 3);
+     sSunMaskTex = g3SunShadowCleanTex;
+@@ -2411,7 +2479,7 @@
+   const GLuint apply = g3SunShadowApplyProgramID;
+   glProgramUniform1i(apply, WaterUniform(apply, "maskTexture"), 12);
+   glProgramUniform2i(apply, WaterUniform(apply, "origin"), sG3Viewport[0], sG3Viewport[1]);
+-  glProgramUniform1i(apply, WaterUniform(apply, "pixelStep"), sScale);
++  glProgramUniform1f(apply, WaterUniform(apply, "pixelStep"), (float)sScale / (float)maskScale);
+   // The same tone as the sprites' shadows: their dark colour at the sun's strength over what is there
+   const float a = s_G3ShadowAlpha;
+   glProgramUniform3f(apply, WaterUniform(apply, "tone"), 1.0f - a * (1.0f - 0.04f), 1.0f - a * (1.0f - 0.06f),
+@@ -2491,6 +2559,7 @@
+   glProgramUniform1i(light, WaterUniform(light, "attrTexture"), kEdgeAttrTexUnit);
+   glProgramUniform1i(light, WaterUniform(light, "shadowTexture"), 12);
+   glProgramUniform1i(light, WaterUniform(light, "useShadow"), sSunShadowMade ? 1 : 0);
++  glProgramUniform1i(light, WaterUniform(light, "shadowScale"), sSunMaskScale);
+   glProgramUniform2i(light, WaterUniform(light, "origin"), sG3Viewport[0], sG3Viewport[1]);
+   glProgramUniform1i(light, WaterUniform(light, "pixelStep"), sScale);
+   glProgramUniform2i(light, WaterUniform(light, "dsSize"), dsWidth, dsHeight);

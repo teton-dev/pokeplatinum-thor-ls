@@ -3,7 +3,11 @@
 
 #include <nitro.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
+#ifdef __ANDROID__
+#include <sys/system_properties.h>
+#endif
 #include <simulator/config/sim_config.h>
 #include <simulator/sim.h>
 
@@ -15,6 +19,8 @@
 #include "terrain_collision_manager.h"
 #include "location.h"
 #include "map_header.h"
+#include "map_matrix.h"
+#include "overlay005/land_data.h"
 #include "rtc.h"
 
 typedef struct {
@@ -89,12 +95,26 @@ static float sSunWorld[3] = { 0.0f, 1.0f, 0.0f };
 // The sprites' shadows' lean (SIM_SetEnhancedSun): sideways in NDC x per NDC y of height, and up the screen per height
 static float sSpriteShear[2] = { 0.0f, 0.24f };
 
+// This frame's camera and projection as floats (row vectors), for EnhancedGraphics_NearView
+static float sViewCamera[4][3], sViewProjection[4][4];
+static BOOL sViewSet = FALSE;
+
 void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera)
 {
+    sViewSet = FALSE;
     if (projection == NULL || camera == NULL) {
         return;
     }
     const float k = 1.0f / 4096.0f;
+    for (int r = 0; r < 4; r++) {
+        for (int c = 0; c < 3; c++) {
+            sViewCamera[r][c] = camera->m[r][c] * k;
+        }
+        for (int c = 0; c < 4; c++) {
+            sViewProjection[r][c] = projection->m[r][c] * k;
+        }
+    }
+    sViewSet = TRUE;
     // The camera for the water's mirror image, by day and by night
     {
         const float ux = camera->_10 * k, uy = camera->_11 * k, uz = camera->_12 * k;
@@ -104,6 +124,8 @@ void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera
                 ux / upLength, uy / upLength, uz / upLength);
         }
     }
+    // The world's origin in view space (row vectors: the translation row), which holds the shadow map's texels still
+    SIM_SetEnhancedWorldOrigin(camera->_30 * k, camera->_31 * k, camera->_32 * k);
     if (!sSunLit) {
         return;
     }
@@ -136,6 +158,36 @@ void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera
     }
     SIM_SetEnhancedShadowCamera(projection->_00 * k, projection->_11 * k, projection->_22 * k, projection->_32 * k,
         vx / length, vy / length, vz / length, ux / upLength, uy / upLength, uz / upLength);
+}
+
+BOOL EnhancedGraphics_WantsOffScreenCasters(void)
+{
+    // The sun's shadows of things off the screen reach onto it (the water's planar mirror, SIM_WATER_METHOD=planar, would
+    // show them too, but the default flip doesn't use them: not worth their cost for it)
+    return sSunShadows;
+}
+
+BOOL EnhancedGraphics_NearView(const VecFx32 *position)
+{
+    if (!sViewSet) {
+        return FALSE;
+    }
+    const float p[3] = { position->x / 4096.0f, position->y / 4096.0f, position->z / 4096.0f };
+    float view[3];
+    for (int c = 0; c < 3; c++) {
+        view[c] = p[0] * sViewCamera[0][c] + p[1] * sViewCamera[1][c] + p[2] * sViewCamera[2][c] + sViewCamera[3][c];
+    }
+    float clip[4];
+    for (int c = 0; c < 4; c++) {
+        clip[c] = view[0] * sViewProjection[0][c] + view[1] * sViewProjection[1][c] + view[2] * sViewProjection[2][c]
+            + sViewProjection[3][c];
+    }
+    if (clip[3] <= 0.0f) {
+        return FALSE;
+    }
+    // A prop's origin is at its foot: one up to about half the screen's width or height beyond an edge can still throw
+    // a shadow (or a reflection) onto it
+    return fabsf(clip[0]) <= clip[3] * 2.0f && fabsf(clip[1]) <= clip[3] * 2.0f;
 }
 
 void EnhancedGraphics_LandDrawing(BOOL drawing)
@@ -221,13 +273,27 @@ static BOOL IsWaterTile(u8 behavior)
     return behavior != 0xFF && (TileBehavior_HasReflectiveSurface(behavior) || TileBehavior_IsSurfable(behavior));
 }
 
+// A tile of the loaded map matrix: the game's own lookup of one outside it sets a link error
+// (LandDataManager_GetRelativeLoadedMapsQuadrantOfTile), which, while the field's link session runs, ended in the error
+// reset: a white screen on loading into a small map with water on (and every headless test with water)
+static BOOL InLoadedMap(const FieldSystem *fieldSystem, int x, int z)
+{
+    if (fieldSystem->landDataMan == NULL || fieldSystem->mapMatrix == NULL) {
+        return FALSE;
+    }
+    const int fx = x - LandDataManager_GetOffsetTileX(fieldSystem->landDataMan);
+    const int fz = z - LandDataManager_GetOffsetTileZ(fieldSystem->landDataMan);
+    return fx >= 0 && fz >= 0 && fx < MapMatrix_GetWidth(fieldSystem->mapMatrix) * MAP_TILES_COUNT_X
+        && fz < MapMatrix_GetHeight(fieldSystem->mapMatrix) * MAP_TILES_COUNT_Z;
+}
+
 static void FindWater(FieldSystem *fieldSystem, int px, int pz, fx32 playerHeight)
 {
     sWaterRunCount = 0;
     for (int z = pz - WATER_RANGE_Z; z <= pz + WATER_RANGE_Z; z++) {
         int start = -1;
         for (int x = px - WATER_RANGE_X; x <= px + WATER_RANGE_X + 1; x++) {
-            const BOOL water = x <= px + WATER_RANGE_X && x >= 0 && z >= 0 && IsWaterTile(TerrainCollisionManager_GetTileBehavior(fieldSystem, x, z));
+            const BOOL water = x <= px + WATER_RANGE_X && InLoadedMap(fieldSystem, x, z) && IsWaterTile(TerrainCollisionManager_GetTileBehavior(fieldSystem, x, z));
             if (water && start < 0) {
                 start = x;
             } else if (!water && start >= 0) {
@@ -319,6 +385,43 @@ void EnhancedGraphics_Update(FieldSystem *fieldSystem)
     if (testHour != NULL && testHour[0] != '\0') {
         minutes = (int)(atof(testHour) * 60.0);
     }
+#ifdef __ANDROID__
+    // On a device: `adb shell setprop debug.eterna.hour H` (to time the daytime passes at night; empty to clear),
+    // looked up about once a second
+    static char sPropHour[PROP_VALUE_MAX];
+    static int sPropAge = 0;
+    if (sPropAge-- <= 0) {
+        sPropAge = 60;
+        if (__system_property_get("debug.eterna.hour", sPropHour) <= 0) {
+            sPropHour[0] = '\0';
+        }
+    }
+    if (sPropHour[0] != '\0') {
+        minutes = (int)(atof(sPropHour) * 60.0);
+    }
+    // `adb shell setprop debug.eterna.poslog 1`: the map and tile at each step, to app-log.txt (to find a spot seen on a
+    // device in a desktop test)
+    {
+        static char sPosLog[PROP_VALUE_MAX];
+        static int sPosLogAge = 0, sLastX = -1, sLastZ = -1;
+        if (sPosLogAge-- <= 0) {
+            sPosLogAge = 60;
+            if (__system_property_get("debug.eterna.poslog", sPosLog) <= 0) {
+                sPosLog[0] = '\0';
+            }
+        }
+        if (sPosLog[0] == '1' && fieldSystem->playerAvatar != NULL) {
+            const int x = PlayerAvatar_GetXPos(fieldSystem->playerAvatar);
+            const int z = PlayerAvatar_GetZPos(fieldSystem->playerAvatar);
+            if (x != sLastX || z != sLastZ) {
+                sLastX = x;
+                sLastZ = z;
+                printf("position: map %d x %d z %d\n", fieldSystem->location->mapHeaderID, x, z);
+                fflush(stdout);
+            }
+        }
+    }
+#endif
     SetSun(minutes / 60.0f);
     for (int i = 0; i < (int)(sizeof(sKeys) / sizeof(sKeys[0])) - 1; i++) {
         const int from = sKeys[i].hour * 60;

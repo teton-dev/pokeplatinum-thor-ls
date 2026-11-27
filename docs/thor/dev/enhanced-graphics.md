@@ -319,6 +319,82 @@ Order: infrastructure + time-of-day, then sprite shadows, then water, then leave
   `SIM_WATER_METHOD=planar` draws the planar mirror, now about the bank (the tiles' height) and of things standing only
   (no ground, nothing at or below the bank): a true mirror of a sunken pond showed its far bank as a second plane of
   grass hiding the fences and trees. Not yet re-checked on the Duo or the Thor.
+- **Steady shadows and off-screen casters (2026-11-25, Windows session), `libntr_enhanced_shadow_stable.patch`.** The
+  owner's report: the 3D shadows warbled while walking and surfaces shaded themselves in shaky patterns; shadows of
+  things just off the screen were missing. Causes found: (1) the shadow map was refitted to the casters every frame in
+  view space, so its texels slid and stretched under the scene as the camera moved; (2) the receive pass gave a yes or
+  no per DS pixel on a grid fixed to the screen, then thresholded, so edges stepped a DS pixel at a time as the world
+  slid under it; (3) a single unfiltered lookup with a constant bias left acne (dashed lines along the canal's walls,
+  combs on the house shadow's edge) that changed with every texel shift; (4) the map's props (houses, per-chunk models)
+  are box-test culled by the game (`map_prop.c`), so off-screen ones never reached libntr's caster capture.
+  Fixes: the map is **held still in the world**: the game passes the world's origin in view space every field frame
+  (`SIM_SetEnhancedWorldOrigin`, from `EnhancedGraphics_SetCamera`), the map's corner is snapped to whole texels of a grid
+  anchored there, and its size changes only in 64-unit steps (grown at once, shrunk below 3/4); the receive pass pushes
+  the looked-up point off its surface along the normal rebuilt from the depth (half a texel to two, more where the sun
+  grazes), bias 0.5, and **filters** it (four hardware comparisons, `sampler2DShadow` through a sampler object bound for
+  that pass only, so the atmosphere's plain reads are untouched); the mask is soft (0 to 1) and the apply pass eases it in
+  over a small band (`smoothstep(0.2, 0.8)`, partial multiply), so edges move smoothly with the scene; and the mask is
+  looked up at **twice the DS's resolution** when the internal resolution is 2x or more (a shadow a DS pixel wide, a cable
+  or post, otherwise flickered; `SIM_SUNSHADOW_MASK_SCALE=1` keeps the DS's, for timing; the highlights pass reads it with
+  `shadowScale`). Off-screen props: with sun shadows on, the props the box test rejects are drawn anyway when their
+  position is within about half a screen of the view (`EnhancedGraphics_NearView`); libntr keeps them as casters before
+  clipping and the clip drops the rest, so nothing extra is shown. Batches with casters but no visible vertices now set up
+  their texture too (`G3SIM_CastersPending`), so a tree crown off the edge casts its round shadow, not its box.
+  **Checked on the Windows desktop build (RTX 5070 Ti, 4x):** `SIM_SUNSHADOW_LOG=1` over the east and north-south walks
+  (`enhanced_walk_shadows.txt`, `_ns.txt`): the sun's axes and the map's span bit-identical every frame while the world
+  origin moved ~150 units (the grid's phase is 0 by construction, so the log's evidence is the constant axes and span);
+  the masks (`SIM_SUNSHADOW_DEBUG=1`) compared with the old code on the same walk: the old house-shadow edge is a comb
+  whose specks change every frame and the canal walls carry dashed acne; the new edges are smooth and the walls clean in
+  every still. Whether the warble is gone in motion is for the owner to judge on the device (stills can't show it).
+  Device-like settings run headless with all effects but water: 16:9 (`wide4`), 1x, 3x, camera tilt; no breakage seen
+  (the 1x/3x/tilt runs end indoors, so they check the passes' scaling, not shadows outdoors). Canalave posts, Route 201 at 9:00 and 16:00
+  (crowns round, the sign casts), Jubilife (no caster overflow with the near-view props; shadows from the west edge come in
+  from off-screen). Specks remain inside tree crowns (foliage shading itself; invisible in colour). All 19 enhanced
+  shaders pass `glslangValidator` as GLSL ES 3.20. **Not checked:** the Duo/Thor (cost: the receive pass now reads about
+  13 texels per mask texel on 4x the texels: time it with the per-pass overlay, A/B with `SIM_SUNSHADOW_MASK_SCALE=1`).
+  **Known:** the map covers every loaded caster (span 1152 units in Canalave: a texel is 1.1 units); fitting it to the
+  view's neighbourhood would sharpen it. The planar water mirror (`SIM_WATER_METHOD=planar`) no longer gets the off-screen
+  props (only sun shadows ask for them). The owner also mentioned an optional lightweight AA (SMAA 1x-like): not done; it
+  needs the owner's call against the "AA stays off, never filter pixel art" rule (an AA restricted to 3D polygon edges via
+  the attribute texture's IDs and depth would respect it). **The flicker at map borders (fixed the same day):** the owner
+  saw the whole picture flicker walking between Jubilife City and Route 204 on the Duo. `enhanced_walk_204.txt` with
+  `SIM_SUNSHADOW_LOG=1`: on the frame the border is crossed one caster thousands of units away stretched the map's fit for
+  that frame (span 1536 -> 11072, then 1216), so every shadow smeared at once. The fit now takes only casters within 1600
+  units of the camera (the loaded map around the player is ~1500 across); the span then stays 1536 across the crossing.
+  The old per-frame fit had the same jump.
+  **The Duo's frame rate (2026-11-25, 9100084-86, every effect on, Route 204 by the ponds, daytime):** at "match the
+  screen" (6x on its 1920x1080) 54 fps, GPU-bound (swap 8.6 ms): GPU 3D 1.3, top screen 4.3, bottom 2.6, shadows 1.4,
+  highlights 2.2, water 0.9, air 0.9, grade 0.5, glow 0.5 ms. The 2D compositor fetched all ten layers at every screen
+  pixel: it now skips empty or disabled ones (`layerMask`; `SIM_G2_ALL_LAYERS=1` for the old way; output identical where
+  runs caught the same frame), top 4.3 -> 3.9 ms, 56 fps. At 5x: 60/60 with 7 ms idle (shadows 1.3, highlights 1.5,
+  water 0.6, air 0.6 ms). Timing on a device: `adb shell setprop debug.eterna.hour 13` fixes the hour the light follows
+  (empty to clear), so the sun's passes run at night. Then 2D-only screens composited at the DS's 256x192 and blown up
+  (`SIM_G2_FULL_RES=1` for the old way; menus identical): bottom screen 2.6 -> 0.1 ms; and the sun shadows' multiply done
+  in the highlights' pass (`SIM_SEPARATE_APPLY=1` apart; at most 2 levels of rounding apart): at 6x 60/60 with 7.4 ms
+  idle (9100087). **The white screen / water soft reset (fixed):** `FindWater` (`src/port/enhanced_graphics.c`) asked the
+  game for tiles outside the loaded map matrix (x 32 of the 32-wide house); the game's lookup answers that with
+  `CommManager_SetCommError`, and with the field's link session (`COMM_TYPE_PARTY`) running that became the error reset:
+  a white screen on loading into a small map with water on, and every headless test with water. Found with gdb (MSYS2's
+  `mingw-w64-ucrt-x86_64-gdb`, the window kept off-screen by `WindowX=-6000` in the run's `sim_config.ini`). The search now
+  stays inside the matrix.
+  **Reflections going out while walking (the band above the screen, same day, owner's choice over a planar fallback):**
+  bursts of captures on the Duo showed the right pond on Route 204 mirroring the trees above it, and its reflection
+  going out whenever walking slid those trees off the top of the screen (the screen mirror only has what is on the
+  screen). With enhanced water on (and no MSAA), the 3D is now drawn 40 DS pixels taller than the screen: the 3D
+  framebuffer has a band of rows above the screen's half, the 3D viewport covers screen and band (`g3_vertex.glsl`'s
+  `bandScale` puts the screen's rows exactly where they were), libntr's clipper moves its top plane up to match
+  (`SIM_SetClipTop`; the box test with it, so props just past the top edge are drawn too), the compositor samples only
+  the screens' rows (`tex3dScaleT`), and every pass but the water's keeps to the screen. The water's mask, shore search
+  (`searchHeight`) and copy of the frame reach into the band; the reflection fades out over the band's last 8 rows.
+  Edge marking runs over the band too: the screen's top row had been outlined against the clear plane, which the mirror
+  showed as a line across the reflection. `SIM_WATER_BAND=0` turns it off. Checked on the desktop
+  (`enhanced_ponds_top.txt`: the pond's reflection stays at z 733-735, where it went out without the band; gone at 736,
+  where the trees are past the band too), Jubilife with every effect pixel-identical band on and off, a widescreen Gen 5
+  battle with water on. Cost: 21% more 3D pixels (40 of 192 rows), not yet timed on the Duo. The 3D shadows' edges are now soft while sprite (billboard)
+  shadows stay hard: the owner's call whether that mix is fine. **Found, not from this change:** with `EnhancedWater=true`,
+  `enhanced_atmosphere.txt` soft-resets at the title screen (`OS_ResetSystem`), with the old shadow code too; not
+  investigated yet. `SIM_SUNSHADOW_MASK_SCALE` is an environment variable, so a release APK can't A/B it without a
+  `sim_config.ini` key.
 - **Camera tilt (not a shader; `src/port/camera_tilt.c`)**: *Display > Camera tilt* (0, 6 or 12 degrees lower), applied
   around the field map's draw in `fieldmap.c` (the camera's angle is raised before the view matrix is made, put back after
   the draw), only for perspective cameras looking down at 30 to 75 degrees with no yaw, so scenes that set their own angle are
@@ -338,3 +414,15 @@ Order: infrastructure + time-of-day, then sprite shadows, then water, then leave
   filtering is right there; the frame underneath isn't touched) and added. Game side: `SIM_SetEnhancedAtmosphere`,
   `SIM_SetEnhancedBloom`; the sun's light is now also set when only Atmosphere is on. `SIM_ATMOSPHERE_DEBUG=1` shows the
   shaft values alone. Test: `tests/scripts/enhanced_atmosphere.txt`.
+- 2026-11-26, **shadows gone on some Jubilife tiles (Duo, widescreen)**: libntr kept at most 6144 caster triangles a frame
+  (fixed array in `g3_handler.cpp`); Jubilife at (174, 784) to (174, 782) in widescreen needs ~6400-6800, and the rest were
+  left out (`[sunshadow] more casters than 18432 vertices`). On the Duo every map shadow went out two tiles north; the
+  desktop overflowed too but kept them (not explained). The buffer now grows (a `std::vector`, doubled as needed) up to
+  65536 triangles; the owner confirmed on the Duo (9100097) that the building and lamp shadows stay along the street.
+  Test: `tests/scripts/enhanced_jubilife_casters.txt` (widescreen, `SIM_SUNSHADOW_LOG=2` logs the caster count when it
+  changes; no "more casters" lines expected).
+- Device diagnostics (Android, `adb shell setprop`; the Duo's logcat keeps only error lines, so libntr also writes its
+  stdout to the data directory's `app-log.txt`, the launch before in `app-log-prev.txt`): `debug.eterna.poslog 1` logs
+  the map and tile at each step, `debug.eterna.sunlog 1` the shadow casters/fit, `debug.eterna.sundebug N` and
+  `debug.eterna.separate 1` the desktop's `SIM_SUNSHADOW_DEBUG` / `SIM_SEPARATE_APPLY`, `debug.eterna.perflog 1` the
+  frame timings (at launch), `debug.eterna.hour H` the light's hour.

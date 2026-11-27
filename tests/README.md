@@ -2,7 +2,8 @@
 
 The desktop build plays a script of keys and touches and checks that the game gets where it should: through the
 new game's introduction, around Twinleaf Town, to a battle. They run in Docker
-(`tools/docker/desktop.sh`, [docs/thor/dev/desktop-docker.md](../docs/thor/dev/desktop-docker.md)), as fast as the game
+(`tools/docker/desktop.sh`, [docs/thor/dev/desktop-docker.md](../docs/thor/dev/desktop-docker.md)) or natively on Windows
+(`tools/windows/test.ps1`, [docs/thor/dev/desktop-windows.md](../docs/thor/dev/desktop-windows.md)), as fast as the game
 goes (libntr's test mode), in a data folder of their own, and need the Platinum ROM extracted once
 (`desktop.sh start`).
 
@@ -49,6 +50,7 @@ tools/docker/desktop.sh test tests/scripts/first_battle.txt --from before-starte
 | `enhanced_water.txt` | `turtwig` | Enhanced graphics' water reflections in Canalave City's canal under the bridge, with `TEST_CONFIG='EnhancedWater=true'`; add `EnhancedShadows=true`, `POKEPLATINUM_ENHANCED_HOUR=H` for the sun's shadows (the check is the shot; `SIM_WATER_DEBUG=1` shows the mask) | ~20 s |
 | `enhanced_posts.txt` | `turtwig` | the posts by Canalave's canal with `EnhancedShadows=true` at `POKEPLATINUM_ENHANCED_HOUR=16`: their shadows are thin streaks (the check is the shot; camera tilt: run `enhanced_grade.txt` with `TEST_CONFIG_PRJ='CameraTilt=1'`) | ~20 s |
 | `enhanced_atmosphere.txt` | `turtwig` | Canalave City with every enhanced-graphics setting on (`EnhancedAtmosphere=true EnhancedBloom=true` ...) at `POKEPLATINUM_ENHANCED_HOUR`; for a 4x shot run with `SCREEN=1280x1600` and `TEST_CONFIG` `InternalResolutionScale=4 WindowWidth=1024 WindowHeight=1536` (the check is the shot; `SIM_ATMOSPHERE_DEBUG=1` shows the shaft values) | ~30 s |
+| `enhanced_walk_shadows.txt`, `enhanced_walk_shadows_ns.txt` | `turtwig` | the sun shadows while the camera moves: the player walks east (and south) across Canalave City's plaza with a `stillshot` every 4 frames; with `SIM_SUNSHADOW_DEBUG=1` the shots are the mask, and `SIM_SUNSHADOW_LOG=1` logs the map's axes, span and grid phase each frame (they must not change while walking) (the check is the shots and the log) | ~30 s |
 | `widescreen_leader.txt` | `turtwig` | with widescreen on: Roark's "VS" encounter effect across the 16:9 window (the check is the shots) | ~20 s |
 | `nuzlocke_on.txt` | `turtwig` | Nuzlocke mode turned on: Hard refuses crit guard, Normal takes it, saved; keep it as `nuz-normal` (the check is the `nuzlocke:` lines) | ~20 s |
 | `nuzlocke_drop.txt` | `nuz-normal` | Nuzlocke mode as loaded, then turned off without saving: off and dropped, and Simple refused; keep it as `nuz-dropped` | ~20 s |

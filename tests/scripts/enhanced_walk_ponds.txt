@@ -1,0 +1,72 @@
+# Enhanced graphics water reflections while the camera moves up and down: the player walks south then north past Route 204
+# South's ponds with a frame-exact shot every 4 frames (the owner saw reflections vanish walking up and down, 2026-11-25).
+# tools\windows\test.ps1 -Script tests/scripts/enhanced_walk_ponds.txt -From turtwig -Hour 13 -Config 'EnhancedWater=true'
+mash A until free
+jump 345 175 724
+until free timeout 3000
+wait 40
+stillshot start
+hold DOWN 4
+stillshot down01
+hold DOWN 4
+stillshot down02
+hold DOWN 4
+stillshot down03
+hold DOWN 4
+stillshot down04
+hold DOWN 4
+stillshot down05
+hold DOWN 4
+stillshot down06
+hold DOWN 4
+stillshot down07
+hold DOWN 4
+stillshot down08
+hold DOWN 4
+stillshot down09
+hold DOWN 4
+stillshot down10
+hold DOWN 4
+stillshot down11
+hold DOWN 4
+stillshot down12
+hold DOWN 4
+stillshot down13
+hold DOWN 4
+stillshot down14
+hold DOWN 4
+stillshot down15
+hold DOWN 4
+stillshot down16
+hold UP 4
+stillshot up01
+hold UP 4
+stillshot up02
+hold UP 4
+stillshot up03
+hold UP 4
+stillshot up04
+hold UP 4
+stillshot up05
+hold UP 4
+stillshot up06
+hold UP 4
+stillshot up07
+hold UP 4
+stillshot up08
+hold UP 4
+stillshot up09
+hold UP 4
+stillshot up10
+hold UP 4
+stillshot up11
+hold UP 4
+stillshot up12
+hold UP 4
+stillshot up13
+hold UP 4
+stillshot up14
+hold UP 4
+stillshot up15
+hold UP 4
+stillshot up16

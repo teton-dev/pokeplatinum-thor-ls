@@ -16,6 +16,10 @@
 #include "heap.h"
 #include "narc.h"
 
+#ifdef SDK_PORT
+#include "port/enhanced_graphics.h"
+#endif
+
 static void MapPropManager_InitRenderObj(const int modelID, AreaDataManager *const areaDataManager, NNSG3dRenderObj *renderObj, NNSG3dResMdl **model);
 static void MapPropManager_RenderUsing1Mat1Shp(const NNSG3dResMdl *model, VecFx32 *position, MtxFx33 *rotation, VecFx32 *scale, const MapPropMaterialShape *propMatShp, const int modelID);
 
@@ -147,7 +151,11 @@ void MapPropManager_Render(const VecFx32 *positionOffset, const AreaDataManager 
             position.x += positionOffset->x;
             position.z += positionOffset->z;
 
-            if (GFXBoxTest_IsModelInView(loadedProp->model, &position, &rotationMatrix, &loadedProp->scale)) {
+            BOOL inView = GFXBoxTest_IsModelInView(loadedProp->model, &position, &rotationMatrix, &loadedProp->scale);
+#ifdef SDK_PORT
+            inView = inView || (EnhancedGraphics_WantsOffScreenCasters() && EnhancedGraphics_NearView(&position));
+#endif
+            if (inView) {
                 const MapPropMaterialShape *propMatShp = AreaDataManager_GetMapPropMaterialShape(areaDataManager);
                 u16 propMatShpIDsCount;
 

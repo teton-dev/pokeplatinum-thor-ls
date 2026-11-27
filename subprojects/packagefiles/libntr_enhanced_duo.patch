@@ -1,0 +1,1035 @@
+--- a/include/simulator/g3_handler.h
++++ b/include/simulator/g3_handler.h
+@@ -140,6 +140,7 @@
+ 
+ // Not GPU Commands
+ int G3SIM_ClipPolygon(fx32 verts[][4], int nVerts, int clipStart, BOOL attribs);
++void SIM_SetClipTop(s32 num, s32 den); // the top clip plane at y = w * den / num (1, 1: the screen's edge)
+ u8 G3SIM_SwapBuffersCalledThisFrame();
+ void G3SIM_ResetSwapBuffersCall();
+ void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts);
+--- a/include/simulator/sim_android.h
++++ b/include/simulator/sim_android.h
+@@ -32,6 +32,8 @@
+ // The pacing watchdog's remedies on the lower screen (PlatinumActivity.unstickDisplays): 0 its window draws a frame,
+ // 1 its surface is made again
+ void SIM_Android_UnstickDisplays(int step);
++// A line for logcat and the data directory's app-log.txt (some devices keep only error lines in logcat)
++void SIM_Android_Log(const char *line);
+ // What the frame timings show about it: the cores the game runs on, and whether the
+ // system takes performance hints
+ const char *SIM_Android_CpuInfo(void);
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <vector>
+ 
+ #include <nitro/gx/g3.h>
+ #include <nitro/hw/X86/ioreg.h>
+@@ -91,22 +92,34 @@
+ // A polygon of up to 4 vertices gains at most one per plane
+ #define G3SIM_CLIP_MAX_VERTS 10
+ 
++// The top plane's reach: y <= w * s_clipTopDen / s_clipTopNum. Above 1 with enhanced water: the 3D is drawn into a band
++// of rows above the screen (SIM_SetClipTop, sim_main.cpp's sBandRows) for the water's mirror to read what is just past
++// the top edge; the screen itself gets exactly what it got
++static s32 s_clipTopNum = 1, s_clipTopDen = 1;
++
++extern "C" void SIM_SetClipTop(s32 num, s32 den)
++{
++    s_clipTopNum = num > 0 ? num : 1;
++    s_clipTopDen = den > 0 ? den : 1;
++}
++
+ // Where the edge from vin (inside the plane) to vout (outside it) crosses it. Always computed from the inside
+-// vertex, so that the two polygons sharing an edge get the same point and no crack opens between them
++// vertex, so that the two polygons sharing an edge get the same point and no crack opens between them. The plane is
++// num * plane * comp <= den * w
+ static void ClipSegment(G3SIM_ClipVtx_t * outbuf, const G3SIM_ClipVtx_t * vin, const G3SIM_ClipVtx_t * vout,
+-                        int comp, s32 plane, BOOL attribs)
++                        int comp, s32 plane, s32 num, s32 den, BOOL attribs)
+ {
+-    s64 distIn = (s64)vin->pos[3] - plane * (s64)vin->pos[comp];    // >= 0
+-    s64 distOut = (s64)vout->pos[3] - plane * (s64)vout->pos[comp]; // < 0
+-    s64 den = distIn - distOut;                                     // > 0
++    s64 distIn = (s64)den * vin->pos[3] - (s64)num * plane * (s64)vin->pos[comp];    // >= 0
++    s64 distOut = (s64)den * vout->pos[3] - (s64)num * plane * (s64)vout->pos[comp]; // < 0
++    s64 span = distIn - distOut;                                                      // > 0
+ 
+     for (int i = 0; i < 4; i++) {
+-        outbuf->pos[i] = (s32)(vin->pos[i] + (((s64)vout->pos[i] - vin->pos[i]) * distIn) / den);
++        outbuf->pos[i] = (s32)(vin->pos[i] + (((s64)vout->pos[i] - vin->pos[i]) * distIn) / span);
+     }
+-    outbuf->pos[comp] = plane * outbuf->pos[3];
++    outbuf->pos[comp] = (s32)(plane * (s64)outbuf->pos[3] * den / num);
+ 
+     if (attribs) {
+-        GLfloat f = (GLfloat)((double)distIn / (double)den);
++        GLfloat f = (GLfloat)((double)distIn / (double)span);
+ #define INTERPOLATE(var) outbuf->var = vin->var + (vout->var - vin->var) * f
+         INTERPOLATE(s);
+         INTERPOLATE(t);
+@@ -118,26 +131,29 @@
+     }
+ }
+ 
+-// Sutherland-Hodgman against one plane: comp <= w (plane 1) or comp >= -w (plane -1)
++// Sutherland-Hodgman against one plane: comp <= w (plane 1) or comp >= -w (plane -1); the top (y, plane 1) at
++// w * s_clipTopDen / s_clipTopNum
+ static int ClipAgainstPlane(G3SIM_ClipVtx_t * out, const G3SIM_ClipVtx_t * in, int nVerts, int comp, s32 plane,
+                             BOOL attribs)
+ {
+     int c = 0;
++    const s32 num = (comp == 1 && plane == 1) ? s_clipTopNum : 1;
++    const s32 den = (comp == 1 && plane == 1) ? s_clipTopDen : 1;
+ 
+     for (int i = 0; i < nVerts; i++) {
+         const G3SIM_ClipVtx_t * cur = &in[i];
+         const G3SIM_ClipVtx_t * next = &in[(i + 1) % nVerts];
+-        BOOL curIn = (s64)plane * cur->pos[comp] <= (s64)cur->pos[3];
+-        BOOL nextIn = (s64)plane * next->pos[comp] <= (s64)next->pos[3];
++        BOOL curIn = (s64)num * plane * cur->pos[comp] <= (s64)den * cur->pos[3];
++        BOOL nextIn = (s64)num * plane * next->pos[comp] <= (s64)den * next->pos[3];
+ 
+         if (curIn) {
+             out[c++] = *cur;
+         }
+         if (curIn != nextIn) {
+             if (curIn) {
+-                ClipSegment(&out[c], cur, next, comp, plane, attribs);
++                ClipSegment(&out[c], cur, next, comp, plane, num, den, attribs);
+             } else {
+-                ClipSegment(&out[c], next, cur, comp, plane, attribs);
++                ClipSegment(&out[c], next, cur, comp, plane, num, den, attribs);
+                 if (!attribs) {
+                     out[c].s = out[c].t = out[c].r = out[c].g = out[c].b = out[c].a = 0.0f;
+                 }
+@@ -1664,9 +1680,12 @@
+ // edges still casts) as triangles of clip-space x, y and w in view units, the texture coordinates s and t and the vertex
+ // colour r, g, b, a, for the shadow map drawn from the sun and the water's mirror image (G3SIM_CASTER_STRIDE floats each). The runs of them that share a texture (a batch: libntr flushes when the texture changes) are
+ // told the texture when the batch is drawn (G3SIM_CasterBatchEnd), so the map can leave out the texture's clear texels
+-#define G3SIM_CASTER_MAX_VERTS (6144 * 3)
++// The buffer grows to what the frames need, up to the most a frame may have. It was a fixed 6144 triangles: Jubilife City
++// with the camera one tile further north filled it, and the buildings drawn after that
++// point, and their shadows, were left out (2026-11-25)
++#define G3SIM_CASTER_MAX_VERTS (65536 * 3)
+ #define G3SIM_CASTER_MAX_BATCHES 1024
+-static float s_casterVerts[G3SIM_CASTER_MAX_VERTS * G3SIM_CASTER_STRIDE];
++static std::vector<float> s_casterVerts;
+ static u32 s_casterCount = 0;
+ static G3SIM_CasterBatch_t s_casterBatches[G3SIM_CASTER_MAX_BATCHES];
+ static u32 s_casterBatchCount = 0, s_casterBatchStart = 0;
+@@ -1708,7 +1727,7 @@
+ {
+     G3SIM_CasterBatchEnd(0, 0); // any left over: untextured
+     const u32 count = s_casterCount;
+-    *verts = s_casterVerts;
++    *verts = s_casterVerts.data();
+     *batches = s_casterBatches;
+     *batchCount = s_casterBatchCount;
+     if(s_casterOverflow) {
+@@ -1813,6 +1832,11 @@
+                     s_casterOverflow = true;
+                     break;
+                 }
++                if((s_casterCount + 3) * G3SIM_CASTER_STRIDE > s_casterVerts.size()) {
++                    // (doubled, so a frame's growth is a few reallocations once, not one per polygon)
++                    const size_t verts = s_casterVerts.empty() ? 6144 * 3 : s_casterVerts.size() / G3SIM_CASTER_STRIDE * 2;
++                    s_casterVerts.resize((verts < G3SIM_CASTER_MAX_VERTS ? verts : G3SIM_CASTER_MAX_VERTS) * G3SIM_CASTER_STRIDE);
++                }
+                 const int corner[3] = {0, i, i + 1};
+                 for(int c=0; c < 3; c++) {
+                     float * out = &s_casterVerts[s_casterCount * G3SIM_CASTER_STRIDE];
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -20,6 +20,8 @@
+ // this screen's 3D uses.
+ uniform float wideRatio;
+ uniform float tex3dScaleS;
++// The 3D texture's height that is the two screens (it is taller with enhanced water's band above them); 0: all of it
++uniform float tex3dScaleT;
+ // BG layers drawn across the whole wide screen (bit n: BGn), in textures wideBgScaleS of
+ // whose width they use, holding only this screen (G2SIM_DrawBGWide)
+ uniform int wideBgMask;
+@@ -40,6 +42,7 @@
+ //uniform float inAlpha;
+ uniform float inMasterBrightFactor;
+ uniform int inMasterBrightMode;
++uniform int layerMask; // bit n: layer n has something (BG0-3, OBJ priorities 0-3 at 4-7, the sprite window at 8); an empty one isn't fetched
+ uniform vec4 inColorAdjust; // saturation, vibrance, contrast, white point: -1..1
+ out vec4 color;
+ void main()
+@@ -63,13 +66,13 @@
+     vec4 none = vec4(0.0);
+     vec4 bgc[4];
+     if (bg0as3d != 0) {
+-        bgc[0] = texture(bgTexture[0], vec2(fragTexCoord.s * tex3dScaleS, fragTexCoord.t));
++        bgc[0] = texture(bgTexture[0], vec2(fragTexCoord.s * tex3dScaleS, fragTexCoord.t * (tex3dScaleT > 0.0 ? tex3dScaleT : 1.0)));
+         // The 3D layer is premultiplied (translucent particles over an empty pixel)
+         if (bgc[0].a > 0.0) {
+             bgc[0].rgb = min(bgc[0].rgb / bgc[0].a, vec3(1.0));
+         }
+     } else {
+-        bgc[0] = inside2d ? texture(bgTexture[0], c2d) : none;
++        bgc[0] = inside2d && (layerMask & 1) != 0 ? texture(bgTexture[0], c2d) : none;
+     }
+     vec2 cWide = vec2(fragTexCoord.s * wideBgScaleS, (fragTexCoord.t - 0.5) * 2.0);
+     if ((wideBgMask & 1) != 0 && bg0as3d == 0) {
+@@ -78,9 +81,9 @@
+     vec2 cEdge = vec2(clamp(c2d.s, 0.002, 0.998), c2d.t);
+     vec2 cStripe = vec2(wideStripeColumn, c2d.t);
+     vec2 cEdgeMirror = vec2(clamp(c2d.s < 0.0 ? -c2d.s : (c2d.s > 1.0 ? 2.0 - c2d.s : c2d.s), 0.002, 0.998), c2d.t);
+-    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : ((inside2d || (wideEdgeMask & 2) != 0) ? texture(bgTexture[1], (wideStripeMask & 2) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 2) != 0 ? cEdgeMirror : cEdge)) : none);
+-    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : ((inside2d || (wideEdgeMask & 4) != 0) ? texture(bgTexture[2], (wideStripeMask & 4) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 4) != 0 ? cEdgeMirror : cEdge)) : none);
+-    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], (wideStripeMask & 8) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 8) != 0 ? cEdgeMirror : cEdge)) : none);
++    bgc[1] = (layerMask & 2) == 0 ? none : (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : ((inside2d || (wideEdgeMask & 2) != 0) ? texture(bgTexture[1], (wideStripeMask & 2) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 2) != 0 ? cEdgeMirror : cEdge)) : none);
++    bgc[2] = (layerMask & 4) == 0 ? none : (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : ((inside2d || (wideEdgeMask & 4) != 0) ? texture(bgTexture[2], (wideStripeMask & 4) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 4) != 0 ? cEdgeMirror : cEdge)) : none);
++    bgc[3] = (layerMask & 8) == 0 ? none : (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], (wideStripeMask & 8) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 8) != 0 ? cEdgeMirror : cEdge)) : none);
+     vec4 objc[4];
+     vec2 cWrap = vec2(fract(c2d.s), c2d.t);
+     // Outside the 4:3 picture, the edge column's pixel if there is one (a bar that reaches the edge, with its border and
+@@ -89,18 +92,18 @@
+     vec4 objEdge[4];
+     for (int k = 0; k < 4; k++) {
+         objEdge[k] = none;
+-        if (!inside2d && (wideObjEdgeMask & (1 << k)) != 0) {
++        if (!inside2d && (wideObjEdgeMask & (1 << k)) != 0 && (layerMask & (16 << k)) != 0) {
+             vec4 e = texture(objTexture[k], cObjEdge);
+             if (e.a > 0.1) {
+                 objEdge[k] = e;
+             }
+         }
+     }
+-    objc[0] = inside2d ? texture(objTexture[0], c2d) : ((wideObjMask & 1) != 0 ? texture(objTexture[0], cWrap) : objEdge[0]);
+-    objc[1] = inside2d ? texture(objTexture[1], c2d) : ((wideObjMask & 2) != 0 ? texture(objTexture[1], cWrap) : objEdge[1]);
+-    objc[2] = inside2d ? texture(objTexture[2], c2d) : ((wideObjMask & 4) != 0 ? texture(objTexture[2], cWrap) : objEdge[2]);
+-    objc[3] = inside2d ? texture(objTexture[3], c2d) : ((wideObjMask & 8) != 0 ? texture(objTexture[3], cWrap) : objEdge[3]);
+-    vec4 objWin = inside2d ? texture(objWindowTexture, c2d) : none;
++    objc[0] = (layerMask & 16) == 0 ? none : inside2d ? texture(objTexture[0], c2d) : ((wideObjMask & 1) != 0 ? texture(objTexture[0], cWrap) : objEdge[0]);
++    objc[1] = (layerMask & 32) == 0 ? none : inside2d ? texture(objTexture[1], c2d) : ((wideObjMask & 2) != 0 ? texture(objTexture[1], cWrap) : objEdge[1]);
++    objc[2] = (layerMask & 64) == 0 ? none : inside2d ? texture(objTexture[2], c2d) : ((wideObjMask & 4) != 0 ? texture(objTexture[2], cWrap) : objEdge[2]);
++    objc[3] = (layerMask & 128) == 0 ? none : inside2d ? texture(objTexture[3], c2d) : ((wideObjMask & 8) != 0 ? texture(objTexture[3], cWrap) : objEdge[3]);
++    vec4 objWin = inside2d && (layerMask & 256) != 0 ? texture(objWindowTexture, c2d) : none;
+     for(int i=0; i<4; i++) {
+         int bgNum = bgOrder[i];
+         int curPrio = bgPriorities[bgNum];
+--- a/libraries/sim/src/shaders/g3_highlight_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_highlight_apply_fragment.glsl
+@@ -14,8 +14,32 @@
+ uniform int pixelStep;
+ uniform int mode;
+ uniform vec3 sunColor;
++// The sun shadows' multiply, done here when both run (one full-resolution pass fewer): the mask (r: in shadow, soft; b: left
++// alone), its texels per framebuffer pixel, the tone at full strength. Written as half the factor: the blend is
++// src * dst + dst * src
++uniform int withShadow;
++uniform sampler2D shadowMask;
++uniform float shadowStep;
++uniform vec3 shadowTone;
+ out vec4 color;
+ 
++// As g3_sunshadow_apply_fragment.glsl: the mask's four texels around this pixel blended, eased over a small band
++float ShadowStrength()
++{
++    vec2 at = (gl_FragCoord.xy - vec2(origin)) / shadowStep - 0.5;
++    ivec2 corner = ivec2(floor(at));
++    vec2 f = at - vec2(corner);
++    ivec2 last = textureSize(shadowMask, 0) - 1;
++    if (texelFetch(shadowMask, ivec2((gl_FragCoord.xy - vec2(origin)) / shadowStep), 0).b > 0.5) {
++        return 0.0;
++    }
++    float r00 = texelFetch(shadowMask, clamp(corner, ivec2(0), last), 0).r;
++    float r10 = texelFetch(shadowMask, clamp(corner + ivec2(1, 0), ivec2(0), last), 0).r;
++    float r01 = texelFetch(shadowMask, clamp(corner + ivec2(0, 1), ivec2(0), last), 0).r;
++    float r11 = texelFetch(shadowMask, clamp(corner + ivec2(1, 1), ivec2(0), last), 0).r;
++    return smoothstep(0.2, 0.8, mix(mix(r00, r10, f.x), mix(r01, r11, f.x), f.y));
++}
++
+ bool SpriteAt(ivec2 f)
+ {
+     ivec2 size = textureSize(attrTexture, 0);
+@@ -30,6 +54,14 @@
+ {
+     vec4 light = texelFetch(lightTexture, (ivec2(gl_FragCoord.xy) - origin) / pixelStep, 0);
+     if (mode == 0) {
++        if (withShadow == 1) {
++            float strength = ShadowStrength();
++            if (strength <= 0.0 && dot(light.rgb, light.rgb) < 1e-5) {
++                discard;
++            }
++            color = vec4(mix(vec3(1.0), shadowTone, strength) * (vec3(1.0) + light.rgb) * 0.5, 1.0);
++            return;
++        }
+         if (dot(light.rgb, light.rgb) < 1e-5) {
+             discard;
+         }
+--- a/libraries/sim/src/shaders/g3_vertex.glsl
++++ b/libraries/sim/src/shaders/g3_vertex.glsl
+@@ -16,11 +16,16 @@
+ 
+ // Widescreen scenes the game didn't widen itself: narrower, so 4:3 shapes stay 4:3
+ uniform float xScale;
++// With enhanced water, the viewport reaches a band of rows above the screen (the clipper's top plane is moved up to
++// match): the screen's rows over the viewport's share bandScale of it, so what is on screen lands where it did and
++// what is just past the top edge fills the band. 0 (not set) or 1: no band
++uniform float bandScale;
+ 
+ void main()
+ {
+     float w = clipW > 0.0 ? clipW : 1.0;
+-    gl_Position = vec4(position.x * xScale * w, position.y * w, position.z * w, w);
++    float band = bandScale > 0.0 ? bandScale : 1.0;
++    gl_Position = vec4(position.x * xScale * w, ((position.y + 1.0) * band - 1.0) * w, position.z * w, w);
+     coordsW = vec4(position.x * w, position.y * w, position.z * w, w);
+     fragTexCoord = vec2(texCoord.x, texCoord.y);
+     fragInColor = inColor;
+--- a/libraries/sim/src/shaders/g3_water_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_water_apply_fragment.glsl
+@@ -116,7 +116,10 @@
+         discard;
+     }
+     float fade = 1.0 - float(shore) / float(40 * pixelStep);
+-    float k = strength * clamp(fade, 0.0, 1.0);
++    // Faded out as what it mirrors nears the top of the screen (past it there is nothing to mirror): the reflection was
++    // cut off in a hard line there, and popped in as a shore came into view walking onto a map (Route 204's ponds)
++    float edge = clamp(float(size.y - 1 - source.y) / float(8 * pixelStep), 0.0, 1.0);
++    float k = strength * clamp(fade, 0.0, 1.0) * edge;
+     color = vec4(mix(scene.rgb, waterTint, 0.25), k);
+ }
+ )""
+--- a/libraries/sim/src/shaders/g3_water_march_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_water_march_fragment.glsl
+@@ -9,6 +9,7 @@
+ uniform int pixelStep;         // framebuffer pixels per DS pixel
+ uniform ivec2 dsSize;          // the viewport in DS pixels
+ uniform int maxDistance;
++uniform int searchHeight;       // rows the search may reach: the viewport's, and the band above it (enhanced water's)
+ out vec4 color;
+ 
+ bool Water(ivec2 ds)
+@@ -24,7 +25,7 @@
+         result = 1.0 / 255.0; // water with no shore in reach (distances are stored times 4, so 1 is below the least)
+         for (int i = 1; i <= maxDistance; i++) {
+             ivec2 up = ds + ivec2(0, i);
+-            if (up.y >= dsSize.y) {
++            if (up.y >= max(dsSize.y, searchHeight)) {
+                 break;
+             }
+             if (!Water(up)) {
+--- a/libraries/sim/src/sim_android.cpp
++++ b/libraries/sim/src/sim_android.cpp
+@@ -12,6 +12,7 @@
+ #include <pthread.h>
+ #include <sched.h>
+ #include <sys/syscall.h>
++#include <time.h>
+ #include <unistd.h>
+ 
+ #include <atomic>
+@@ -28,6 +29,22 @@
+ 
+ int sLogPipe[2] = {-1, -1};
+ 
++// Also written to a file in the data directory (app-log.txt, the launch before kept as app-log-prev.txt): some
++// devices keep only error lines in logcat (the Retroid Pocket Duo), and adb can read the data directory
++FILE *sLogFile = nullptr;
++std::mutex sLogFileLock;
++
++void WriteLogLine(const char *line) {
++  __android_log_write(ANDROID_LOG_INFO, kLogTag, line);
++  std::lock_guard<std::mutex> guard(sLogFileLock);
++  if (sLogFile != nullptr) {
++    struct timespec now;
++    clock_gettime(CLOCK_MONOTONIC, &now);
++    fprintf(sLogFile, "[%ld.%03ld] %s\n", (long)now.tv_sec, now.tv_nsec / 1000000, line);
++    fflush(sLogFile);
++  }
++}
++
+ // stdout/stderr have nowhere to go on Android: forward them to logcat line by line
+ void *LogForwardThread(void *) {
+   char buffer[1024];
+@@ -44,13 +61,13 @@
+     char *newline;
+     while ((newline = strchr(lineStart, '\n')) != nullptr) {
+       *newline = '\0';
+-      __android_log_write(ANDROID_LOG_INFO, kLogTag, lineStart);
++      WriteLogLine(lineStart);
+       lineStart = newline + 1;
+     }
+     used = strlen(lineStart);
+     if (used == sizeof(buffer) - 1) {
+       // Very long line: flush it as is
+-      __android_log_write(ANDROID_LOG_INFO, kLogTag, lineStart);
++      WriteLogLine(lineStart);
+       used = 0;
+     } else {
+       memmove(buffer, lineStart, used);
+@@ -94,6 +111,11 @@
+     dataDir = SDL_AndroidGetInternalStoragePath();
+   }
+   if (dataDir != nullptr && chdir(dataDir) == 0) {
++    {
++      std::lock_guard<std::mutex> guard(sLogFileLock);
++      rename("app-log.txt", "app-log-prev.txt");
++      sLogFile = fopen("app-log.txt", "w");
++    }
+     printf("Data directory: %s\n", dataDir);
+   } else {
+     printf("Could not enter the data directory: %s\n", SDL_GetError());
+@@ -183,6 +205,10 @@
+   }
+ }
+ 
++extern "C" void SIM_Android_Log(const char *line) {
++  WriteLogLine(line);
++}
++
+ extern "C" void SIM_Android_UnstickDisplays(int step) {
+   JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
+   jobject activity = (jobject)SDL_AndroidGetActivity();
+--- a/libraries/sim/src/sim_display.cpp
++++ b/libraries/sim/src/sim_display.cpp
+@@ -15,6 +15,8 @@
+ #include <android/native_window.h>
+ #include <android/native_window_jni.h>
+ #include <jni.h>
++#include <simulator/sim_android.h>
++#include <cstdio>
+ #endif
+ 
+ namespace {
+@@ -37,8 +39,14 @@
+ 
+ #ifdef SDK_BUILD_ANDROID
+ 
+-#define DISPLAY_LOG(...)                                                       \
+-  __android_log_print(ANDROID_LOG_INFO, "libntr-display", __VA_ARGS__)
++// (to logcat and the data directory's app-log.txt: see SIM_Android_Log)
++#define DISPLAY_LOG(...)                                                                          \
++  do {                                                                                            \
++    char displayLogLine_[256];                                                                    \
++    const int displayLogUsed_ = snprintf(displayLogLine_, sizeof(displayLogLine_), "display: ");  \
++    snprintf(displayLogLine_ + displayLogUsed_, sizeof(displayLogLine_) - displayLogUsed_, __VA_ARGS__); \
++    SIM_Android_Log(displayLogLine_);                                                             \
++  } while (0)
+ 
+ // The Java Presentation's surface arrives on the UI thread while the renderer runs on
+ // the SDL main thread. sLock guards the window/surface pair: the render thread holds it
+@@ -630,6 +638,17 @@
+   ReleaseWindowLocked();
+ }
+ 
++// The Java side's diagnostics (SecondaryScreen.log), to app-log.txt with the native ones
++JNIEXPORT void JNICALL Java_org_pokeplatinum_port_SecondaryScreen_nativeLog(JNIEnv *env, jclass, jstring text) {
++  const char *chars = env->GetStringUTFChars(text, nullptr);
++  if (chars != nullptr) {
++    char line[512];
++    snprintf(line, sizeof(line), "java: %s", chars);
++    SIM_Android_Log(line);
++    env->ReleaseStringUTFChars(text, chars);
++  }
++}
++
+ JNIEXPORT void JNICALL Java_org_pokeplatinum_port_SecondaryScreen_nativeTouch(
+     JNIEnv *, jclass, jboolean down, jfloat x, jfloat y) {
+   const bool wasDown = sTouchDown;
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -44,6 +44,7 @@
+ #include <simulator/sim_carts.h>
+ #ifdef SDK_BUILD_ANDROID
+ #include <simulator/sim_android.h>
++#include <sys/system_properties.h>
+ #endif
+ 
+ #include <math.h>
+@@ -143,15 +144,37 @@
+ // second, the game at half speed) until the settings were opened over the lower screen. Judged a second at a time (a
+ // frame-by-frame count missed it: some swaps came in just under a refresh): under 45 frames shown with swaps averaging
+ // over 10 ms at the game's speed is stuck, and the watchdog tries a remedy, the next one a second later while it lasts:
+-// 0 the lower screen's window draws a frame (what the settings do), 1 a few frames aren't shown, 2 the lower screen's
+-// surface is made again. After all three fail it waits 8 seconds (a scene too heavy for the device looks the same).
+-// Logcat tag pokeplatinum says which cleared it.
++// 0 the lower screen's window draws a frame (what the settings do), 1 a few frames aren't shown. After both fail it
++// waits 8 seconds (a scene too heavy for the device looks the same). Logcat tag pokeplatinum (and app-log.txt) says
++// which cleared it. (A third, making the lower screen's surface again, is gone: on the Duo in this state the next 3D
++// draw crashed in the GPU driver right after it (2026-11-25, twice), each one showed the lower screen on the top for
++// a frame, and no log ever showed it clearing the lock.)
+ static int sUnstickStep = 0, sUnstickLast = -1, sUnstickWait = 0;
+ static int sWatchdogFixes = 0, sWatchdogLastRemedy = -1, sWatchdogClearedBy = -1; // for the frame timings
+ static u64 sWindowStartNs = 0, sWindowSwapNs = 0;
+ static int sWindowFrames = 0;
++// debug.eterna.unstick=N (adb shell setprop): the lower screen's surface is made again every N seconds, as the
++// watchdog's last remedy does, to reproduce what that does on a device
++static void DebugUnstick(u64 now) {
++  static u64 sNextReadNs = 0, sLastFireNs = 0;
++  static int sEverySeconds = 0;
++  if (now >= sNextReadNs) {
++    sNextReadNs = now + 1000000000ull;
++    char value[PROP_VALUE_MAX] = "";
++    __system_property_get("debug.eterna.unstick", value);
++    sEverySeconds = atoi(value);
++  }
++  if (sEverySeconds > 0 && now - sLastFireNs >= (u64)sEverySeconds * 1000000000ull) {
++    sLastFireNs = now;
++    printf("debug unstick: the lower screen's surface is made again\n");
++    fflush(stdout);
++    SIM_Android_UnstickDisplays(1);
++  }
++}
++
+ static void PacingWatchdog(bool steady, u64 swapNs) {
+   const u64 now = SIM_NowNs();
++  DebugUnstick(now);
+   if (!steady) {
+     sWindowStartNs = 0;
+     return;
+@@ -195,20 +218,50 @@
+   if (sUnstickStep == 1) {
+     sDrainPresents = 6;
+   } else {
+-    SIM_Android_UnstickDisplays(sUnstickStep == 0 ? 0 : 1);
++    SIM_Android_UnstickDisplays(0);
+   }
+   sUnstickLast = sUnstickStep;
+   sWatchdogFixes++;
+   sWatchdogLastRemedy = sUnstickStep;
+-  sUnstickStep = (sUnstickStep + 1) % 3;
++  sUnstickStep = (sUnstickStep + 1) % 2;
+   if (sUnstickStep == 0) {
+-    sUnstickWait = 8; // all three tried: a scene too heavy for the device looks the same, don't keep at it
++    sUnstickWait = 8; // both tried: a scene too heavy for the device looks the same, don't keep at it
+   }
+ }
+ #endif
+ static u64 sNextVBlankNs = 0;            // fast-forward pacing
+ static u64 sLastPresentNs = 0;
+ 
++// Fast-forward shows a frame at most this often (about 60 a second; the battle speed shows every frame of 1.5x).
++// On Android never faster than the display refreshes: frames queued every 15 ms on the Duo's 60 Hz panels (16.7 ms)
++// backed up its buffer queue, and every swap after fast-forward waited two refreshes (30 frames a second, the game
++// at half speed) for a few seconds; at 17 ms that never happened (2026-11-25). debug.eterna.ffpresentms=N (adb shell
++// setprop, read once a second): N ms instead
++static u64 FastForwardPresentNs() {
++  u64 ns = SIM_BattleSpeedTenths() > 0 ? 10000000ull : 15000000ull;
++#ifdef SDK_BUILD_ANDROID
++  ns = 17000000ull;
++  static u64 sNextReadNs = 0;
++  static int sOverrideMs = 0;
++  const u64 now = SIM_NowNs();
++  if (now >= sNextReadNs) {
++    sNextReadNs = now + 1000000000ull;
++    char value[PROP_VALUE_MAX] = "";
++    __system_property_get("debug.eterna.ffpresentms", value);
++    const int ms = atoi(value);
++    if (ms != sOverrideMs) {
++      printf("fast-forward: a frame shown at most every %d ms\n", ms > 0 ? ms : (int)(ns / 1000000ull));
++      fflush(stdout);
++    }
++    sOverrideMs = ms;
++  }
++  if (sOverrideMs > 0) {
++    ns = (u64)sOverrideMs * 1000000ull;
++  }
++#endif
++  return ns;
++}
++
+ extern "C" BOOL SIM_IsFastForwarding(void) {
+   return (sFastForwardHeld || sFastForwardOn) ? TRUE : FALSE;
+ }
+@@ -505,6 +558,7 @@
+ static float sSunCamera[10];
+ static float sSunLight[3] = {0.0f, 0.0f, 0.0f};
+ static bool sSunFrameDrawn = false, sSunFrameCamera = false, sSunShadowMade = false;
++static bool sSunApplyDeferred = false; // see G3EnhancedSunShadow
+ static GLuint g3HighlightProgramID, g3HighlightApplyProgramID, g3HighlightTex, g3HighlightFbo;
+ static int sHighlightW, sHighlightH;
+ static bool sSunCameraSet = false;
+@@ -633,6 +687,10 @@
+ static LayerSet sLayerSets[2][kLayerRing];
+ static int sLayerRingIndex = 0;
+ static u64 sEmptyLayerHash = 0;
++// The layers DrawEngine's engine has something in (bit n: layer n, LAYER_OBJ0... included), for the 2D shader's
++// layerMask: an empty layer isn't fetched. On the Duo's 1920x1080 the compositor read all ten layers at every pixel of
++// both screens, 6.9 ms of GPU a frame
++static int sLayerFilledBits = 0;
+ 
+ // Profile of the frame being drawn
+ static u64 sFrameUploadNs = 0;
+@@ -699,6 +757,9 @@
+   const int row = SIM_EngineTextureRow(isSub);
+   const u8 *half = fullBuffer + 4 * SIM_NDS_SCREEN_WIDTH * row;
+   const u64 hash = knownEmpty ? sEmptyLayerHash : HashLayerHalf(half);
++  if (hash != sEmptyLayerHash) {
++    sLayerFilledBits |= 1 << layer;
++  }
+   glBindTexture(GL_TEXTURE_2D, set.texture[layer]);
+   if (set.row[layer] != row || set.hash[layer] != hash) {
+     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, row, SIM_NDS_SCREEN_WIDTH, SIM_NDS_SCREEN_HEIGHT, GL_RGBA,
+@@ -897,6 +958,15 @@
+ static bool sWideSubTop = false; // a wide scene whose top screen is the sub engine (2D only: BW2's Summary)
+ static int sWide3dWidth = SIM_NDS_SCREEN_WIDTH; // the 3D being drawn: its width
+ static int sWideWidth = SIM_NDS_SCREEN_WIDTH;   // the top display's
++// Enhanced water's band: DS pixel rows of 3D drawn above the screen, past its top edge, for the water's mirror (it
++// mirrors what stands above a pond's far shore, and walking south slid that off the screen: the reflection went out).
++// The 3D framebuffer is that much taller; the screen's rows and everything reading them are as they were
++static int sBandRows = 0;
++static int BandRowsWanted() {
++  // SIM_WATER_BAND=0: none (to compare)
++  static const bool sNoBand = getenv("SIM_WATER_BAND") != nullptr && getenv("SIM_WATER_BAND")[0] == '0';
++  return (s_SIM_config.enhancedWater && s_SIM_config.antiAliasing <= 1 && !sNoBand) ? 40 : 0;
++}
+ static int sFboWidth = SIM_NDS_SCREEN_WIDTH;    // the 3D framebuffer's
+ 
+ // How the wide scene is made (SIM_SetWidescreenSceneOptions), as asked and as latched
+@@ -976,7 +1046,8 @@
+   sScale = WantedScale();
+   sFboWidth = s_SIM_config.widescreen ? sWideWidth : SIM_NDS_SCREEN_WIDTH;
+   const int width = sFboWidth * sScale;
+-  const int height = SIM_NDS_SCREEN_HEIGHT * 2 * sScale;
++  sBandRows = BandRowsWanted();
++  const int height = (SIM_NDS_SCREEN_HEIGHT * 2 + sBandRows) * sScale;
+ 
+   glBindTexture(GL_TEXTURE_2D, g3RenderTextureId);
+   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+@@ -1012,7 +1083,8 @@
+     glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
+     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, edges ? width : 1, edges ? height : 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+     glBindTexture(GL_TEXTURE_2D, g3EdgeSourceTextureId);
+-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, edges ? width : 1, edges ? height / 2 : 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, edges ? width : 1, edges ? (SIM_NDS_SCREEN_HEIGHT + sBandRows) * sScale : 1, 0,
++                 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+     glBindTexture(GL_TEXTURE_2D, g3RenderTextureId);
+     static const GLenum kDrawBuffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, edges ? g3AttrTextureId : 0, 0);
+@@ -1622,17 +1694,20 @@
+   const bool wideEngine = (sWideActive && !isSub && (dispSel ? !isSub : isSub)) || (sWideSubTop && isSub && (dispSel ? !isSub : isSub));
+   const int wideBgWidth = sWideSubTop && isSub ? sFboWidth : sWide3dWidth;
+   int wideBgMask = 0;
++  sLayerFilledBits = 0;
+   for (int i = 0; i < 4; i++) {
+     const int bg = bgOrder[i];
+     glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bg]);
+     if (bgEnabled[bg] && !(bg == 0 && bg0as3d)) {
+       if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, wideBgWidth, ((sWideMirrorBgs >> bg) & 1) != 0, isSub)) {
+         wideBgMask |= 1 << bg;
++        sLayerFilledBits |= 1 << bg;
+         continue;
+       }
+       memset(bgBufs[bg] + halfOffset, 0, kLayerHalfBytes);
+-      G2SIM_DrawBG(bg, bgMode, bg0as3d, isSub);
++      G2SIM_DrawBG(bg, bgMode, bg0as3d, isSub); // (uploads it: SIM_UploadLayer marks it when not empty)
+     } else if (bgEnabled[bg]) {
++      sLayerFilledBits |= 1 << bg;
+       glBindTexture(GL_TEXTURE_2D, g3RenderTextureId); // BG0 shows the 3D scene
+     } else {
+       glBindTexture(GL_TEXTURE_2D, dummyScreenTextureId);
+@@ -1650,6 +1725,10 @@
+       g2shaderProgramID,
+       glGetUniformLocation(g2shaderProgramID, "objWindowTexture"),
+       s_objWindowTexUnit);
++  // SIM_G2_ALL_LAYERS=1: every layer fetched, as before the mask (for comparing)
++  static const bool sAllLayers = getenv("SIM_G2_ALL_LAYERS") != nullptr && getenv("SIM_G2_ALL_LAYERS")[0] == '1';
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "layerMask"),
++                     sAllLayers ? 0x1FF : sLayerFilledBits);
+ 
+   sFrameG2Ns += (SIM_NowNs() - g2Start) - (sFrameUploadNs - uploadNsBefore);
+ 
+@@ -1688,6 +1767,8 @@
+   const bool wideHere = (sWideActive && !isSub && topScreen) || (sWideSubTop && isSub && topScreen);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideRatio"),
+                      wideHere ? (float)(sWideSubTop && isSub ? sFboWidth : sWide3dWidth) / (float)SIM_NDS_SCREEN_WIDTH : 1.0f);
++  glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "tex3dScaleT"),
++                     (float)(SIM_NDS_SCREEN_HEIGHT * 2) / (float)(SIM_NDS_SCREEN_HEIGHT * 2 + sBandRows));
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "tex3dScaleS"),
+                      (float)(wideHere ? sWide3dWidth : SIM_NDS_SCREEN_WIDTH) / (float)sFboWidth);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgMask"),
+@@ -1736,7 +1817,56 @@
+ 
+   glBindVertexArray(g2vertexArray);
+   glBindBuffer(GL_ARRAY_BUFFER, g2vertexBuffer);
+-  DrawScreenQuad();
++  // A screen of 2D layers alone (no 3D scene in it, not widescreen, a screen of its own) is made at the DS's own
++  // 256x192 and blown up pixel for pixel: every pixel of a DS pixel's block got the same answer anyway. The Duo's
++  // bottom screen (1280x960) cost 2.6 ms of GPU a frame composited at full size. SIM_G2_FULL_RES=1: the old way
++  static const bool sFullRes = getenv("SIM_G2_FULL_RES") != nullptr && getenv("SIM_G2_FULL_RES")[0] == '1';
++  GLint drawSamples = 0;
++  if (!sFullRes) {
++    glGetIntegerv(GL_SAMPLE_BUFFERS, &drawSamples); // (a blit can't write into a multisampled output)
++  }
++  if (!sFullRes && drawSamples == 0 && s_SingleScreenQuad != SINGLE_SCREEN_NONE && !wideHere && !(bg0as3d && bgEnabled[0])) {
++    static GLuint sLowFbo = 0, sLowTex = 0;
++    GLint viewport[4], drawFbo = 0;
++    glGetIntegerv(GL_VIEWPORT, viewport);
++    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFbo);
++    if (sLowFbo == 0) {
++      // (on unit 0's binding, put back: the layers' units are bound for the draw below)
++      GLint activeUnit = 0, bound = 0;
++      glGetIntegerv(GL_ACTIVE_TEXTURE, &activeUnit);
++      glActiveTexture(GL_TEXTURE0);
++      glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
++      glGenTextures(1, &sLowTex);
++      glBindTexture(GL_TEXTURE_2D, sLowTex);
++      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SIM_NDS_SCREEN_WIDTH, SIM_NDS_SCREEN_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE,
++                   NULL);
++      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++      glGenFramebuffers(1, &sLowFbo);
++      glBindFramebuffer(GL_FRAMEBUFFER, sLowFbo);
++      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sLowTex, 0);
++      glBindTexture(GL_TEXTURE_2D, (GLuint)bound);
++      glActiveTexture((GLenum)activeUnit);
++    }
++    const GLboolean scissor = glIsEnabled(GL_SCISSOR_TEST);
++    glBindFramebuffer(GL_FRAMEBUFFER, sLowFbo);
++    glDisable(GL_SCISSOR_TEST);
++    glViewport(0, 0, SIM_NDS_SCREEN_WIDTH, SIM_NDS_SCREEN_HEIGHT);
++    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
++    glClear(GL_COLOR_BUFFER_BIT);
++    DrawScreenQuad();
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, sLowFbo);
++    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)drawFbo);
++    if (scissor) {
++      glEnable(GL_SCISSOR_TEST);
++    }
++    glBlitFramebuffer(0, 0, SIM_NDS_SCREEN_WIDTH, SIM_NDS_SCREEN_HEIGHT, viewport[0], viewport[1], viewport[0] + viewport[2],
++                      viewport[1] + viewport[3], GL_COLOR_BUFFER_BIT, GL_NEAREST);
++    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)drawFbo);
++    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
++  } else {
++    DrawScreenQuad();
++  }
+ #ifdef SDK_TRACY_ENABLE
+   TracyCZoneEnd(ctx);
+ #endif
+@@ -2001,8 +2131,11 @@
+     sLocAntiAlias = glGetUniformLocation(g3EdgeProgramID, "antiAlias");
+   }
+   glProgramUniform3fv(g3EdgeProgramID, sLocColors, 8, colors);
++  // Over enhanced water's band above the screen too: the screen's top row was outlined against the clear plane there,
++  // and the water's mirror showed that row as a line across the reflection where it reads past the top edge
++  const int edgeBand = sBandRows * sScale;
+   glProgramUniform4i(g3EdgeProgramID, sLocRect, sG3Viewport[0], sG3Viewport[1], sG3Viewport[0] + sG3Viewport[2],
+-                     sG3Viewport[1] + sG3Viewport[3]);
++                     sG3Viewport[1] + sG3Viewport[3] + edgeBand);
+   glProgramUniform1i(g3EdgeProgramID, sLocStep, sScale);
+   glProgramUniform1i(g3EdgeProgramID, sLocClearId, (int)((s_reg_G3X_CLEAR_COLOR >> 24) & 0x3F));
+   glProgramUniform1i(g3EdgeProgramID, sLocAntiAlias, antiAlias ? 1 : 0);
+@@ -2017,11 +2150,12 @@
+   if (antiAlias) {
+     glBindFramebuffer(GL_READ_FRAMEBUFFER, g3FrameBuffer);
+     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g3EdgeSourceFrameBuffer);
+-    glBlitFramebuffer(sG3Viewport[0], sG3Viewport[1], sG3Viewport[0] + sG3Viewport[2], sG3Viewport[1] + sG3Viewport[3],
+-                      0, 0, sG3Viewport[2], sG3Viewport[3], GL_COLOR_BUFFER_BIT, GL_NEAREST);
++    glBlitFramebuffer(sG3Viewport[0], sG3Viewport[1], sG3Viewport[0] + sG3Viewport[2],
++                      sG3Viewport[1] + sG3Viewport[3] + edgeBand, 0, 0, sG3Viewport[2], sG3Viewport[3] + edgeBand,
++                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+   }
+   glBindFramebuffer(GL_FRAMEBUFFER, g3EdgeFrameBuffer);
+-  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3] + edgeBand);
+   glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
+   glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
+   glActiveTexture(GL_TEXTURE0 + kEdgeSourceTexUnit);
+@@ -2148,12 +2282,14 @@
+   }
+   sSunShadowMade = false;
+   sSunMapMade = false;
++  sSunApplyDeferred = false;
+ }
+ 
+ 
+ // The sun shadow map, drawn from this frame's casters (see G3SIM_TakeCasters): each vertex back in view space (the game's
+ // projection undone: x = x_clip / m00, y = y_clip / m11, z = -w), then in the sun's view, an orthographic one along toSun
+ // fitted to the casters. Fills the uniforms the receive pass needs; false when there is nothing to draw
++static u32 sSunFitNear = 0; // (for the shadow log: the caster vertices the last fit took)
+ static bool G3SunShadowMap(const float *casters, u32 count, const G3SIM_CasterBatch_t *batches, u32 batchCount,
+                            float right[3], float up[3], float bounds[4], float depth[2]) {
+   if (count < 3) {
+@@ -2179,20 +2315,41 @@
+ 
+   static std::vector<float> sPlaced;
+   sPlaced.resize((size_t)count * 5);
++  // The fit takes only casters within kSunFitRadius of the camera (the loaded map around the player is ~1500 units
++  // across): on the frame a map border is crossed a stray caster thousands of units away stretched the map for that one
++  // frame (span 1536 -> 11072 -> 1216 between Jubilife and Route 204), and every shadow smeared: a whole-screen flicker.
++  // Casters outside the fit are still drawn; the map's edges clip them
++  constexpr float kSunFitRadius = 1600.0f;
+   float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
++  float allLo[3] = {1e30f, 1e30f, 1e30f}, allHi[3] = {-1e30f, -1e30f, -1e30f};
++  bool anyNear = false;
++  sSunFitNear = 0;
+   for (u32 v = 0; v < count; v++) {
+     const float *c = &casters[v * G3SIM_CASTER_STRIDE];
+     const float p[3] = {c[0] / m00, c[1] / m11, -c[2]};
+     const float q[3] = {p[0] * right[0] + p[1] * right[1] + p[2] * right[2], p[0] * up[0] + p[1] * up[1] + p[2] * up[2],
+                         p[0] * L[0] + p[1] * L[1] + p[2] * L[2]};
++    const bool inFit = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] < kSunFitRadius * kSunFitRadius;
++    anyNear = anyNear || inFit;
++    sSunFitNear += inFit ? 1 : 0;
+     for (int i = 0; i < 3; i++) {
+       sPlaced[v * 5 + i] = q[i];
+-      lo[i] = q[i] < lo[i] ? q[i] : lo[i];
+-      hi[i] = q[i] > hi[i] ? q[i] : hi[i];
++      allLo[i] = q[i] < allLo[i] ? q[i] : allLo[i];
++      allHi[i] = q[i] > allHi[i] ? q[i] : allHi[i];
++      if (inFit) {
++        lo[i] = q[i] < lo[i] ? q[i] : lo[i];
++        hi[i] = q[i] > hi[i] ? q[i] : hi[i];
++      }
+     }
+     sPlaced[v * 5 + 3] = c[3];
+     sPlaced[v * 5 + 4] = c[4];
+   }
++  if (!anyNear) {
++    for (int i = 0; i < 3; i++) {
++      lo[i] = allLo[i];
++      hi[i] = allHi[i];
++    }
++  }
+   for (int i = 0; i < 3; i++) {
+     lo[i] -= 1.0f;
+     hi[i] += 1.0f;
+@@ -2296,6 +2453,12 @@
+   return true;
+ }
+ 
++// The sun shadows' multiply, when the highlights pass does it for them (one full-resolution pass fewer: the two multiply
++// the same pixels; on the Duo at 6x each such pass is about half a millisecond): the shadows leave their mask and tone
++static float sSunApplyTone[3];
++static float sSunApplyStep = 1.0f;
++static bool HighlightsWillRun();
++
+ static void G3EnhancedSunShadow() {
+   // This frame's casters (they start afresh with each 3D frame: G3SIM_ResetCasters)
+   const float *casters = nullptr;
+@@ -2336,8 +2499,25 @@
+     glBindFramebuffer(GL_FRAMEBUFFER, g3SunShadowCleanFbo);
+     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g3SunShadowCleanTex, 0);
+   }
+-  static const int sDebug = (getenv("SIM_SUNSHADOW_DEBUG") != nullptr && getenv("SIM_SUNSHADOW_DEBUG")[0] != 0)
+-                                ? atoi(getenv("SIM_SUNSHADOW_DEBUG")) : 0;
++  // SIM_SUNSHADOW_DEBUG=N, SIM_SEPARATE_APPLY=1; on Android also adb shell setprop debug.eterna.sundebug N and
++  // debug.eterna.separate 1 (looked up about once a second, to look at a device's shadows where a desktop's differ)
++  static int sDebug = (getenv("SIM_SUNSHADOW_DEBUG") != nullptr && getenv("SIM_SUNSHADOW_DEBUG")[0] != 0)
++                          ? atoi(getenv("SIM_SUNSHADOW_DEBUG")) : 0;
++  static bool sSeparate = getenv("SIM_SEPARATE_APPLY") != nullptr && getenv("SIM_SEPARATE_APPLY")[0] == '1';
++#ifdef SDK_BUILD_ANDROID
++  {
++    static int sPropAge = 0;
++    if (sPropAge-- <= 0) {
++      sPropAge = 60;
++      char value[PROP_VALUE_MAX] = "";
++      __system_property_get("debug.eterna.sundebug", value);
++      sDebug = atoi(value);
++      value[0] = '\0';
++      __system_property_get("debug.eterna.separate", value);
++      sSeparate = value[0] == '1';
++    }
++  }
++#endif
+   const float xScale = sWideScale3D ? (float)SIM_NDS_SCREEN_WIDTH / (float)sWide3dWidth : 1.0f;
+ 
+   GLint viewport[4];
+@@ -2362,6 +2542,39 @@
+   const bool mapped = !sMarch && G3SunShadowMap(casters, casterCount, casterBatches, casterBatchCount, lightRight, lightUp,
+                                                  lightBounds, lightDepth);
+   SIM_Smooth(&sTimings.shadowMapCpuMs, SIM_NowNs() - mapStartNs);
++  {
++    // SIM_SUNSHADOW_LOG=2 (or on Android adb shell setprop debug.eterna.sunlog 1): the shadow map's casters, fit and
++    // depth range whenever they change, to stdout (app-log.txt on Android)
++    static int sFitLog = -1;
++    if (sFitLog < 0) {
++      const char *env = getenv("SIM_SUNSHADOW_LOG");
++      sFitLog = (env != nullptr && env[0] == '2') ? 1 : 0;
++    }
++#ifdef SDK_BUILD_ANDROID
++    static int sFitLogAge = 0;
++    if (sFitLogAge-- <= 0) {
++      sFitLogAge = 60;
++      char value[PROP_VALUE_MAX] = "";
++      __system_property_get("debug.eterna.sunlog", value);
++      sFitLog = value[0] == '1' ? 1 : (getenv("SIM_SUNSHADOW_LOG") != nullptr && getenv("SIM_SUNSHADOW_LOG")[0] == '2');
++    }
++#endif
++    static u32 sLastCount = 0xFFFFFFFF, sLastNear = 0xFFFFFFFF;
++    static float sLastSpan = -1.0f, sLastDepth = -1.0f;
++    static bool sLastMapped = false;
++    if (sFitLog && (casterCount != sLastCount || sSunFitNear != sLastNear || mapped != sLastMapped ||
++                    (mapped && (lightBounds[2] != sLastSpan || fabsf(lightDepth[1] - sLastDepth) > 1.0f)))) {
++      printf("[sunfit] casters %u (%u batches) near %u mapped %d span %.0f depth %.1f +%.1f\n", casterCount,
++             casterBatchCount, sSunFitNear, mapped ? 1 : 0, mapped ? lightBounds[2] : 0.0f, mapped ? lightDepth[0] : 0.0f,
++             mapped ? lightDepth[1] : 0.0f);
++      fflush(stdout);
++      sLastCount = casterCount;
++      sLastNear = sSunFitNear;
++      sLastMapped = mapped;
++      sLastSpan = mapped ? lightBounds[2] : 0.0f;
++      sLastDepth = mapped ? lightDepth[1] : 0.0f;
++    }
++  }
+   glDepthFunc(depthFunc);
+   glDepthMask(depthMask);
+   sSunMapMade = mapped;
+@@ -2469,7 +2682,9 @@
+     sSunMaskTex = g3SunShadowCleanTex;
+   }
+ 
+-  // 2. The multiply, over the viewport, into the 3D colour alone
++  // 2. The multiply, over the viewport, into the 3D colour alone (or by the highlights pass, with its own: SIM_SEPARATE_APPLY=1
++  // keeps them apart, for comparing)
++  sSunApplyDeferred = sDebug == 0 && !sSeparate && HighlightsWillRun();
+   static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+   glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
+   glDrawBuffers(1, kBoth);
+@@ -2491,8 +2706,14 @@
+   } else {
+     glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ONE);
+   }
+-  glUseProgram(apply);
+-  glDrawArrays(GL_TRIANGLES, 0, 3);
++  sSunApplyTone[0] = 1.0f - a * (1.0f - 0.04f);
++  sSunApplyTone[1] = 1.0f - a * (1.0f - 0.06f);
++  sSunApplyTone[2] = 1.0f - a * (1.0f - 0.14f);
++  sSunApplyStep = (float)sScale / (float)maskScale;
++  if (!sSunApplyDeferred) {
++    glUseProgram(apply);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++  }
+   glDrawBuffers(2, kBoth);
+   glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+   sSunShadowMade = true;
+@@ -2515,9 +2736,13 @@
+ 
+ // Enhanced graphics' sun highlights: see g3_highlight_fragment.glsl. At the DS's resolution the light on each pixel, then
+ // at full resolution an addition of it; not with anti-aliasing (no attributes), in a W-buffer scene, or with no sun.
++static bool HighlightsWillRun() {
++  return sSunFrameDrawn && sSunFrameCamera && s_SIM_config.enhancedHighlights && sSamples == 0 && !s_SIM_useWBuffer &&
++         sG3Viewport[2] > 0 && sG3Viewport[3] > 0 && (sSunLight[0] + sSunLight[1] + sSunLight[2]) > 0.0f;
++}
++
+ static void G3EnhancedHighlights() {
+-  if (!sSunFrameDrawn || !sSunFrameCamera || !s_SIM_config.enhancedHighlights || sSamples != 0 || s_SIM_useWBuffer ||
+-      sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0 || (sSunLight[0] + sSunLight[1] + sSunLight[2]) <= 0.0f) {
++  if (!HighlightsWillRun()) {
+     return;
+   }
+   const int dsWidth = (sG3Viewport[2] + sScale - 1) / sScale, dsHeight = (sG3Viewport[3] + sScale - 1) / sScale;
+@@ -2599,10 +2824,24 @@
+   glEnable(GL_BLEND);
+   glUseProgram(apply);
+   if (sDebug == 0) {
+-    // The pixel's own colour brightened (dst * (1 + light)), then the sun's colour added where there is a rim
++    // The pixel's own colour brightened (dst * (1 + light)), and darkened in the sun shadows when they left their multiply
++    // here: dst * shade * (1 + light), as twice src * dst (the blend's factors stop at 1), then the sun's colour added
++    // where there is a rim
++    const bool withShadow = sSunApplyDeferred && sSunShadowMade;
+     glProgramUniform1i(apply, WaterUniform(apply, "mode"), 0);
+-    glBlendFuncSeparate(GL_DST_COLOR, GL_ONE, GL_ZERO, GL_ONE);
++    glProgramUniform1i(apply, WaterUniform(apply, "withShadow"), withShadow ? 1 : 0);
++    if (withShadow) {
++      glActiveTexture(GL_TEXTURE0 + 13);
++      glBindTexture(GL_TEXTURE_2D, sSunMaskTex);
++      glProgramUniform1i(apply, WaterUniform(apply, "shadowMask"), 13);
++      glProgramUniform1f(apply, WaterUniform(apply, "shadowStep"), sSunApplyStep);
++      glProgramUniform3f(apply, WaterUniform(apply, "shadowTone"), sSunApplyTone[0], sSunApplyTone[1], sSunApplyTone[2]);
++      glBlendFuncSeparate(GL_DST_COLOR, GL_SRC_COLOR, GL_ZERO, GL_ONE);
++    } else {
++      glBlendFuncSeparate(GL_DST_COLOR, GL_ONE, GL_ZERO, GL_ONE);
++    }
+     glDrawArrays(GL_TRIANGLES, 0, 3);
++    sSunApplyDeferred = false;
+     glProgramUniform1i(apply, WaterUniform(apply, "mode"), 1);
+     glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
+     glDrawArrays(GL_TRIANGLES, 0, 3);
+@@ -2663,8 +2902,9 @@
+     return;
+   }
+   const int dsWidth = (sG3Viewport[2] + sScale - 1) / sScale, dsHeight = (sG3Viewport[3] + sScale - 1) / sScale;
+-  WaterResources(sFboWidth * sScale, SIM_NDS_SCREEN_HEIGHT * 2 * sScale, dsWidth, dsHeight, sG3Viewport[2],
+-                 sG3Viewport[3]);
++  const int bandPx = sBandRows * sScale; // (the band above the screen: the mask, the shore search and the copy reach it)
++  WaterResources(sFboWidth * sScale, (SIM_NDS_SCREEN_HEIGHT * 2 + sBandRows) * sScale, dsWidth, dsHeight, sG3Viewport[2],
++                 sG3Viewport[3] + bandPx);
+ 
+   GLint viewport[4];
+   GLint vertexArray, depthFunc;
+@@ -2678,9 +2918,11 @@
+ 
+   // 1. The mask: the water quads, kept where the scene's depth lets them show
+   glBindFramebuffer(GL_FRAMEBUFFER, g3WaterMaskFbo);
+-  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3] + bandPx);
+   glEnable(GL_SCISSOR_TEST);
+-  glScissor(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glScissor(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3] + bandPx);
++  glProgramUniform1f(g3WaterMaskProgramID, WaterUniform(g3WaterMaskProgramID, "bandScale"),
++                     (float)SIM_NDS_SCREEN_HEIGHT / (float)(SIM_NDS_SCREEN_HEIGHT + sBandRows));
+   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+   glClear(GL_COLOR_BUFFER_BIT);
+   glDisable(GL_SCISSOR_TEST);
+@@ -2938,6 +3180,7 @@
+     glProgramUniform1i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "pixelStep"), sScale);
+     glProgramUniform2i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "dsSize"), dsWidth, dsHeight);
+     glProgramUniform1i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "maxDistance"), 40);
++    glProgramUniform1i(g3WaterMarchProgramID, WaterUniform(g3WaterMarchProgramID, "searchHeight"), dsHeight + sBandRows);
+     glUseProgram(g3WaterMarchProgramID);
+     glBindVertexArray(g3EdgeVertexArray);
+     glDrawArrays(GL_TRIANGLES, 0, 3);
+@@ -2950,7 +3193,8 @@
+       const int cx1 = (x1 + pad < sG3Viewport[0] + sG3Viewport[2] ? x1 + pad : sG3Viewport[0] + sG3Viewport[2]) - sG3Viewport[0];
+       const int cy0 = y0 - sG3Viewport[1];
+       const int top = y1 + 2 * 40 * sScale;
+-      const int cy1 = (top < sG3Viewport[1] + sG3Viewport[3] ? top : sG3Viewport[1] + sG3Viewport[3]) - sG3Viewport[1];
++      const int cy1 = (top < sG3Viewport[1] + sG3Viewport[3] + bandPx ? top : sG3Viewport[1] + sG3Viewport[3] + bandPx) -
++                      sG3Viewport[1];
+       glBindFramebuffer(GL_READ_FRAMEBUFFER, g3FrameBuffer);
+       glReadBuffer(GL_COLOR_ATTACHMENT0);
+       glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g3WaterSceneFbo);
+@@ -3425,7 +3669,7 @@
+       if (presentNs == 0 || SIM_NowNs() - sLastPresentNs < presentNs) {
+         present = false;
+       }
+-    } else if (fastForward && SIM_NowNs() - sLastPresentNs < (SIM_BattleSpeedTenths() > 0 ? 10000000ull : 15000000ull)) {
++    } else if (fastForward && SIM_NowNs() - sLastPresentNs < FastForwardPresentNs()) {
+       present = false; // about 60 frames a second shown, whatever the speed (the battle speed shows every frame of 1.5x)
+     }
+     sSkipNextFrame = false;
+@@ -4113,6 +4357,12 @@
+       if (sPerfLog < 0) {
+         const char *env = getenv("LIBNTR_PERF_LOG");
+         sPerfLog = (env != NULL && env[0] == '1') ? 1 : 0;
++#ifdef SDK_BUILD_ANDROID
++        // (on Android: adb shell setprop debug.eterna.perflog 1, read at launch; it goes to app-log.txt)
++        char value[PROP_VALUE_MAX] = "";
++        __system_property_get("debug.eterna.perflog", value);
++        sPerfLog = sPerfLog || value[0] == '1';
++#endif
+       }
+       if (sPerfLog && ++sPerfFrames % 120 == 0) {
+         printf("perf: game %.2f  3d %.2f  draw %.2f (2d %.2f upload %.2f second %.2f gui %.2f)  wait %.2f  swap %.2f "
+@@ -4183,7 +4433,18 @@
+   sG3Viewport[1] = (s_reg_GX_POWCNT >> 15) ? SIM_NDS_SCREEN_HEIGHT * sScale : 0;
+   sG3Viewport[2] = sWide3dWidth * sScale;
+   sG3Viewport[3] = SIM_NDS_SCREEN_HEIGHT * sScale;
+-  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  // (the band above the screen when enhanced water wants one: the 3D is drawn over both, the passes keep to the screen's)
++  if (BandRowsWanted() != sBandRows && !sChangeInternalResAfterRender) {
++    SIM_SetInternalResolutionAfterRender(0);
++  }
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3] + sBandRows * sScale);
++  {
++    const float bandScale = (float)SIM_NDS_SCREEN_HEIGHT / (float)(SIM_NDS_SCREEN_HEIGHT + sBandRows);
++    glProgramUniform1f(g3shaderProgramID, glGetUniformLocation(g3shaderProgramID, "bandScale"), bandScale);
++    glProgramUniform1f(g3WaterMaskProgramID, glGetUniformLocation(g3WaterMaskProgramID, "bandScale"), bandScale);
++    // the top plane at y = w * (H + 2 * band) / H
++    SIM_SetClipTop(SIM_NDS_SCREEN_HEIGHT, SIM_NDS_SCREEN_HEIGHT + 2 * sBandRows);
++  }
+ 
+   // Activate 3D shader
+   glUseProgram(g3shaderProgramID);

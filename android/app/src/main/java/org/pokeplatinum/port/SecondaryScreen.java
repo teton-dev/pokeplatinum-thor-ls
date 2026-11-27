@@ -71,6 +71,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
      * window draws a frame, as when the settings open over it, which ended the stall; 1 its surface is made again.
      */
     void unstick(int step) {
+        log("unstick " + step + (presentation != null ? "" : " (no bottom screen)"));
         if (presentation != null) {
             presentation.unstick(step);
         }
@@ -78,6 +79,9 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
     /** Places the lower screen again: the game's window moved to another display (see PlatinumActivity). */
     void refresh() {
+        if (wanted && presentation == null) {
+            log("refresh: no bottom screen yet, the game is on display " + ownDisplayId() + "; " + describeDisplays());
+        }
         if (wanted) {
             update();
         }
@@ -94,6 +98,17 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
         }
         //noinspection deprecation
         return activity.getWindowManager().getDefaultDisplay().getDisplayId();
+    }
+
+    /** Every display, for the log: id, state, flags, and which one the game's window is on. */
+    private String describeDisplays() {
+        StringBuilder text = new StringBuilder("displays");
+        for (Display display : displayManager.getDisplays()) {
+            text.append(' ').append(display.getDisplayId()).append(":state ").append(display.getState())
+                    .append(display.isValid() ? "" : " invalid")
+                    .append(" flags 0x").append(Integer.toHexString(display.getFlags()));
+        }
+        return text.toString();
     }
 
     private Display pickDisplay() {
@@ -133,17 +148,17 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
         dismiss();
         if (target == null) {
-            Log.i(TAG, "No display for the bottom screen (the game is on display " + ownDisplayId() + ")");
+            log("No display for the bottom screen (the game is on display " + ownDisplayId() + "; " + describeDisplays() + ")");
             return; // single screen: the game falls back to its normal layout
         }
 
         try {
             presentation = new ScreenPresentation(activity, target);
             presentation.show();
-            Log.i(TAG, "Bottom screen on display " + target.getDisplayId() + " (" + target.getName() + ")");
+            log("Bottom screen on display " + target.getDisplayId() + " (" + target.getName() + ")");
         } catch (WindowManager.InvalidDisplayException | WindowManager.BadTokenException e) {
             // The display went away while we were choosing it; the listener will retry
-            Log.w(TAG, "Could not show the bottom screen", e);
+            log("Could not show the bottom screen: " + e);
             presentation = null;
         }
     }
@@ -165,11 +180,13 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
     @Override
     public void onDisplayAdded(int displayId) {
+        log("display " + displayId + " added");
         update();
     }
 
     @Override
     public void onDisplayRemoved(int displayId) {
+        log("display " + displayId + " removed");
         update();
     }
 
@@ -182,6 +199,20 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
     static native void nativeSurfaceChanged(Surface surface);
     static native void nativeSurfaceDestroyed();
     static native void nativeTouch(boolean down, float x, float y);
+    static native void nativeLog(String text);
+
+    /**
+     * To logcat and to the data directory's app-log.txt (libntr's SIM_Android_Log): some devices keep only error
+     * lines in logcat (the Retroid Pocket Duo).
+     */
+    static void log(String text) {
+        Log.i(TAG, text);
+        try {
+            nativeLog(text);
+        } catch (UnsatisfiedLinkError ignored) {
+            // the native library isn't loaded yet
+        }
+    }
 
     private static final class ScreenPresentation extends Presentation {
         private SurfaceView surfaceView;
@@ -268,11 +299,13 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
                 @Override
                 public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                    log("surface changed " + width + "x" + height);
                     nativeSurfaceChanged(holder.getSurface());
                 }
 
                 @Override
                 public void surfaceDestroyed(SurfaceHolder holder) {
+                    log("surface destroyed");
                     // Returns once the renderer has let go of the surface
                     nativeSurfaceDestroyed();
                 }

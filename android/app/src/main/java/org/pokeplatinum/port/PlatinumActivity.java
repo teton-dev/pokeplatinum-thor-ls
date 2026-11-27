@@ -205,12 +205,12 @@ public class PlatinumActivity extends SDLActivity {
         if (main == null || !main.isValid() || main.getState() == Display.STATE_OFF) {
             return;
         }
-        Log.i(TAG, "Launched on display " + getDisplay().getDisplayId() + ": moving to the main display");
+        SecondaryScreen.log("Launched on display " + getDisplay().getDisplayId() + ": moving to the main display");
         Intent intent = new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             startActivity(intent, ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY).toBundle());
         } catch (SecurityException | ActivityNotFoundException e) {
-            Log.w(TAG, "Could not move to the main display", e);
+            SecondaryScreen.log("Could not move to the main display: " + e);
         }
     }
 
@@ -235,24 +235,37 @@ public class PlatinumActivity extends SDLActivity {
         }
     }
 
+    private int displayIdForLog() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && getDisplay() != null) {
+            return getDisplay().getDisplayId();
+        }
+        return -1;
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        SecondaryScreen.log("resumed on display " + displayIdForLog());
         if (secondaryScreen != null) {
             secondaryScreen.show();
             // Again once the window has settled: after moveToMainDisplay it can resume while still counted on the
             // display it was launched on
-            getWindow().getDecorView().postDelayed(() -> {
-                if (secondaryScreen != null) {
-                    secondaryScreen.refresh();
-                }
-            }, 500);
+            // (and later again: launched from Cocoon on the Duo's lower panel, the game sometimes stayed on the top
+            // screen alone until it was closed)
+            for (int delayMs : new int[] {500, 1500, 3000}) {
+                getWindow().getDecorView().postDelayed(() -> {
+                    if (secondaryScreen != null) {
+                        secondaryScreen.refresh();
+                    }
+                }, delayMs);
+            }
         }
     }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        SecondaryScreen.log("configuration changed, on display " + displayIdForLog());
         // A move to another display (moveToMainDisplay) comes as a configuration change: the lower screen follows
         if (secondaryScreen != null) {
             secondaryScreen.refresh();

@@ -29,6 +29,11 @@ BOOL EnhancedGraphics_SunShadowsShown(void);
 // shadow polygons are not drawn while the sun's are shown
 void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera);
 void EnhancedGraphics_LandDrawing(BOOL drawing);
+// The map's props just off the screen are drawn too (EnhancedGraphics_NearView; nothing of them is shown: libntr keeps
+// them as shadow casters before clipping and the clip drops the rest), so a house past the edge still casts onto it
+BOOL EnhancedGraphics_WantsOffScreenCasters(void);
+// Is a point (a prop's position) on the screen or within about half the screen of it, with this frame's camera
+BOOL EnhancedGraphics_NearView(const VecFx32 *position);
 // Around other models that should cast the sun's shadows (signposts, mailboxes: map objects drawn as models)
 void EnhancedGraphics_CasterDrawing(BOOL drawing);
 

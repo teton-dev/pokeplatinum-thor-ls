@@ -1,0 +1,55 @@
+# Enhanced graphics sun shadows while the camera moves: the player walks east south of the house by Canalave City's canal
+# with a frame-exact shot every 4 frames (stillshot), to see whether shadow edges hold still on the ground as the view slides.
+# TEST_CONFIG="EnhancedShadows=true" POKEPLATINUM_ENHANCED_HOUR=16 tools/docker/desktop.sh test tests/scripts/enhanced_walk_shadows.txt --from turtwig
+mash A until free
+jump 33 50 735
+until free timeout 3000
+wait 40
+hold RIGHT 4
+stillshot walk00
+hold RIGHT 4
+stillshot walk01
+hold RIGHT 4
+stillshot walk02
+hold RIGHT 4
+stillshot walk03
+hold RIGHT 4
+stillshot walk04
+hold RIGHT 4
+stillshot walk05
+hold RIGHT 4
+stillshot walk06
+hold RIGHT 4
+stillshot walk07
+hold RIGHT 4
+stillshot walk08
+hold RIGHT 4
+stillshot walk09
+hold RIGHT 4
+stillshot walk10
+hold RIGHT 4
+stillshot walk11
+hold RIGHT 4
+stillshot walk12
+hold RIGHT 4
+stillshot walk13
+hold RIGHT 4
+stillshot walk14
+hold RIGHT 4
+stillshot walk15
+hold RIGHT 4
+stillshot walk16
+hold RIGHT 4
+stillshot walk17
+hold RIGHT 4
+stillshot walk18
+hold RIGHT 4
+stillshot walk19
+hold RIGHT 4
+stillshot walk20
+hold RIGHT 4
+stillshot walk21
+hold RIGHT 4
+stillshot walk22
+hold RIGHT 4
+stillshot walk23

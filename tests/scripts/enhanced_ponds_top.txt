@@ -1,0 +1,36 @@
+# Enhanced graphics water reflections with the pond at the top of the screen: Route 204 South's right pond from a few tiles
+# further south each shot, so what it mirrors (the trees above it) leaves the screen (with SIM_WATER_BAND=0 it went out).
+# tools\windows\test.ps1 -Script tests/scripts/enhanced_ponds_top.txt -From turtwig -Hour 13 -Config 'EnhancedWater=true'
+mash A until free
+jump 345 177 729
+until free timeout 3000
+wait 30
+stillshot z729
+jump 345 177 730
+until free timeout 3000
+wait 30
+stillshot z730
+jump 345 177 731
+until free timeout 3000
+wait 30
+stillshot z731
+jump 345 177 732
+until free timeout 3000
+wait 30
+stillshot z732
+jump 345 177 733
+until free timeout 3000
+wait 30
+stillshot z733
+jump 345 177 734
+until free timeout 3000
+wait 30
+stillshot z734
+jump 345 177 735
+until free timeout 3000
+wait 30
+stillshot z735
+jump 345 177 736
+until free timeout 3000
+wait 30
+stillshot z736

@@ -1,0 +1,53 @@
+# The same as enhanced_walk_shadows.txt walking south across Canalave City's plaza (the camera moves along the view's depth)
+mash A until free
+jump 33 53 733
+until free timeout 3000
+wait 40
+hold DOWN 4
+stillshot walk00
+hold DOWN 4
+stillshot walk01
+hold DOWN 4
+stillshot walk02
+hold DOWN 4
+stillshot walk03
+hold DOWN 4
+stillshot walk04
+hold DOWN 4
+stillshot walk05
+hold DOWN 4
+stillshot walk06
+hold DOWN 4
+stillshot walk07
+hold DOWN 4
+stillshot walk08
+hold DOWN 4
+stillshot walk09
+hold DOWN 4
+stillshot walk10
+hold DOWN 4
+stillshot walk11
+hold DOWN 4
+stillshot walk12
+hold DOWN 4
+stillshot walk13
+hold DOWN 4
+stillshot walk14
+hold DOWN 4
+stillshot walk15
+hold DOWN 4
+stillshot walk16
+hold DOWN 4
+stillshot walk17
+hold DOWN 4
+stillshot walk18
+hold DOWN 4
+stillshot walk19
+hold DOWN 4
+stillshot walk20
+hold DOWN 4
+stillshot walk21
+hold DOWN 4
+stillshot walk22
+hold DOWN 4
+stillshot walk23

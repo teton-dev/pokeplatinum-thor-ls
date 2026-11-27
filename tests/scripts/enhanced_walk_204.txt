@@ -1,0 +1,88 @@
+# Enhanced graphics across a map border: the player walks north out of Jubilife City into Route 204 with a frame-exact
+# shot every 4 frames, to catch a whole-screen flicker as the next map's chunks load (seen on the Duo, 2026-11-25).
+# tools\windows\test.ps1 -Script tests/scripts/enhanced_walk_204.txt -From turtwig -Hour 16 -Config 'EnhancedShadows=true ...'
+mash A until free
+jump 3 173 742
+until free timeout 3000
+wait 40
+stillshot start
+hold UP 4
+stillshot walk01
+hold UP 4
+stillshot walk02
+hold UP 4
+stillshot walk03
+hold UP 4
+stillshot walk04
+hold UP 4
+stillshot walk05
+hold UP 4
+stillshot walk06
+hold UP 4
+stillshot walk07
+hold UP 4
+stillshot walk08
+hold UP 4
+stillshot walk09
+hold UP 4
+stillshot walk10
+hold UP 4
+stillshot walk11
+hold UP 4
+stillshot walk12
+hold UP 4
+stillshot walk13
+hold UP 4
+stillshot walk14
+hold UP 4
+stillshot walk15
+hold UP 4
+stillshot walk16
+hold UP 4
+stillshot walk17
+hold UP 4
+stillshot walk18
+hold UP 4
+stillshot walk19
+hold UP 4
+stillshot walk20
+hold UP 4
+stillshot walk21
+hold UP 4
+stillshot walk22
+hold UP 4
+stillshot walk23
+hold UP 4
+stillshot walk24
+hold UP 4
+stillshot walk25
+hold UP 4
+stillshot walk26
+hold UP 4
+stillshot walk27
+hold UP 4
+stillshot walk28
+hold UP 4
+stillshot walk29
+hold UP 4
+stillshot walk30
+hold UP 4
+stillshot walk31
+hold UP 4
+stillshot walk32
+hold UP 4
+stillshot walk33
+hold UP 4
+stillshot walk34
+hold UP 4
+stillshot walk35
+hold UP 4
+stillshot walk36
+hold UP 4
+stillshot walk37
+hold UP 4
+stillshot walk38
+hold UP 4
+stillshot walk39
+hold UP 4
+stillshot walk40

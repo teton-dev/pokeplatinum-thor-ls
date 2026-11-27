@@ -1,0 +1,14 @@
+# Enhanced graphics sun shadows in Jubilife City where the frame has the most shadow casters: one tile north of
+# (174, 784) the scene once overflowed libntr's caster buffer and every building's and lamp's shadow went out.
+# Widescreen (it shows more of the map). From the turtwig fixture with TEST_CONFIG="EnhancedShadows=true SecondaryScreen=true
+# Widescreen=true WindowWidth=768 WindowHeight=432" POKEPLATINUM_ENHANCED_HOUR=13 (SIM_SUNSHADOW_LOG=2 logs
+# the caster count): both shots show the buildings' shadows
+mash A until free
+jump 3 174 784
+until free timeout 3000
+wait 90
+shot south
+jump 3 174 782
+until free timeout 3000
+wait 90
+shot north
