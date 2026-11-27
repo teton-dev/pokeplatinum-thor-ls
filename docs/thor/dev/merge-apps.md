@@ -1,111 +1,164 @@
-# One app for both games: scope (2026-11-25)
+# SinjohDS: one app for both games (scope)
 
-The owner asked to scope combining **Eterna** (Platinum, `app.eterna`) and **Goldenrod** (HeartGold/SoulSilver,
-`app.goldenrod`) into one app. Nothing is built yet; this is the plan and its costs, from the code as it is.
+**Status: scope only (first written 2026-11-25, revised 2026-11-26). Nothing of SinjohDS is built.**
 
-## What the two apps share today
+The owner wants **Eterna** (`app.eterna`) and **Goldenrod** (`app.goldenrod`) merged into one app called
+**SinjohDS** (name decided 2026-11-26). It launches HeartGold/SoulSilver and their hacks, and Platinum with Renegade
+and Following Renegade Platinum. The two sides share the Black 2/White 2 data, and Platinum may use HGSS's follower
+sprites.
 
-| Part | State |
-|---|---|
-| Java (`org.pokeplatinum.port`) | `NativeSettings.java` identical; `PlatinumActivity.java` differs in 3 places (Eterna's pacing-watchdog `unstickDisplays`, Goldenrod's list of accepted game codes `IPKE,IPGE`, the multicast lock's name); `SecondaryScreen.java` ~30 lines apart (the watchdog's `unstick`). |
-| Gradle | Same SDK levels and `stable.keystore` (both apps are signed with the same key). Goldenrod adds a `dev` flavour (`APK_FLAVOR`). |
-| Native | Each APK is `libSDL2.so` (6 MB) + `libmain.so` (Eterna 15.0 MB, Goldenrod 15.5 MB): the decomp, its libntr build and port-common, linked into one library. |
-| libntr | Same pinned revision (`teton-dev/libntr` 578c6a8); the `packagefiles` patch lists differ: Goldenrod lacks the 11 `libntr_enhanced_*` patches, `libntr_3d_premultiplied`, the Android pacing ones (`android_main_async`, `android_watchdog_status`) and `wide_subtop_bgs`; Eterna lacks `libntr_wide_edge_bg0`. |
-| port-common | Same revision; Goldenrod adds `port-common_gear_option.patch`. |
-| gen5 | One tree: Goldenrod's `gen5` is a symlink to Eterna's in git. |
+## Games it launches
 
-## The one hard constraint: one game per process
-
-The two decomps cannot live in one native library. Measured on the shipped libraries (`llvm-nm -D --defined-only` of
-`libmain.so` in eterna-9100083 and goldenrod-26112305): Eterna exports 27,127 symbols, Goldenrod 31,830, and **14,637
-are in both**. About half of those are libntr, NitroSDK/NitroSystem and C++ (`SIM_*`, `NNS*`, `OS_*`, `GX*`, mangled
-names), but thousands are game code: the HGSS decomp uses many of Platinum's names (`AreaDataManager_*`,
-`Save*`, `Sprite*`, `Heap*`...). Each game also links its own libntr, with its own patch set and globals (the emulated
-DS registers, the renderer). Renaming every symbol of one game (as `gen5/tools/prefix_symbols.py` does for BW2's code)
-is possible in principle but out of proportion to the gain.
-
-So the merged app keeps **two native libraries**, `libplatinum.so` and `libheartgold.so`, each built as today from
-its own repository, and **runs each game in its own process**:
-
-- A small launcher activity (native Android views, like the settings) lists the games and their ROMs and starts
-  one of two `SDLActivity` subclasses, declared with `android:process=":platinum"` and `android:process=":heartgold"`.
-- Each process loads only its game's library (`getLibraries()` returns `SDL2` + that one), so the duplicate symbols
-  never meet. SDL's static Java state is per process, so it is safe too.
-- Switching games ends one process and starts the other (as quitting does now): no in-process reset to write.
-- The JNI names (`org.pokeplatinum.port.*`) stay. Both libraries register the same natives, but only one per process.
-
-## The data folder
-
-libntr `chdir`s into `SDL_AndroidGetExternalStoragePath()` (`sim_android.cpp`), which is `Android/data/<package>/files`
-for both processes of one package. Each game needs its own subfolder:
-
-- `files/platinum/` and `files/heartgold/` (extracted ROM, saves, `sim_config*.ini`, `gen5/`), chosen by the activity
-  (an intent extra or a per-library constant read in `sim_android.cpp`): a small libntr patch, shared by both games.
-- The BW2 import (`gen5/`, 269 MB extracted, measured on the Windows desktop build) could be shared by pointing both games at `files/gen5/`. That saves
-  a second import and its disk space; it needs the path in `gen5_rom.cpp` to be configurable.
-
-## Package ID and moving existing saves
-
-Both apps are signed with the same key, so the merged app can **be an update of `app.eterna`** (a higher version
-code), keeping Eterna's data in place (moved into `files/platinum/` on first run). Goldenrod's data is in another
-app's `Android/data`, which Android 11+ doesn't let one app read. The ways to bring it over:
-
-1. **adb** (the owner's devices): `adb shell cp -r /sdcard/Android/data/app.goldenrod/files/* /sdcard/Android/data/app.eterna/files/heartgold/`.
-   Fine for the owner, useless for other players.
-2. **Export from Goldenrod**: one last Goldenrod update whose Saves page writes a zip to `Documents/`, imported by the
-   merged app's launcher (Storage Access Framework, which the app already uses for ROM import).
-3. **A signature-protected `ContentProvider`** in a last Goldenrod update that the merged app reads directly (same
-   key). Seamless, but more code than (2) for a one-time move.
-
-Recommended: (1) now for the owner, (2) if the app is released to others. A new package ID instead (say
-`app.thor.pokemon`) makes both games' data a migration and loses the update path; it isn't worth it.
-
-**Version codes**: Eterna uses `91000NN` locally, `9100000 + run` in Actions; Goldenrod uses `YYMMDDNN`
-(26112305 > 9100083). The merged app continues Eterna's (as an update of `app.eterna`) and must stay above
-Eterna's Actions builds. `adb install -r` refuses lower codes.
-
-## Building it
-
-- Each game builds its `.so` as today (`tools/android/build_apk.sh` up to its meson/ninja step). A combined Gradle
-  project takes both libraries as `jniLibs` (renamed to `libplatinum.so`/`libheartgold.so`) plus SDL2 once.
-- Where the Android project lives: recommended **in Eterna's repo** (`android/`, a `combined` flavour taking
-  `HEARTGOLD_LIB=<path>`), so each game repo keeps tracking its upstream untouched. A third, tiny repo for the shell
-  is the alternative if the owner wants the games' repos to stay single-game.
-- Actions: one workflow checks out both repos (and pokebw2), builds both libraries, then the APK. About twice
-  today's ~10 min Eterna build.
-- APK size: ~37 MB (two 15 MB libraries + SDL2), up from ~21 MB each.
-
-## The libntr patch sets: unify first (done 2026-11-25)
-
-**Done:** Goldenrod's `libntr.wrap` now lists Eterna's patches with its own `libntr_wide_edge_bg0.patch` where it was
-(after `libntr_carts_known.patch`); the patches the two share are byte-identical, and each series applies cleanly to
-libntr 578c6a8 and reproduces its checkout exactly. Goldenrod builds and runs with it on Windows, but only a one-room
-smoke test (the bedroom at 4x) has been run: outdoors, widescreen, a Gen 5 battle and the Android build are unchecked,
-and so is why `libntr_3d_premultiplied` and `libntr_wide_subtop_bgs` were Eterna-only (HGSS may draw differently with
-them). Nothing of it is committed yet. The enhanced passes are
-in its libntr, but nothing in HGSS calls them yet: the game side is the next step. The Android pacing patches look up
-`unstickDisplays` through JNI, which Goldenrod's activity doesn't have yet; libntr clears the failed lookup, so it is a
-no-op there until the Java side is copied over. The original note:
-
-
-The merged app doesn't require one libntr patch set (each game links its own), but keeping two diverging sets is the
-real maintenance cost, and Goldenrod needs the enhanced-graphics patches anyway. Before merging: bring Goldenrod's
-`packagefiles` to Eterna's list (plus its own `wide_edge_bg0` and `gear_option`) in the same order, with a script that
-checks both repos' checkouts against their patches (the handoff's "apply in order to a fresh checkout and diff").
-
-## Order and size
-
-| Step | What | Size |
+| Engine | Game codes | Games |
 |---|---|---|
-| 1 | Unify the libntr patch sets (enhanced graphics, pacing watchdog into Goldenrod) | 2-3 sessions (much of it is the enhanced-graphics port to HGSS, planned anyway) |
-| 2 | One `PlatinumActivity`/`SecondaryScreen` with the game as a parameter (accepted codes, lock name, data subfolder); libntr data-subfolder patch | 1 session |
-| 3 | Launcher activity (game list, Add a game, last-played), two game activities in their own processes, combined Gradle flavour | 1-2 sessions |
-| 4 | Moving data: `files/` into `files/platinum/` on first run; the Goldenrod import (adb now, export/import later) | 1 session |
-| 5 | Actions workflow building both libraries; version code | 1 session |
-| 6 | Device checks: both games on the Thor and the Duo, both screens, switching games, settings, link play | 1 session |
+| Platinum (`libplatinum.so`) | `CPUE` | Platinum, Renegade Platinum, Following Renegade Platinum |
+| HGSS (`libheartgold.so`) | `IPKE`, `IPGE` | HeartGold, SoulSilver, Sacred Gold, Storm Silver |
 
-**Risks**: the Duo's dual-screen hosting (`SecondaryScreen`) and the pacing watchdog are per-activity and untested
-across two processes; link play's LAN discovery from either game; the Actions build time.
+Hacks run only as far as the port reimplements their code changes: an unknown hack gets "Add a game"'s warning and
+may not work. Storm Silver is untested, and Following Renegade is ~70% (`following-renegade.md`). The merge changes
+neither. HeartGold (JP) is not a game of its own here: only the Japanese Game Corner reads it.
 
-**Open questions for the owner**: keep `app.eterna` as the merged app's ID (recommended)? The merged app's name and
-icon? Should the launcher remember the last game and start straight into it?
+**Platform:** assumed **Android** (Thor, Duo). The desktop builds stay two separate programs, used for testing.
+
+## The hard constraint: one game per process (measured 2026-11-25)
+
+The two decomps can't share a native library. `llvm-nm` on the shipped `libmain.so`s: Eterna exports 27,127 symbols,
+Goldenrod 31,830, **14,637 in both**, including thousands of game functions. Each also links its own libntr with its
+own globals. Renaming one game's symbols (as `gen5/tools/prefix_symbols.py` does for BW2) is out of proportion.
+
+So SinjohDS ships **two native libraries** and **runs each game in its own process**: a launcher activity starts one
+of two `SDLActivity` subclasses (`android:process=":platinum"` / `":heartgold"`), each loading only SDL2 and its
+library. SDL's static Java state is per process. The JNI names (`org.pokeplatinum.port.*`) stay.
+
+**What this means for sharing:** the games share **files**, never code or memory. Anything Platinum "gets from HGSS"
+is read from HGSS's extracted ROM on disk, by Platinum's own code.
+
+## Data layout
+
+libntr `chdir`s into the app's `files/` (`sim_android.cpp`). Proposed:
+
+```
+files/
+  shared/gen5/          the BW2 import (~269 MB), used by both engines
+  shared/gen5-moon/     Moon Black 2's a/0/6/5 (the Fairy animations), if the player has it
+  platinum/             Platinum's own ROM, saves, ini files, carts.ini, carts/<id>/
+  heartgold/            the same for HGSS
+```
+
+Needs a small libntr change (the engine's subfolder as the base directory, and a "shared" path beside it), the same
+in both games.
+
+### Shared BW2 data
+
+- Today `gen5_rom.cpp` uses `SIM_SettingsPath("gen5")`, so per-engine subfolders would **split** it. It moves to
+  `shared/gen5/`, found through the new shared path.
+- Either engine may import or remove it. The launcher only starts one game process at a time, which is what keeps
+  two imports (both use `gen5.tmp/`) or a removal under a running game from happening: the launcher must end the
+  other game's process before starting one.
+- `gen5_data.c` builds `gen5_data/` in each cart's folder from BW2 plus that game's data. That stays per cart
+  (hacks differ). Only its Moon Black 2 input (`gen5_data/moon/a_0_6_5` today, one copy per cart) moves to `shared/`.
+
+### Follower sprites from HGSS
+
+**Checked 2026-11-26** (texture headers only, read-only):
+
+| Source | Follower members | Texture |
+|---|---|---|
+| HGSS `a/0/8/1` (863 members) | from 297 up | `tsure_poke.N`, 8 frames, 32x32 (64x64 for big ones), format 3, 2 palettes |
+| Following Renegade `data/mmodel/mmodel.narc` (1325) | appended after Platinum's | same names, sizes, format and palette count (members sampled) |
+| Platinum's own (470) | none of this kind | e.g. 16 frames, 1 palette |
+
+So HGSS's sprites are in the layout `src/port/following_hack.c`'s renderer already draws. **Plan:** one follower
+renderer (the hack's), fed from a second archive when the hack isn't installed, replacing `follower.c`'s built-in
+list for the species it covers. No third follower implementation, and no converter expected. Not yet proven: that
+the frame order matches (compare pixels, not just headers) and that the renderer works without the hack's tables.
+
+Still needed:
+- **Species to member mapping.** HGSS's code (`src/follow_mon.c`: `sModelIndexLUT`, `sFormMaxLUT`, `sFemaleFlagLUT`;
+  member = 297 + offset + form or female) can't be called across processes. Platinum gets a table **generated** from
+  that file at build time, so HGSS's source stays the owner. Per-species offsets, sizes and bobbing need the same.
+- **Which HGSS copy.** The base HeartGold or SoulSilver cart, never a hack (a hack may change the archive).
+- **Untrusted input.** Bounds-check the archive and the texture before use, as `gen5_rom_fs.h` does for BW2's.
+- **Fallback.** With no HGSS game added (or a bad archive), today's follower (built-ins and party icons) stays.
+- **Scope of following.** `follower.c` and the hack differ in behaviour (scripts, hops, ball effect). First step is
+  only the pictures in vanilla and Renegade Platinum.
+- **Species past 493**: none in either engine, nothing to do.
+
+## Launcher
+
+- A native Android activity (like the settings): one list of games from both engines, "Add a game", last played.
+- Each engine already keeps its carts in `carts.ini` (`Current=`, `AskAtLaunch`, `SkipPickerOnce`; 8 carts at most).
+  The files stay the **owner** of the cart lists; the launcher reads both, and starts a game by writing `Current=`
+  and `SkipPickerOnce=1` before starting that engine's activity. The in-game picker is then off in SinjohDS.
+- "Add a game" today refuses another engine's game code (`card_game_code`). The launcher reads the ROM's code first
+  and hands the file to the right engine. Open design point: adding (extraction, xdelta patching, randomizer) is
+  libntr C++ inside a game process, so the launcher starts that engine in an "add this file" mode (preferred) rather
+  than reimplementing it in Java. Not yet traced how to enter that mode.
+- Check the 8-cart limit: Platinum 3, HGSS 4, with versions held inside a cart.
+
+## Package ID and existing saves
+
+**Decided by the owner (2026-11-26): SinjohDS ships as an update of `app.eterna`**, with the SinjohDS label and icon.
+
+- Eterna's saves stay in place and are moved into `files/platinum/` on first run.
+- Version codes continue Eterna's (`91000NN` locally, `9100000 + run` in Actions) and must stay above them.
+- Signed with the same `stable.keystore` as both apps.
+- Goldenrod stays installed beside it until its saves are moved. Android 11+ doesn't let one app read another's
+  `Android/data`: adb copy for the owner's devices now; an export zip from a last Goldenrod update, imported
+  through the file picker, if the app is released to others.
+- Every move copies, verifies, then leaves the originals in place.
+
+## Building
+
+- Each game builds its library as today; one Gradle project takes both as `jniLibs` plus SDL2 once. Recommended
+  home: Eterna's `android/` (a `combined` flavour taking `HEARTGOLD_LIB=<path>`), so Goldenrod keeps tracking its
+  upstream. APK ~37 MB (two ~15 MB libraries), up from ~21 MB each.
+- Actions: check out both repos and pokebw2, build both, package. About twice today's ~10 min.
+- The Windows build PC (`S:\Engage-Port` toolchain) can produce local APKs.
+
+## Where the two sides stand
+
+- Java: `NativeSettings.java` identical; `PlatinumActivity.java` differs in 3 places (pacing watchdog, accepted game
+  codes, multicast lock name); `SecondaryScreen.java` ~30 lines (the watchdog). (2026-11-25)
+- libntr: same pin (578c6a8). The patch lists were unified on 2026-11-25 (Goldenrod has Eterna's plus
+  `libntr_wide_edge_bg0`), **uncommitted**; only a one-room smoke test on Windows then. Outdoors, widescreen, a
+  Gen 5 battle and the Android build of Goldenrod with them are unchecked, as is why `libntr_3d_premultiplied` and
+  `wide_subtop_bgs` had been Eterna-only. Goldenrod's activity lacks `unstickDisplays` (a no-op until copied).
+- `libntrdwc_android.patch` differs (Goldenrod has an extra `nonport.c` hunk; 2026-11-26). Each library links its
+  own, so it doesn't block the merge.
+- port-common: same pin; Goldenrod adds `port-common_gear_option.patch`.
+- Shared game code is copy-forked (root `PLAN.md` B-1), and `gen5` is a symlink in git but a junction on Windows (B-6).
+
+## Order and size (sizes are estimates in working sessions)
+
+| # | Milestone | Needs | Size |
+|---|---|---|---|
+| M0 | Commit the uncommitted work in both repos (PLAN.md D-1); check Goldenrod with the unified patches (outdoors, widescreen, Gen 5 battle, APK) | owner's OK to commit | 1 |
+| M1 | One `PlatinumActivity`/`SecondaryScreen` with the engine as a parameter; libntr base and shared directories | M0 | 1 |
+| M2 | Combined APK: two activities in their own processes, a minimal two-button launcher, Gradle flavour. **First thing to try on the Thor and Duo**, as the riskiest part | M1 | 1-2 |
+| M3 | Shared BW2 and Moon data in `shared/` | M1 | 0.5-1 |
+| M4 | Full launcher: carts of both engines, "Add a game" routed by game code, last played | M2 | 2 |
+| M5 | Save migration (first-run move, Goldenrod copy-in), version codes, label and icon | M1 | 1 |
+| M6 | HGSS follower pictures in Platinum (works without the merge on desktop; in the app needs M1's paths) | pixel check first | 2-3 |
+| M7 | Actions workflow; device pass over every game, both screens, switching, link play | all | 1-2 |
+
+Moving the shared source files into one place (B-1) is not required to ship the merge, but `gen5_rom.cpp` should
+move before M3, which edits it in both copies. Total: about 10-13 sessions.
+
+## Risks
+
+- The Duo's second-screen hosting and the pacing watchdog are per activity and untried across two processes.
+- Android may keep a game process alive in the background after switching; ending it must be explicit, after its
+  save is flushed.
+- Link play's LAN discovery from either engine.
+- Fork-only (GPL, pokebw2): SinjohDS can't go upstream as it is.
+
+## Candidates, not in scope
+
+Moving Pokemon between Platinum and HGSS saves (the save editor's trade box is a possible base); one settings page
+for options both engines have; shared texture packs; HGSS's follower behaviour (not just pictures) in Platinum.
+
+## Open questions for the owner
+
+1. An icon for SinjohDS?
+2. Start straight into the last game, or always show the launcher?
