@@ -1,0 +1,12 @@
+# Enhanced graphics' fog in Eterna Forest (its own map matrix, near the south entrance): ground mist among the trees.
+# From the turtwig fixture with TEST_CONFIG="EnhancedFog=true", by day and by night (-Hour 13 / -Hour 22);
+# SIM_ATMOSPHERE_DEBUG=2 shows the fog's share alone (white: hidden). Compare with a run without EnhancedFog.
+mash A until free
+jump 203 28 80
+until free timeout 3000
+wait 90
+shot entrance
+jump 203 40 60
+until free timeout 3000
+wait 90
+shot inside

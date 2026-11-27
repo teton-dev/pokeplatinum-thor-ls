@@ -1,0 +1,886 @@
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -67,6 +67,8 @@
+     s8 colorWhitePoint;
+     u8 enhancedAtmosphere; /* Enhanced graphics: haze and light shafts in the air (SIM_SetEnhancedAtmosphere) */
+     u8 enhancedBloom; /* Enhanced graphics: the glow of lamps and lit windows (SIM_SetEnhancedBloom) */
++    u8 enhancedFog; /* Enhanced graphics: ground and distance fog on the maps the game asks for (SIM_SetEnhancedFog) */
++    u8 enhancedLamps; /* Enhanced graphics: lamps light their surroundings at night, and sprites cast their shadows (SIM_SetLampTextures) */
+     u8 enhancedHighlights; /* Enhanced graphics: the sun's specular and fresnel highlights on buildings, rim light on sprites */
+     u8 enhancedWater; /* Enhanced graphics: the scene mirrored in water (SIM_SetEnhancedWater) */
+     u8 enhancedShadows; /* Enhanced graphics: the sun's shadows of the overworld's sprites (SIM_SetEnhancedSun) */
+--- a/include/simulator/g3_draw.h
++++ b/include/simulator/g3_draw.h
+@@ -33,11 +33,13 @@
+ void G3SIM_ClearMask(void);
+ // A sprite's sun shadow (Enhanced graphics), drawn with the batch's texture: the sprite's rectangle on screen (NDC), its
+ // depth, the texture's rectangle it shows (s0 + ds * u across, tb + dt * v up) and how the sun lays it down: the shadow's
+-// sideways shift per sprite height (shx, NDC) and its flattening (shy)
++// sideways shift per sprite height (shx, NDC) and its flattening (shy; negative: laid toward the camera, from a lamp behind
++// the sprite), and how dark it is (alpha, 0 to 1: the sun's strength, or a lamp's)
+ typedef struct {
+ 	float xl, xr, yb, yt, z;
+ 	float s0, ds, tb, dt;
+ 	float shx, shy;
++	float alpha;
+ } G3SIM_ShadowQuad_t;
+ void G3SIM_AddShadowQuad(const G3SIM_ShadowQuad_t * quad);
+ // Enhanced graphics' sun shadow map: a run of casters sharing a texture (0: none) and its wrapping (bits: repeat s, flip s,
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -107,9 +107,9 @@
+     float gpu3dMs;        // the 3D scene
+     float gpuMainMs;      // the main window
+     float gpuSecondaryMs; // the second display
+-    // Enhanced graphics' passes, GPU ms (not part of gpu3dMs): sun shadows, highlights, water, atmosphere, grade, glow;
+-    // and the shadow map's casters placed on the CPU
+-    float gpuEnhancedMs[6];
++    // Enhanced graphics' passes, GPU ms (not part of gpu3dMs): sun shadows, highlights, water, atmosphere (with the fog),
++    // grade, glow, lamps; and the shadow map's casters placed on the CPU
++    float gpuEnhancedMs[7];
+     float shadowMapCpuMs;
+ 
+     float shownPerSecond;   // frames shown
+@@ -168,6 +168,46 @@
+ // Glow (Settings > Display > Glow), every frame: pixels brighter than the threshold (luminance 0 to 1, measured before the
+ // time of day's tint) glow, by strength (0: none).
+ void SIM_SetEnhancedBloom(float threshold, float strength);
++// Fog (Settings > Display > Fog), every frame the field is drawn, after SIM_SetEnhancedCamera and
++// SIM_SetEnhancedWorldOrigin (it uses their up and origin); a frame drawn without it has none. NULL or both densities 0:
++// none. Lengths are view units (the game's world units). Ground fog thins with height above groundLevel (e-fold over
++// groundFalloff) and is integrated along each pixel's ray from the camera, so it lies on the ground and tree trunks
++// stand out of it; distance fog grows past distanceStart. A slow drifting pattern fixed to the world (east is the
++// world's x axis in view space) varies the ground fog by noiseAmount (0 to 1).
++typedef struct {
++    float r, g, b;
++    float groundDensity, groundFalloff, groundLevel;
++    float distanceDensity, distanceStart;
++    float noiseScale, noiseAmount;
++    float windX, windZ; // the drift, world units per second, east and south
++    float time;         // seconds, for the drift
++    float eastX, eastY, eastZ;
++} SIM_EnhancedFog;
++void SIM_SetEnhancedFog(const SIM_EnhancedFog *fog);
++// Lamp light (Settings > Display > Lamp light). Every frame the field is drawn, before its land: the textures that are
++// lamps' glowing parts (textureOffset: the texture's VRAM address in bytes, as the polygons' TEXIMAGE_PARAM gives it), each
++// lamp a sphere of light (radius, view units) of the colour given (its strength: 1 about doubles a lit surface at the
++// centre). libntr finds the lamps from the polygons drawn with those textures (the land's and the props', on the screen or
++// just off it), each group of them near one another one lamp with the light at its middle, and lights the scene around
++// them. The list holds for the frame it is given in: a 3D frame drawn without the call (not the field) has no lamps.
++#define SIM_LAMP_TEXTURES_MAX 8
++typedef struct {
++    u32 textureOffset;
++    float radius, r, g, b;
++} SIM_LampTexture;
++void SIM_SetLampTextures(const SIM_LampTexture *textures, int count);
++// The lamps found so far this frame (after the land is drawn), in view space, nearest the camera's axis first, at most
++// max; returns how many (for the game's own use: its sprites' shadows)
++#define SIM_ENHANCED_LAMPS_MAX 16
++typedef struct {
++    float x, y, z, radius;
++    float r, g, b;
++} SIM_EnhancedLamp;
++int SIM_GetFrameLamps(SIM_EnhancedLamp *lamps, int max);
++// Inside SIM_SetSpriteShadow's bracket, before each sprite: a lamp's shadow for the sprites that follow, in place of the
++// sun's (shearX and shearY as SIM_SetEnhancedSun's; shearY may be negative: toward the camera, the lamp behind the sprite),
++// alpha 0 to 1 how dark; alpha 0: the sun's shadow (if any) again. Drawn with the Lamp light setting on, whatever the sun's.
++void SIM_SetSpriteShadowLight(float shearX, float shearY, float alpha);
+ // While the game draws its land and buildings: the faint shadow polygons they carry (alpha 12 of 31 or less, untextured or
+ // 4-colour) aren't drawn, as the sun's shadows take their place (only while SIM_SetEnhancedSun's strength is above 0)
+ void SIM_SetHideBuiltInShadows(BOOL hide);
+--- a/include/simulator/sim_shaders.hpp
++++ b/include/simulator/sim_shaders.hpp
+@@ -25,6 +25,7 @@
+ extern const char * G3HighlightApplyFragmentShader;
+ extern const char * G3AtmosphereMarchFragmentShader;
+ extern const char * G3AtmosphereApplyFragmentShader;
++extern const char * G3LampFragmentShader;
+ extern const char * G3BloomBrightFragmentShader;
+ extern const char * G3BloomBlurFragmentShader;
+ extern const char * G3BloomApplyFragmentShader;
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -83,6 +83,12 @@
+     if(MATCH("General", "EnhancedBloom")) {
+         config->enhancedBloom = StringToBool(value);
+     }
++    if(MATCH("General", "EnhancedFog")) {
++        config->enhancedFog = StringToBool(value);
++    }
++    if(MATCH("General", "EnhancedLamps")) {
++        config->enhancedLamps = StringToBool(value);
++    }
+     if(MATCH("General", "EnhancedHighlights")) {
+         config->enhancedHighlights = StringToBool(value);
+     }
+@@ -499,6 +505,8 @@
+     aConfig->enhancedHighlights = FALSE;
+     aConfig->enhancedAtmosphere = FALSE;
+     aConfig->enhancedBloom = FALSE;
++    aConfig->enhancedFog = FALSE;
++    aConfig->enhancedLamps = FALSE;
+     aConfig->colorSaturation = 0;
+     aConfig->colorVibrance = 0;
+     aConfig->colorContrast = 0;
+@@ -603,6 +611,8 @@
+     fprintf(configFile, "EnhancedHighlights=%s\n", BoolToString(aConfig->enhancedHighlights));
+     fprintf(configFile, "EnhancedAtmosphere=%s\n", BoolToString(aConfig->enhancedAtmosphere));
+     fprintf(configFile, "EnhancedBloom=%s\n", BoolToString(aConfig->enhancedBloom));
++    fprintf(configFile, "EnhancedFog=%s\n", BoolToString(aConfig->enhancedFog));
++    fprintf(configFile, "EnhancedLamps=%s\n", BoolToString(aConfig->enhancedLamps));
+     fprintf(configFile, "ColorSaturation=%d\n", aConfig->colorSaturation);
+     fprintf(configFile, "ColorVibrance=%d\n", aConfig->colorVibrance);
+     fprintf(configFile, "ColorContrast=%d\n", aConfig->colorContrast);
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -38,7 +38,7 @@
+ 	G3SIM_Vertex_t * verts;
+ 	u32 vertsCount;
+ 	bool shadow; // a sprite's sun shadow (Enhanced graphics): drawn after the other translucent items, once per pixel
+-	float shadowParams[8]; // the shadow's: s0, ds, tb, dt of the sprite's texture rectangle, then shift slope, feet fraction
++	float shadowParams[8]; // the shadow's: s0, ds, tb, dt of the sprite's texture rectangle, then shift slope, feet fraction, alpha
+ } g3_draw_item_t;
+ 
+ G3SIM_Vertex_t s_G3DrawVerts[G3_DRAW_MAX_VERTS];
+@@ -173,7 +173,6 @@
+ #define G3_SHADOW_MAX_QUADS 64
+ static G3SIM_ShadowQuad_t s_G3ShadowQuads[G3_SHADOW_MAX_QUADS];
+ static u32 s_G3ShadowCount = 0;
+-extern float s_G3ShadowAlpha;
+ extern "C" int G3SIM_SpriteDrawing(void);
+ extern "C" int G3SIM_HideBuiltInShadows(void);
+ 
+@@ -591,6 +590,7 @@
+ 		item->shadowParams[3] = sq->dt;
+ 		item->shadowParams[4] = sq->shx * height / width; // the shift in sprite widths per unit of sprite height
+ 		item->shadowParams[5] = feet;
++		item->shadowParams[6] = sq->alpha;
+ 		s_G3DrawItemListCount++;
+ 	}
+ 
+@@ -704,7 +704,6 @@
+ 		glDepthMask(GL_FALSE);
+ 		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("shadowMode"), 1);
+ 		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("shadowSubdivide"), SIM_GetInternalScale());
+-		glProgramUniform4f(g3shaderProgramID, G3SIM_Uniform("shadowColor"), 0.04f, 0.06f, 0.14f, s_G3ShadowAlpha);
+ 		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("useTexture"), 1);
+ 		glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("polygonMode"), 0);
+ 		for(int i=0; i<s_G3DrawItemListCount; i++) {
+@@ -712,6 +711,8 @@
+ 			if(!item->shadow) {
+ 				continue;
+ 			}
++			// Each its own darkness: the sun's strength, or the lamp's that casts it (shadowParams[6])
++			glProgramUniform4f(g3shaderProgramID, G3SIM_Uniform("shadowColor"), 0.04f, 0.06f, 0.14f, item->shadowParams[6]);
+ 			G3SIM_ApplyCullAndDepth(&item->polygonAttr);
+ 			glProgramUniform4fv(g3shaderProgramID, G3SIM_Uniform("shadowParams0"), 1, &item->shadowParams[0]);
+ 			glProgramUniform4fv(g3shaderProgramID, G3SIM_Uniform("shadowParams1"), 1, &item->shadowParams[4]);
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1639,6 +1639,61 @@
+     s_polygonTag = tag;
+ }
+ 
++// Lamp light: the textures that are lamps' (SIM_SetLampTextures), and the points of the polygons drawn with them this frame
++// (clip x, y, w and the texture's index), kept before clipping so lamps just off the screen still light it; the lamps are
++// made from them in sim_main.cpp (G3SIM_TakeLampPoints)
++static SIM_LampTexture s_lampTextures[SIM_LAMP_TEXTURES_MAX];
++static int s_lampTextureCount = 0;
++#define G3SIM_LAMP_MAX_POINTS 2048
++static float s_lampPoints[G3SIM_LAMP_MAX_POINTS * 4];
++static u32 s_lampPointCount = 0;
++static bool s_lampPointsOverflow = false;
++
++// (Polygons are matched as they are submitted, so the list needs no flush of what came before)
++extern "C" void SIM_SetLampTextures(const SIM_LampTexture *textures, int count)
++{
++    if(textures == NULL || count < 0) {
++        count = 0;
++    }
++    s_lampTextureCount = count < SIM_LAMP_TEXTURES_MAX ? count : SIM_LAMP_TEXTURES_MAX;
++    for(int i = 0; i < s_lampTextureCount; i++) {
++        s_lampTextures[i] = textures[i];
++    }
++}
++
++// After a frame is drawn: its lamps' textures and points were for it alone (the game names the textures again for its next
++// field frame; the points also start afresh with each new 3D frame, but a run of frames that submit without a swap, as
++// while a test stands stuck, would otherwise pile them up)
++extern "C" void G3SIM_ClearLampTextures(void)
++{
++    s_lampTextureCount = 0;
++    s_lampPointCount = 0;
++}
++
++extern "C" u32 G3SIM_TakeLampPoints(const float **points, const SIM_LampTexture **textures)
++{
++    *points = s_lampPoints;
++    *textures = s_lampTextures;
++    static int s_overflowsLogged = 0;
++    if(s_lampPointsOverflow && s_overflowsLogged < 3) { // a few times a run, not every frame
++        s_overflowsLogged++;
++        fprintf(stderr, "[lamps] more lamp points than %d this frame; the rest were left out\n", G3SIM_LAMP_MAX_POINTS);
++    }
++    s_lampPointsOverflow = false;
++    return s_lampPointCount;
++}
++
++// A lamp's shadow for the sprites being drawn now (SIM_SetSpriteShadowLight), in place of the sun's; alpha 0: none
++static float s_lampShearX = 0.0f, s_lampShearY = 0.0f, s_lampShadowAlpha = 0.0f;
++
++extern "C" void SIM_SetSpriteShadowLight(float shearX, float shearY, float alpha)
++{
++    // Read when each sprite's polygon is submitted (its shadow quad keeps its own), so nothing need be flushed
++    s_lampShearX = shearX;
++    s_lampShearY = shearY;
++    s_lampShadowAlpha = SIM_GetConfigPtr()->enhancedLamps && alpha > 0.0f ? (alpha < 1.0f ? alpha : 1.0f) : 0.0f;
++}
++
+ extern "C" void SIM_SetSpriteShadow(BOOL casts)
+ {
+     G3SIM_FlushArray(); // what was submitted so far is drawn as it was (the shadow flag, and the sprite flag, hold for a batch)
+@@ -1717,6 +1772,7 @@
+ // several game frames to a drawn one (fast-forward) the map holds only the frame on the screen
+ extern "C" void G3SIM_ResetCasters(void)
+ {
++    s_lampPointCount = 0;
+     s_casterCount = 0;
+     s_casterBatchCount = 0;
+     s_casterBatchStart = 0;
+@@ -1780,7 +1836,7 @@
+     // A caster's rectangle, for the shadow: from the polygon as it comes (a sprite is a quad facing the camera), before
+     // clipping cuts it
+     G3SIM_ShadowQuad_t shadowQuad = {};
+-    if(s_spriteCasts && s_G3ShadowAlpha > 0.0f && s_spriteDepthBiasTop != 0 && !s_SIM_useWBuffer) {
++    if(s_spriteCasts && (s_G3ShadowAlpha > 0.0f || s_lampShadowAlpha > 0.0f) && s_spriteDepthBiasTop != 0 && !s_SIM_useWBuffer) {
+         bool ok = true;
+         float xl = 1e9f, xr = -1e9f, yb = 1e9f, yt = -1e9f;
+         for(int i=0; i < numVerts; i++) {
+@@ -1817,6 +1873,32 @@
+         }
+     }
+ 
++    // A lamp's polygon (its texture is one of SIM_SetLampTextures'): its points are kept to find the lamps from
++    if(s_lampTextureCount > 0 && s_spriteDepthBiasTop == 0 && s_polygonTag == 0 && !s_SIM_useWBuffer
++       && s_texImageParam.textureFormat != GX_TEXFMT_NONE) {
++        int lamp = -1;
++        for(int i = 0; i < s_lampTextureCount; i++) {
++            if(s_lampTextures[i].textureOffset == s_texImageParam.textureOffset) {
++                lamp = i;
++                break;
++            }
++        }
++        if(lamp >= 0 && s_lampPointCount + (u32)numVerts > G3SIM_LAMP_MAX_POINTS) {
++            s_lampPointsOverflow = true;
++        } else if(lamp >= 0) {
++            for(int i = 0; i < numVerts; i++) {
++                if(clip[i].pos[3] <= 0) {
++                    continue; // behind the camera
++                }
++                float *p = &s_lampPoints[s_lampPointCount++ * 4];
++                p[0] = (float)((double)clip[i].pos[0] / 4096.0);
++                p[1] = (float)((double)clip[i].pos[1] / 4096.0);
++                p[2] = (float)((double)clip[i].pos[3] / 4096.0);
++                p[3] = (float)lamp;
++            }
++        }
++    }
++
+     // A caster for the sun shadow map: an opaque polygon of the land and buildings (the bracket SIM_SetHideBuiltInShadows
+     // marks, with the shadows shown), not a sprite, not the water mask, not see-through, wholly in front of the camera
+     if((s_hideBuiltInShadows || s_landDrawing || s_extraCasters)
+@@ -1970,8 +2052,17 @@
+             foot = polyVerts[i].y < polyVerts[foot].y ? i : foot;
+         }
+         shadowQuad.z = polyVerts[foot].z - 0.0004f;
+-        shadowQuad.shx = s_sunShearX / ratio;
+-        shadowQuad.shy = s_sunShearY < 0.05f ? 0.05f : s_sunShearY;
++        if(s_lampShadowAlpha > 0.0f) {
++            // A lamp's: away from it, either way up or down the screen, never quite flat
++            shadowQuad.shx = s_lampShearX / ratio;
++            shadowQuad.shy = s_lampShearY >= 0.0f ? (s_lampShearY < 0.05f ? 0.05f : s_lampShearY)
++                                                  : (s_lampShearY > -0.05f ? -0.05f : s_lampShearY);
++            shadowQuad.alpha = s_lampShadowAlpha;
++        } else {
++            shadowQuad.shx = s_sunShearX / ratio;
++            shadowQuad.shy = s_sunShearY < 0.05f ? 0.05f : s_sunShearY;
++            shadowQuad.alpha = s_G3ShadowAlpha;
++        }
+         G3SIM_AddShadowQuad(&shadowQuad);
+     }
+ }
+--- a/libraries/sim/src/shaders/g3_atmosphere_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_atmosphere_apply_fragment.glsl
+@@ -4,7 +4,13 @@
+ // Enhanced graphics' atmosphere, second pass, at full resolution: over what is drawn (not over what isn't), the sun's light
+ // scattered by the air, from the march's texture (one texel a DS pixel, never filtered, so the light keeps the pixel grid),
+ // and a haze that thickens toward the top of the screen (the far side of the field), in the colour of the sky at that hour.
+-// The blend is premultiplied: the haze's colour with alpha as its share, over what is there; the shafts add to it.
++// The fog (SIM_SetEnhancedFog) is drawn here too, under the haze, so it costs no pass of its own: each pixel's place in
++// the scene is rebuilt from the depth in the attribute texture, and the fog along the ray from the camera to it is
++// integrated in closed form: ground fog that thins with height (exponentially), so it lies on the ground and the trees
++// stand out of it, and distance fog. A slow pattern fixed to the world (value noise in its x and z, drifting) varies the
++// ground fog, so it is mist, not a flat tint; it is fixed to the world, not the screen, so it doesn't crawl as the camera
++// moves. The fog is a soft overlay: it doesn't filter or move the pixels under it.
++// The blend is premultiplied: the fog and the haze over what is there (the fog first), the shafts added to it.
+ uniform sampler2D shaftTexture;
+ uniform sampler2D attrTexture;
+ uniform ivec2 origin;
+@@ -16,12 +22,79 @@
+ uniform vec3 hazeColor;
+ uniform float hazeAmount;   // the haze's share at the top of the screen
+ uniform int debugMode;
++// The fog
++uniform int useFog;
++uniform vec4 projection;    // the game's projection: m00, m11, m22, m32
++uniform float xScale;       // a wide scene libntr narrows
++uniform vec3 upView;        // the world's up in view space
++uniform vec3 eastView;      // the world's x axis in view space
++uniform vec3 worldOrigin;   // the world's origin in view space
++uniform vec3 fogColor;
++uniform vec3 fogGround;     // density at the ground (per view unit), height over which it thins by e, the ground's height
++uniform vec2 fogDistance;   // density past the start, the start
++uniform vec2 fogNoise;      // the pattern's size (view units), how much it varies the ground fog (0 to 1)
++uniform vec2 fogDrift;      // the pattern's offset now (world x and z)
+ out vec4 color;
+ 
++float Hash(vec2 p)
++{
++    p = fract(p * vec2(0.1031, 0.1030));
++    p += dot(p, p.yx + 33.33);
++    return fract((p.x + p.y) * p.x);
++}
++
++float ValueNoise(vec2 p)
++{
++    vec2 i = floor(p);
++    vec2 f = fract(p);
++    vec2 u = f * f * (3.0 - 2.0 * f);
++    float a = Hash(i), b = Hash(i + vec2(1.0, 0.0)), c = Hash(i + vec2(0.0, 1.0)), d = Hash(i + vec2(1.0, 1.0));
++    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
++}
++
++// How much of the scene the fog hides in front of this pixel (0 to 1)
++float Fog(ivec2 fragment, vec4 attr)
++{
++    ivec4 a = ivec4(attr * 255.0 + 0.5);
++    float ndcz = float(a.g * 256 + a.b) / 65535.0 * 2.0 - 1.0;
++    float d = projection.w / (ndcz + projection.z);
++    if (d <= 0.0) {
++        return 0.0;
++    }
++    vec2 ndc = (vec2(fragment - origin) + 0.5) / vec2(viewportSize) * 2.0 - 1.0;
++    vec3 p = vec3(ndc.x / xScale * d / projection.x, ndc.y * d / projection.y, -d);
++    float rayLength = length(p);
++
++    // Heights above the ground, of the camera (the view's origin) and of the surface
++    float falloff = max(fogGround.y, 0.001);
++    float cameraHeight = dot(-worldOrigin, upView) - fogGround.z;
++    vec3 world = p - worldOrigin;
++    float surfaceHeight = max(dot(world, upView) - fogGround.z, -2.0 * falloff);
++    float dh = (surfaceHeight - cameraHeight) / falloff;
++    float eCamera = exp(-max(cameraHeight, -2.0 * falloff) / falloff);
++    float eSurface = exp(-surfaceHeight / falloff);
++    // The integral of density * exp(-height / falloff) along the ray (the height changes linearly along it)
++    float ground = abs(dh) > 0.001 ? (eCamera - eSurface) / dh : eSurface;
++    float depth = fogGround.x * rayLength * ground;
++
++    // The drifting pattern, where the ray meets the surface: two octaves of value noise in the world's x and z
++    if (fogNoise.y > 0.0) {
++        vec3 southView = cross(eastView, upView);
++        vec2 xz = vec2(dot(world, eastView), dot(world, southView)) - fogDrift;
++        vec2 q = xz / max(fogNoise.x, 1.0);
++        float n = ValueNoise(q) * 0.65 + ValueNoise(q * 2.3 + 17.0) * 0.35;
++        n = smoothstep(0.2, 0.8, n); // value noise bunches around a half: spread it, so there are clear gaps and banks
++        depth *= mix(1.0 - fogNoise.y, 1.0 + fogNoise.y, n);
++    }
++    depth += fogDistance.x * max(rayLength - fogDistance.y, 0.0);
++    return 1.0 - exp(-depth);
++}
++
+ void main()
+ {
+     ivec2 fragment = ivec2(gl_FragCoord.xy);
+-    if (texelFetch(attrTexture, fragment, 0).a < 0.5) {
++    vec4 attr = texelFetch(attrTexture, fragment, 0);
++    if (attr.a < 0.5) {
+         discard;
+     }
+     float y = clamp(float(fragment.y - origin.y) / float(viewportSize.y), 0.0, 1.0);
+@@ -30,10 +103,17 @@
+     if (useShafts == 1) {
+         shaft = texelFetch(shaftTexture, (fragment - origin) / pixelStep, 0).r;
+     }
++    float fog = useFog == 1 ? Fog(fragment, attr) : 0.0;
+     if (debugMode == 1) {
+         color = vec4(vec3(shaft), 1.0);
+         return;
+     }
+-    color = vec4(hazeColor * haze + sunColor * (shaft * shaftGain), haze);
++    if (debugMode == 2) {
++        color = vec4(vec3(fog), 1.0);
++        return;
++    }
++    // The fog over the scene, then the haze over that: premultiplied, alpha what of the scene is covered
++    color = vec4(hazeColor * haze + fogColor * (fog * (1.0 - haze)) + sunColor * (shaft * shaftGain),
++                 1.0 - (1.0 - fog) * (1.0 - haze));
+ }
+ )""
+--- /dev/null
++++ b/libraries/sim/src/shaders/g3_lamp_fragment.glsl
+@@ -0,0 +1,56 @@
++R""(
++#version 420 core
++
++// Enhanced graphics' lamp light, one lamp at a time, at full resolution, inside a scissor around the lamp's sphere of light
++// on the screen (so only the pixels it can reach are visited): each pixel's place in the scene is rebuilt from the depth
++// in the attribute texture and lit by the lamp, falling off smoothly to nothing at the radius. The surface's facing comes
++// from the screen-space derivatives of that place (free in a fragment shader); the sprites (flagged in the attributes) face
++// the camera and take a share of the light whichever way it comes. The output brightens the pixel's own colour (the blend
++// is dst * (1 + light)), so the art's detail and outlines stay as drawn; nothing is filtered or moved.
++uniform sampler2D attrTexture; // polygon ID * 4 + 1 for a sprite in r, the depth's high and low bytes in g and b, a set where drawn
++uniform ivec2 origin;
++uniform ivec2 viewportSize;
++uniform vec4 projection;       // the game's projection: m00, m11, m22, m32
++uniform float xScale;          // a wide scene libntr narrows
++uniform vec4 lamp;             // the lamp's centre in view space, and its radius
++uniform vec3 lampColor;        // its colour times its strength
++out vec4 color;
++
++void main()
++{
++    ivec2 fragment = ivec2(gl_FragCoord.xy);
++    vec4 attr = texelFetch(attrTexture, fragment, 0);
++    ivec4 a = ivec4(attr * 255.0 + 0.5);
++    float ndcz = float(a.g * 256 + a.b) / 65535.0 * 2.0 - 1.0;
++    float d = projection.w / (ndcz + projection.z);
++    vec2 ndc = (vec2(fragment - origin) + 0.5) / vec2(viewportSize) * 2.0 - 1.0;
++    vec3 p = vec3(ndc.x / xScale * d / projection.x, ndc.y * d / projection.y, -d);
++    // The derivatives are taken before any early exit (they need the whole 2x2 quad)
++    vec3 n = cross(dFdx(p), dFdy(p));
++    if (a.a == 0 || d <= 0.0) {
++        discard;
++    }
++    vec3 toLamp = lamp.xyz - p;
++    float distance2 = dot(toLamp, toLamp);
++    float r2 = lamp.w * lamp.w;
++    if (distance2 >= r2) {
++        discard;
++    }
++    float k = 1.0 - distance2 / r2;
++    float falloff = k * k;
++    vec3 l = toLamp * inversesqrt(max(distance2, 1e-4));
++    float facing;
++    if ((a.r & 1) == 1) {
++        facing = 0.7; // a sprite: a picture facing the camera
++    } else {
++        float nn = dot(n, n);
++        vec3 normal = nn > 1e-10 ? n * inversesqrt(nn) : -normalize(p);
++        if (dot(normal, -p) < 0.0) {
++            normal = -normal;
++        }
++        // Softened (an edge's derivatives mix two surfaces): a little light reaches faces turned away too
++        facing = 0.25 + 0.75 * max(dot(normal, l), 0.0);
++    }
++    color = vec4(lampColor * (falloff * facing), 0.0);
++}
++)""
+--- a/libraries/sim/src/sim_gui.cpp
++++ b/libraries/sim/src/sim_gui.cpp
+@@ -161,8 +161,9 @@
+     }
+     const float *e = t.gpuEnhancedMs;
+     snprintf(lines[3], sizeof(lines[3]),
+-             "Enhanced GPU ms  shadows %.1f (map CPU %.1f)  highlights %.1f  water %.1f  air %.1f  grade %.1f  glow %.1f",
+-             e[0], t.shadowMapCpuMs, e[1], e[2], e[3], e[4], e[5]);
++             "Enhanced GPU ms  shadows %.1f (map CPU %.1f)  highlights %.1f  water %.1f  air %.1f  grade %.1f  glow %.1f"
++             "  lamps %.1f",
++             e[0], t.shadowMapCpuMs, e[1], e[2], e[3], e[4], e[5], e[6]);
+ 
+     ImFont *font = SIM::UI::RegularFont();
+     const float px = SIM::UI::S(12.0f);
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -358,7 +358,7 @@
+ #define GL_GPU_DISJOINT_EXT 0x8FBB
+ #endif
+ enum GpuPart { GPU_3D, GPU_MAIN, GPU_SECONDARY, GPU_SHADOW, GPU_HIGHLIGHT, GPU_WATER, GPU_ATMOSPHERE, GPU_GRADE, GPU_BLOOM,
+-               GPU_PART_COUNT };
++               GPU_LAMPS, GPU_PART_COUNT };
+ static constexpr int kGpuQueryRing = 8;
+ static bool sGpuTimers = false;
+ static GLuint sGpuQueries[GPU_PART_COUNT][kGpuQueryRing];
+@@ -426,7 +426,8 @@
+ #endif
+   float *targets[GPU_PART_COUNT] = {&sTimings.gpu3dMs,           &sTimings.gpuMainMs,         &sTimings.gpuSecondaryMs,
+                                     &sTimings.gpuEnhancedMs[0], &sTimings.gpuEnhancedMs[1], &sTimings.gpuEnhancedMs[2],
+-                                    &sTimings.gpuEnhancedMs[3], &sTimings.gpuEnhancedMs[4], &sTimings.gpuEnhancedMs[5]};
++                                    &sTimings.gpuEnhancedMs[3], &sTimings.gpuEnhancedMs[4], &sTimings.gpuEnhancedMs[5],
++                                    &sTimings.gpuEnhancedMs[6]};
+   for (int part = 0; part < GPU_PART_COUNT; part++) {
+     for (int slot = 0; slot < kGpuQueryRing; slot++) {
+       if (!sGpuQueryPending[part][slot]) {
+@@ -567,6 +568,12 @@
+ static GLuint g3AtmoMarchProgramID, g3AtmoApplyProgramID, g3AtmoTex, g3AtmoFbo;
+ static int sAtmoW, sAtmoH;
+ static float sAtmosphere[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // shaft, haze colour, haze share
++// Enhanced graphics' fog (SIM_SetEnhancedFog), drawn in the atmosphere's apply pass; given again every frame the field is
++// drawn, and dropped once a frame has been drawn with it, so frames that aren't the field's get none
++static SIM_EnhancedFog sFog;
++static bool sFogSet = false;
++// Enhanced graphics' lamps (SIM_SetLampTextures): found from the polygons drawn with the lamps' textures
++static GLuint g3LampProgramID;
+ static GLuint g3BloomBrightProgramID, g3BloomBlurProgramID, g3BloomApplyProgramID;
+ static GLuint g3BloomTex[2], g3BloomFbo[2], g3BloomSceneTex, g3BloomSceneFbo;
+ static int sBloomW, sBloomH;
+@@ -1419,6 +1426,11 @@
+       g3AtmoApplyProgramID = glCreateProgram();
+       CompileFragmentShader(fragment, ptr);
+       LinkShader(g3AtmoApplyProgramID, edgeVertexShader, fragment);
++      src = SIM::PrepareShaderSource(SIM::G3LampFragmentShader);
++      ptr = src.c_str();
++      g3LampProgramID = glCreateProgram();
++      CompileFragmentShader(fragment, ptr);
++      LinkShader(g3LampProgramID, edgeVertexShader, fragment);
+       src = SIM::PrepareShaderSource(SIM::G3BloomBrightFragmentShader);
+       ptr = src.c_str();
+       g3BloomBrightProgramID = glCreateProgram();
+@@ -3346,14 +3358,115 @@
+   sBloom[1] = strength;
+ }
+ 
++extern "C" void SIM_SetEnhancedFog(const SIM_EnhancedFog *fog) {
++  sFogSet = fog != nullptr && (fog->groundDensity > 0.0f || fog->distanceDensity > 0.0f);
++  if (sFogSet) {
++    sFog = *fog;
++  }
++}
++
++extern "C" u32 G3SIM_TakeLampPoints(const float **points, const SIM_LampTexture **textures);
++extern "C" void G3SIM_ClearLampTextures(void);
++
++// The lamps of this frame from the points of their textures' polygons (G3SIM_TakeLampPoints): back in view space (x / m00,
++// y / m11, z = -w, as the shadow map's casters), each point joins the group whose middle is within 16 units of it across
++// the world's up (a lamp is tall and thin; lamps along a street stand three tiles apart or more), and each group is one
++// lamp, the light at its middle (the textures named are the lamps' glowing parts)
++extern "C" int SIM_GetFrameLamps(SIM_EnhancedLamp *lamps, int max) {
++  const float *points = nullptr;
++  const SIM_LampTexture *textures = nullptr;
++  const u32 count = G3SIM_TakeLampPoints(&points, &textures);
++  if (count == 0 || !sEnhancedCameraSet || sEnhancedCamera[0] == 0.0f || sEnhancedCamera[1] == 0.0f || max <= 0) {
++    return 0;
++  }
++  const float up[3] = {sEnhancedCamera[4], sEnhancedCamera[5], sEnhancedCamera[6]};
++  constexpr int kMaxGroups = 64;
++  struct Group {
++    float sum[3]; // of the points, for the middle
++    int count, texture;
++  } groups[kMaxGroups];
++  int groupCount = 0;
++  for (u32 i = 0; i < count; i++) {
++    const float *q = &points[i * 4];
++    const float p[3] = {q[0] / sEnhancedCamera[0], q[1] / sEnhancedCamera[1], -q[2]};
++    const int texture = (int)q[3];
++    Group *group = nullptr;
++    for (int g = 0; g < groupCount && group == nullptr; g++) {
++      Group &candidate = groups[g];
++      if (candidate.texture != texture) {
++        continue;
++      }
++      float d[3];
++      for (int c = 0; c < 3; c++) {
++        d[c] = p[c] - candidate.sum[c] / (float)candidate.count;
++      }
++      const float along = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
++      float across2 = 0.0f;
++      for (int c = 0; c < 3; c++) {
++        const float a = d[c] - along * up[c];
++        across2 += a * a;
++      }
++      if (across2 < 16.0f * 16.0f) {
++        group = &candidate;
++      }
++    }
++    if (group == nullptr) {
++      if (groupCount == kMaxGroups) {
++        continue;
++      }
++      group = &groups[groupCount++];
++      *group = {};
++      group->texture = texture;
++    }
++    for (int c = 0; c < 3; c++) {
++      group->sum[c] += p[c];
++    }
++    group->count++;
++  }
++  // Nearest the middle of the view first (by the angle off the camera's axis)
++  int order[kMaxGroups];
++  float key[kMaxGroups];
++  for (int g = 0; g < groupCount; g++) {
++    const float x = groups[g].sum[0] / groups[g].count, y = groups[g].sum[1] / groups[g].count;
++    const float z = groups[g].sum[2] / groups[g].count;
++    key[g] = (x * x + y * y) / (z * z + 1.0f);
++    order[g] = g;
++  }
++  int made = 0;
++  for (int n = 0; n < groupCount && made < max; n++) {
++    int best = n;
++    for (int i = n + 1; i < groupCount; i++) {
++      best = key[order[i]] < key[order[best]] ? i : best;
++    }
++    const int swap = order[n];
++    order[n] = order[best];
++    order[best] = swap;
++    const Group &group = groups[order[n]];
++    const SIM_LampTexture &texture = textures[group.texture];
++    SIM_EnhancedLamp &lamp = lamps[made++];
++    lamp.x = group.sum[0] / (float)group.count;
++    lamp.y = group.sum[1] / (float)group.count;
++    lamp.z = group.sum[2] / (float)group.count;
++    lamp.radius = texture.radius;
++    lamp.r = texture.r;
++    lamp.g = texture.g;
++    lamp.b = texture.b;
++  }
++  return made;
++}
++
+ // Enhanced graphics' atmosphere: see g3_atmosphere_march_fragment.glsl. At the DS's resolution how much sunlight the air in
+ // front of each pixel holds (when there are shafts to show), then at full resolution a haze over the far side of the
+-// screen and the shafts added. After the water (so a reflection isn't hazed twice), before the grade; once per frame drawn;
+-// not with anti-aliasing (no attributes) or in a W-buffer scene.
++// screen and the shafts added, and the fog (SIM_SetEnhancedFog) under them in the same pass. After the water (so a
++// reflection isn't hazed twice), before the grade; once per frame drawn; not with anti-aliasing (no attributes) or in a
++// W-buffer scene.
+ static void G3EnhancedAtmosphere() {
+-  const bool haze = sAtmosphere[4] > 0.001f;
+-  const bool shafts = sSunFrameCamera && sAtmosphere[0] > 0.001f && (sSunLight[0] + sSunLight[1] + sSunLight[2]) > 0.0f;
+-  if (!sSunFrameDrawn || !s_SIM_config.enhancedAtmosphere || (!haze && !shafts) || sSamples != 0 || s_SIM_useWBuffer ||
++  const bool air = s_SIM_config.enhancedAtmosphere != 0;
++  const bool haze = air && sAtmosphere[4] > 0.001f;
++  const bool shafts = air && sSunFrameCamera && sAtmosphere[0] > 0.001f &&
++                      (sSunLight[0] + sSunLight[1] + sSunLight[2]) > 0.0f;
++  const bool fog = s_SIM_config.enhancedFog && sFogSet && sEnhancedCameraSet && sWorldOriginSet;
++  if (!sSunFrameDrawn || (!haze && !shafts && !fog) || sSamples != 0 || s_SIM_useWBuffer ||
+       sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0) {
+     return;
+   }
+@@ -3435,10 +3548,29 @@
+   glProgramUniform3f(apply, WaterUniform(apply, "hazeColor"), sAtmosphere[1], sAtmosphere[2], sAtmosphere[3]);
+   glProgramUniform1f(apply, WaterUniform(apply, "hazeAmount"), haze ? sAtmosphere[4] : 0.0f);
+   glProgramUniform1i(apply, WaterUniform(apply, "debugMode"), sDebug);
++  glProgramUniform1i(apply, WaterUniform(apply, "useFog"), fog ? 1 : 0);
++  if (fog) {
++    // SIM_ATMOSPHERE_DEBUG=2 shows the fog's share alone
++    glProgramUniform4f(apply, WaterUniform(apply, "projection"), sEnhancedCamera[0], sEnhancedCamera[1],
++                       sEnhancedCamera[2], sEnhancedCamera[3]);
++    glProgramUniform1f(apply, WaterUniform(apply, "xScale"), xScale);
++    glProgramUniform3f(apply, WaterUniform(apply, "upView"), sEnhancedCamera[4], sEnhancedCamera[5], sEnhancedCamera[6]);
++    glProgramUniform3f(apply, WaterUniform(apply, "eastView"), sFog.eastX, sFog.eastY, sFog.eastZ);
++    glProgramUniform3f(apply, WaterUniform(apply, "worldOrigin"), sWorldOrigin[0], sWorldOrigin[1], sWorldOrigin[2]);
++    glProgramUniform3f(apply, WaterUniform(apply, "fogColor"), sFog.r, sFog.g, sFog.b);
++    glProgramUniform3f(apply, WaterUniform(apply, "fogGround"), sFog.groundDensity, sFog.groundFalloff, sFog.groundLevel);
++    glProgramUniform2f(apply, WaterUniform(apply, "fogDistance"), sFog.distanceDensity, sFog.distanceStart);
++    glProgramUniform2f(apply, WaterUniform(apply, "fogNoise"), sFog.noiseScale, sFog.noiseAmount);
++    // The drift, kept small for the shader's floats: wrapped every 4096 of the pattern's cells (the pattern jumps once
++    // then: at a few units a second, after many hours)
++    const float wrap = 4096.0f * (sFog.noiseScale > 1.0f ? sFog.noiseScale : 1.0f);
++    glProgramUniform2f(apply, WaterUniform(apply, "fogDrift"), fmodf(sFog.windX * sFog.time, wrap),
++                       fmodf(sFog.windZ * sFog.time, wrap));
++  }
+   glEnable(GL_BLEND);
+-  // premultiplied: the haze's colour over what is there, the shafts added (the alpha stays)
++  // premultiplied: the fog and the haze's colour over what is there, the shafts added (the alpha stays)
+   glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+-  if (sDebug == 1) {
++  if (sDebug == 1 || sDebug == 2) {
+     glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ONE);
+   }
+   glUseProgram(apply);
+@@ -3462,6 +3594,118 @@
+   glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+ }
+ 
++// Enhanced graphics' lamp light: see g3_lamp_fragment.glsl. Each lamp (SIM_GetFrameLamps: found from SIM_SetLampTextures) lights the pixels within its
++// radius, one draw per lamp clipped by a scissor to its sphere's box on the screen, so the cost is the lamps' screen area,
++// not the whole frame per lamp. After the grade (the lamps' light isn't tinted by the night's colour), before the glow (so a
++// lit wall by a lamp may glow); once per frame drawn; not with anti-aliasing (no attributes) or in a W-buffer scene.
++static void G3EnhancedLamps() {
++  if (!sSunFrameDrawn || !s_SIM_config.enhancedLamps || !sEnhancedCameraSet || sSamples != 0 || s_SIM_useWBuffer ||
++      sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0) {
++    return;
++  }
++  SIM_EnhancedLamp lamps[SIM_ENHANCED_LAMPS_MAX];
++  const int lampCount = SIM_GetFrameLamps(lamps, SIM_ENHANCED_LAMPS_MAX);
++  if (lampCount == 0) {
++    return;
++  }
++  const float xScale = sWideScale3D ? (float)SIM_NDS_SCREEN_WIDTH / (float)sWide3dWidth : 1.0f;
++  const float m00 = sEnhancedCamera[0], m11 = sEnhancedCamera[1];
++
++  GLint viewport[4], scissor[4];
++  GLint vertexArray;
++  glGetIntegerv(GL_VIEWPORT, viewport);
++  glGetIntegerv(GL_SCISSOR_BOX, scissor);
++  glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
++  const GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
++  const GLboolean cullFace = glIsEnabled(GL_CULL_FACE);
++  const GLboolean blend = glIsEnabled(GL_BLEND);
++  const GLboolean scissorTest = glIsEnabled(GL_SCISSOR_TEST);
++
++  static const GLenum kBoth[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++  glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++  glDrawBuffers(1, kBoth); // the colour alone: the attributes stay as the scene left them
++  glViewport(sG3Viewport[0], sG3Viewport[1], sG3Viewport[2], sG3Viewport[3]);
++  glDisable(GL_DEPTH_TEST);
++  glDisable(GL_CULL_FACE);
++  glEnable(GL_BLEND);
++  glEnable(GL_SCISSOR_TEST);
++  // dst * (1 + light): the pixel's own colour brightened; the alpha stays
++  glBlendFuncSeparate(GL_DST_COLOR, GL_ONE, GL_ZERO, GL_ONE);
++  glBindVertexArray(g3EdgeVertexArray);
++  glActiveTexture(GL_TEXTURE0 + kEdgeAttrTexUnit);
++  glBindTexture(GL_TEXTURE_2D, g3AttrTextureId);
++  const GLuint program = g3LampProgramID;
++  glProgramUniform1i(program, WaterUniform(program, "attrTexture"), kEdgeAttrTexUnit);
++  glProgramUniform2i(program, WaterUniform(program, "origin"), sG3Viewport[0], sG3Viewport[1]);
++  glProgramUniform2i(program, WaterUniform(program, "viewportSize"), sG3Viewport[2], sG3Viewport[3]);
++  glProgramUniform4f(program, WaterUniform(program, "projection"), m00, m11, sEnhancedCamera[2], sEnhancedCamera[3]);
++  glProgramUniform1f(program, WaterUniform(program, "xScale"), xScale);
++  glUseProgram(program);
++  const GLint lampUniform = WaterUniform(program, "lamp"), colorUniform = WaterUniform(program, "lampColor");
++  for (int i = 0; i < lampCount; i++) {
++    const SIM_EnhancedLamp &lamp = lamps[i];
++    if (lamp.radius <= 0.0f || lamp.r + lamp.g + lamp.b <= 0.0f) {
++      continue;
++    }
++    // The sphere's box on the screen, from the box's eight corners; the whole viewport when it reaches behind the camera
++    float x0 = 1.0f, y0 = 1.0f, x1 = -1.0f, y1 = -1.0f;
++    bool behind = false;
++    for (int c = 0; c < 8 && !behind; c++) {
++      const float x = lamp.x + ((c & 1) ? lamp.radius : -lamp.radius);
++      const float y = lamp.y + ((c & 2) ? lamp.radius : -lamp.radius);
++      const float d = -(lamp.z + ((c & 4) ? lamp.radius : -lamp.radius));
++      if (d < 1.0f) {
++        behind = true;
++        break;
++      }
++      const float nx = xScale * m00 * x / d, ny = m11 * y / d;
++      x0 = nx < x0 ? nx : x0;
++      x1 = nx > x1 ? nx : x1;
++      y0 = ny < y0 ? ny : y0;
++      y1 = ny > y1 ? ny : y1;
++    }
++    if (behind) {
++      x0 = y0 = -1.0f;
++      x1 = y1 = 1.0f;
++    }
++    x0 = x0 < -1.0f ? -1.0f : x0;
++    y0 = y0 < -1.0f ? -1.0f : y0;
++    x1 = x1 > 1.0f ? 1.0f : x1;
++    y1 = y1 > 1.0f ? 1.0f : y1;
++    if (x1 <= x0 || y1 <= y0) {
++      continue; // off the screen
++    }
++    const int px0 = sG3Viewport[0] + (int)floorf((x0 + 1.0f) * 0.5f * (float)sG3Viewport[2]);
++    const int py0 = sG3Viewport[1] + (int)floorf((y0 + 1.0f) * 0.5f * (float)sG3Viewport[3]);
++    const int px1 = sG3Viewport[0] + (int)ceilf((x1 + 1.0f) * 0.5f * (float)sG3Viewport[2]);
++    const int py1 = sG3Viewport[1] + (int)ceilf((y1 + 1.0f) * 0.5f * (float)sG3Viewport[3]);
++    glScissor(px0, py0, px1 - px0, py1 - py0);
++    glProgramUniform4f(program, lampUniform, lamp.x, lamp.y, lamp.z, lamp.radius);
++    glProgramUniform3f(program, colorUniform, lamp.r, lamp.g, lamp.b);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++  }
++
++  glDrawBuffers(2, kBoth);
++  glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++  glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
++  if (!scissorTest) {
++    glDisable(GL_SCISSOR_TEST);
++  }
++  glActiveTexture(GL_TEXTURE0);
++  glBindVertexArray(vertexArray);
++  glUseProgram(g3shaderProgramID);
++  if (cullFace) {
++    glEnable(GL_CULL_FACE);
++  }
++  if (depthTest) {
++    glEnable(GL_DEPTH_TEST);
++  }
++  if (!blend) {
++    glDisable(GL_BLEND);
++  }
++  glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
++}
++
+ // Enhanced graphics' bloom: see g3_bloom_bright_fragment.glsl. The finished (graded) frame copied down to one pixel per DS
+ // pixel, its bright parts picked out and blurred there, and the glow enlarged and added at full resolution. The last pass of
+ // a frame; once per frame drawn; not with anti-aliasing (the frame is multisampled).
+@@ -3620,9 +3864,18 @@
+   GpuTimerBegin(GPU_GRADE);
+   G3EnhancedGrade();
+   GpuTimerEnd();
++  GpuTimerBegin(GPU_LAMPS);
++  G3EnhancedLamps();
++  GpuTimerEnd();
+   GpuTimerBegin(GPU_BLOOM);
+   G3EnhancedBloom();
+   GpuTimerEnd();
++  // The fog and the lamps' textures are the game's for the frame it gave them with: a frame drawn without them (not the
++  // field) has none
++  if (sSunFrameDrawn) {
++    sFogSet = false;
++    G3SIM_ClearLampTextures();
++  }
+ 
+   GpuTimersCollect();
+ #ifdef SDK_BUILD_ANDROID
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -349,6 +349,21 @@
+     SaveConfig();
+   }
+ 
++  bool fog = config->enhancedFog != 0;
++  if (Toggle("Fog", "Enhanced graphics: mist that lies low over the ground and thickens with distance, drifting slowly, "
++             "in forests and other misty places (Eterna Forest). Needs 3D smoothing (anti-aliasing) off.", &fog)) {
++    config->enhancedFog = fog ? 1 : 0;
++    SaveConfig();
++  }
++
++  bool lamps = config->enhancedLamps != 0;
++  if (Toggle("Lamp light", "Enhanced graphics: at night, street lamps and other lights cast warm pools of light around "
++             "them, and people and Pokemon near one cast a shadow away from it. Needs 3D smoothing (anti-aliasing) off.",
++             &lamps)) {
++    config->enhancedLamps = lamps ? 1 : 0;
++    SaveConfig();
++  }
++
+   bool water = config->enhancedWater != 0;
+   if (Toggle("Water reflections", "Enhanced graphics: lakes, the sea, rivers and puddles mirror the trees, buildings and "
+              "people along their shore. Needs 3D smoothing (anti-aliasing) off; use a higher 3D resolution instead.",
+@@ -647,8 +662,8 @@
+     const float *e = t.gpuEnhancedMs;
+     snprintf(text, sizeof(text),
+              "Enhanced graphics, GPU ms per frame: sun shadows %.1f (the shadow map's CPU side %.1f), highlights %.1f, "
+-             "water %.1f, atmosphere %.1f, time-of-day light %.1f, glow %.1f.",
+-             e[0], t.shadowMapCpuMs, e[1], e[2], e[3], e[4], e[5]);
++             "water %.1f, atmosphere and fog %.1f, time-of-day light %.1f, glow %.1f, lamp light %.1f.",
++             e[0], t.shadowMapCpuMs, e[1], e[2], e[3], e[4], e[5], e[6]);
+     Note(text);
+   }
+ #ifdef SDK_BUILD_ANDROID
+--- a/libraries/sim/src/sim_shaders.cpp
++++ b/libraries/sim/src/sim_shaders.cpp
+@@ -84,6 +84,10 @@
+ #include "shaders/g3_atmosphere_apply_fragment.glsl"
+ ;
+ 
++const char * G3LampFragmentShader =
++#include "shaders/g3_lamp_fragment.glsl"
++;
++
+ const char * G3BloomBrightFragmentShader =
+ #include "shaders/g3_bloom_bright_fragment.glsl"
+ ;

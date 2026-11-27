@@ -8,7 +8,12 @@ directory = port-common
 # teton-dev fork: port-common_nuzlocke_mode.patch: the Gear shows Nuzlocke mode's books (src/port/nuzlocke_gear.c hands
 # them over through weak PortGame_NuzlockeMode* hooks) while the mode is on; the retired helper's hooks stay off. Its
 # lines that name a settings page follow the fork's pages (Challenges, Gear)
-diff_files = port-common_nuzlocke_mode.patch
+# port-common_gear_option.patch: a 'gear' option (default on, as here) that a game without the Gear's adapters turns off;
+# applied as in the HGSS port so both build the same port-common
+# port-common_enhanced_scene.patch: enhanced graphics' game-neutral game side (src/enhanced_scene.c: the time of day's
+# light, sun, air, fog, forest sunlight, lamps, water mask); each game keeps an adapter (Platinum src/port/enhanced_graphics.c,
+# HGSS lib/port/enhanced_graphics.c). Needs NitroSystem's headers
+diff_files = port-common_gear_option.patch, port-common_nuzlocke_mode.patch, port-common_enhanced_scene.patch
 
 [provide]
 dependency_names = port_common

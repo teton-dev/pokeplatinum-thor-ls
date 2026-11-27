@@ -1,0 +1,42 @@
+# Enhanced graphics' lamps and fog through the things that leave and rebuild the field: the start menu and the bag over
+# Jubilife at night, a warp indoors and back out (the map's textures loaded again), a wild battle and back; then the same
+# in Eterna Forest with fog. Every shot of the field should show the lamps' pools (and the fog) as before; the indoor
+# and battle shots none. From the turtwig fixture with TEST_CONFIG="EnhancedLamps=true EnhancedFog=true
+# EnhancedShadows=true" -Hour 22.
+mash A until free
+jump 3 174 790
+until free timeout 3000
+wait 60
+shot lamps_before
+press X
+wait 30
+press A
+wait 90
+shot bag
+mash B until free timeout 3000
+wait 60
+shot lamps_after_bag
+jump 420 4 6
+until free timeout 3000
+wait 30
+shot indoors
+jump 3 174 790
+until free timeout 3000
+wait 60
+shot lamps_after_warp
+wild 399 2
+until command timeout 3000
+shot battle
+mash B touch 128 178 until free timeout 6000
+wait 60
+shot lamps_after_battle
+jump 203 28 80
+until free timeout 3000
+wait 60
+shot fog_forest
+press X
+wait 30
+press B
+mash B until free timeout 3000
+wait 60
+shot fog_after_menu

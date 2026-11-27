@@ -1,0 +1,335 @@
+--- a/include/simulator/config/sim_config.h
++++ b/include/simulator/config/sim_config.h
+@@ -67,6 +67,7 @@
+     s8 colorWhitePoint;
+     u8 enhancedAtmosphere; /* Enhanced graphics: haze and light shafts in the air (SIM_SetEnhancedAtmosphere) */
+     u8 enhancedBloom; /* Enhanced graphics: the glow of lamps and lit windows (SIM_SetEnhancedBloom) */
++    u8 enhancedSunPatches; /* Enhanced graphics: patches of sunlight through a forest's canopy, with a glow (SIM_SetEnhancedSunPatches) */
+     u8 enhancedFog; /* Enhanced graphics: ground and distance fog on the maps the game asks for (SIM_SetEnhancedFog) */
+     u8 enhancedLamps; /* Enhanced graphics: lamps light their surroundings at night, and sprites cast their shadows (SIM_SetLampTextures) */
+     u8 enhancedHighlights; /* Enhanced graphics: the sun's specular and fresnel highlights on buildings, rim light on sprites */
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -184,6 +184,23 @@
+     float eastX, eastY, eastZ;
+ } SIM_EnhancedFog;
+ void SIM_SetEnhancedFog(const SIM_EnhancedFog *fog);
++// Forest sunlight (Settings > Display > Forest sunlight), every frame the field is drawn, after SIM_SetEnhancedCamera and
++// SIM_SetEnhancedWorldOrigin: patches of sunlight through the canopy, as Eterna Forest's (a lighter core inside each), fixed
++// to the ground and drifting, with a soft glow of the sun around their cores. NULL or strength 0: none; a frame drawn
++// without the call has none. Lengths in view units; east is the world's x axis in view space.
++typedef struct {
++    float r, g, b;       // the sun's colour
++    float strength;      // how much the patches brighten what they fall on (it is multiplied by 1 + strength)
++    float glow;          // the glow around their cores, added (0: none)
++    float size;          // across a patch's pattern cell
++    float coverage;      // the share of the ground in patches (0 to 1)
++    float groundLevel;   // the floor's height (world up, view units): the light falls on it, not on the canopy above
++    float groundFade;    // the height over the floor where the light fades out (0: no fade, it lights everything)
++    float windX, windZ;  // the drift, world units per second, east and south
++    float time;          // seconds
++    float eastX, eastY, eastZ;
++} SIM_EnhancedSunPatches;
++void SIM_SetEnhancedSunPatches(const SIM_EnhancedSunPatches *patches);
+ // Lamp light (Settings > Display > Lamp light). Every frame the field is drawn, before its land: the textures that are
+ // lamps' glowing parts (textureOffset: the texture's VRAM address in bytes, as the polygons' TEXIMAGE_PARAM gives it), each
+ // lamp a sphere of light (radius, view units) of the colour given (its strength: 1 about doubles a lit surface at the
+--- a/libraries/sim/src/config/sim_config.c
++++ b/libraries/sim/src/config/sim_config.c
+@@ -86,6 +86,9 @@
+     if(MATCH("General", "EnhancedFog")) {
+         config->enhancedFog = StringToBool(value);
+     }
++    if(MATCH("General", "EnhancedSunPatches")) {
++        config->enhancedSunPatches = StringToBool(value);
++    }
+     if(MATCH("General", "EnhancedLamps")) {
+         config->enhancedLamps = StringToBool(value);
+     }
+@@ -507,6 +510,7 @@
+     aConfig->enhancedBloom = FALSE;
+     aConfig->enhancedFog = FALSE;
+     aConfig->enhancedLamps = FALSE;
++    aConfig->enhancedSunPatches = FALSE;
+     aConfig->colorSaturation = 0;
+     aConfig->colorVibrance = 0;
+     aConfig->colorContrast = 0;
+@@ -613,6 +617,7 @@
+     fprintf(configFile, "EnhancedBloom=%s\n", BoolToString(aConfig->enhancedBloom));
+     fprintf(configFile, "EnhancedFog=%s\n", BoolToString(aConfig->enhancedFog));
+     fprintf(configFile, "EnhancedLamps=%s\n", BoolToString(aConfig->enhancedLamps));
++    fprintf(configFile, "EnhancedSunPatches=%s\n", BoolToString(aConfig->enhancedSunPatches));
+     fprintf(configFile, "ColorSaturation=%d\n", aConfig->colorSaturation);
+     fprintf(configFile, "ColorVibrance=%d\n", aConfig->colorVibrance);
+     fprintf(configFile, "ColorContrast=%d\n", aConfig->colorContrast);
+--- a/libraries/sim/src/shaders/g3_atmosphere_apply_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_atmosphere_apply_fragment.glsl
+@@ -9,8 +9,14 @@
+ // integrated in closed form: ground fog that thins with height (exponentially), so it lies on the ground and the trees
+ // stand out of it, and distance fog. A slow pattern fixed to the world (value noise in its x and z, drifting) varies the
+ // ground fog, so it is mist, not a flat tint; it is fixed to the world, not the screen, so it doesn't crawl as the camera
+-// moves. The fog is a soft overlay: it doesn't filter or move the pixels under it.
+-// The blend is premultiplied: the fog and the haze over what is there (the fog first), the shafts added to it.
++// moves. The forest's sun patches (SIM_SetEnhancedSunPatches) are drawn by this shader as well, from the same place:
++// patches of a pattern fixed to the world's x and z (stepped on a one-unit grid, about a DS pixel, so their edges are
++// pixel steps like the DS forests' own), with a lighter core and a soft glow of the sun around it. Sunlight multiplies
++// what it falls on (a lit patch of a blue floor is a brighter blue, not a grey one), so the patches are a draw of their
++// own first (patchPass 1, blended dst * (1 + light)), and the glow, the bloom of the bright cores, is added in the main
++// draw. The fog and patches are soft overlays: they don't filter or move the pixels under them.
++// The main draw's blend is premultiplied: the fog and the haze over what is there (the fog first), the shafts and the
++// sun's glow added.
+ uniform sampler2D shaftTexture;
+ uniform sampler2D attrTexture;
+ uniform ivec2 origin;
+@@ -22,18 +28,27 @@
+ uniform vec3 hazeColor;
+ uniform float hazeAmount;   // the haze's share at the top of the screen
+ uniform int debugMode;
+-// The fog
+-uniform int useFog;
++// The scene's place (fog and sun patches)
+ uniform vec4 projection;    // the game's projection: m00, m11, m22, m32
+ uniform float xScale;       // a wide scene libntr narrows
+ uniform vec3 upView;        // the world's up in view space
+-uniform vec3 eastView;      // the world's x axis in view space
+ uniform vec3 worldOrigin;   // the world's origin in view space
++// The fog
++uniform int useFog;
++uniform vec3 eastView;      // the world's x axis in view space
+ uniform vec3 fogColor;
+ uniform vec3 fogGround;     // density at the ground (per view unit), height over which it thins by e, the ground's height
+ uniform vec2 fogDistance;   // density past the start, the start
+ uniform vec2 fogNoise;      // the pattern's size (view units), how much it varies the ground fog (0 to 1)
+ uniform vec2 fogDrift;      // the pattern's offset now (world x and z)
++// The sun patches
++uniform int usePatches;
++uniform vec3 patchEast;     // the world's x axis in view space
++uniform vec3 patchColor;    // the sun's colour
++uniform vec4 patchParams;   // strength, glow, cell size, coverage (0 to 1)
++uniform vec2 patchDrift;    // the pattern's offset now (world x and z)
++uniform vec2 patchGround;   // the floor's height, the height over it where the light fades out (0: no fade)
++uniform int patchPass;      // 1: this draw is the patches' light alone (multiplied in); 0: the main draw (their glow)
+ out vec4 color;
+ 
+ float Hash(vec2 p)
+@@ -52,17 +67,22 @@
+     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+ }
+ 
+-// How much of the scene the fog hides in front of this pixel (0 to 1)
+-float Fog(ivec2 fragment, vec4 attr)
++// The pixel's place in view space, from the depth in the attribute texture (z = 0: none)
++vec3 ViewPosition(ivec2 fragment, vec4 attr)
+ {
+     ivec4 a = ivec4(attr * 255.0 + 0.5);
+     float ndcz = float(a.g * 256 + a.b) / 65535.0 * 2.0 - 1.0;
+     float d = projection.w / (ndcz + projection.z);
+     if (d <= 0.0) {
+-        return 0.0;
++        return vec3(0.0);
+     }
+     vec2 ndc = (vec2(fragment - origin) + 0.5) / vec2(viewportSize) * 2.0 - 1.0;
+-    vec3 p = vec3(ndc.x / xScale * d / projection.x, ndc.y * d / projection.y, -d);
++    return vec3(ndc.x / xScale * d / projection.x, ndc.y * d / projection.y, -d);
++}
++
++// How much of the scene the fog hides in front of this pixel (0 to 1)
++float Fog(vec3 p)
++{
+     float rayLength = length(p);
+ 
+     // Heights above the ground, of the camera (the view's origin) and of the surface
+@@ -90,6 +110,30 @@
+     return 1.0 - exp(-depth);
+ }
+ 
++// The sun patches here, in the sun's colour times its share: the light of the patch and its core (x), and the glow about
++// the core (y)
++vec2 SunPatches(vec3 p)
++{
++    vec3 world = p - worldOrigin;
++    vec3 southView = cross(patchEast, upView);
++    // Stepped to whole world units, so the patches' edges are pixel steps fixed to the ground
++    vec2 xz = floor(vec2(dot(world, patchEast), dot(world, southView)) - patchDrift);
++    vec2 q = xz / max(patchParams.z, 1.0);
++    float n = ValueNoise(q) * 0.7 + ValueNoise(q * 2.7 + 31.0) * 0.3;
++    // The pattern's values above this edge are in a patch: higher coverage, lower edge
++    float edge = mix(0.75, 0.45, clamp(patchParams.w, 0.0, 1.0));
++    float inPatch = step(edge, n);
++    float core = step(edge + 0.07, n);
++    // The glow: a soft rise toward the core's edge and beyond it, wider than the core
++    float glow = smoothstep(edge - 0.02, edge + 0.12, n);
++    vec2 light = vec2(patchParams.x * (0.65 * inPatch + 0.35 * core), patchParams.y * glow * glow);
++    // The light reaches the floor through gaps in the canopy, so the treetops and roofs above it don't take it
++    if (patchGround.y > 0.0) {
++        light *= 1.0 - smoothstep(0.0, patchGround.y, dot(world, upView) - patchGround.x);
++    }
++    return light;
++}
++
+ void main()
+ {
+     ivec2 fragment = ivec2(gl_FragCoord.xy);
+@@ -97,13 +141,29 @@
+     if (attr.a < 0.5) {
+         discard;
+     }
++    if (patchPass == 1) {
++        vec3 p = ViewPosition(fragment, attr);
++        color = vec4(p.z < 0.0 ? patchColor * SunPatches(p).x : vec3(0.0), 1.0);
++        return;
++    }
+     float y = clamp(float(fragment.y - origin.y) / float(viewportSize.y), 0.0, 1.0);
+     float haze = hazeAmount * smoothstep(0.25, 1.0, y);
+     float shaft = 0.0;
+     if (useShafts == 1) {
+         shaft = texelFetch(shaftTexture, (fragment - origin) / pixelStep, 0).r;
+     }
+-    float fog = useFog == 1 ? Fog(fragment, attr) : 0.0;
++    float fog = 0.0;
++    vec3 sun = vec3(0.0);
++    if (useFog == 1 || usePatches == 1) {
++        vec3 p = ViewPosition(fragment, attr);
++        if (p.z < 0.0) {
++            fog = useFog == 1 ? Fog(p) : 0.0;
++            if (usePatches == 1) {
++                vec2 light = SunPatches(p);
++                sun = patchColor * (debugMode == 3 ? light.x + light.y : light.y);
++            }
++        }
++    }
+     if (debugMode == 1) {
+         color = vec4(vec3(shaft), 1.0);
+         return;
+@@ -112,8 +172,13 @@
+         color = vec4(vec3(fog), 1.0);
+         return;
+     }
+-    // The fog over the scene, then the haze over that: premultiplied, alpha what of the scene is covered
+-    color = vec4(hazeColor * haze + fogColor * (fog * (1.0 - haze)) + sunColor * (shaft * shaftGain),
++    if (debugMode == 3) {
++        color = vec4(sun, 1.0);
++        return;
++    }
++    // The sun's glow under the fog (so the fog veils it a little, as it does the patches, drawn before), then the fog over
++    // the scene, then the haze over that: premultiplied, alpha what of the scene is covered
++    color = vec4(hazeColor * haze + (fogColor * fog + sun * (1.0 - fog)) * (1.0 - haze) + sunColor * (shaft * shaftGain),
+                  1.0 - (1.0 - fog) * (1.0 - haze));
+ }
+ )""
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -572,6 +572,9 @@
+ // drawn, and dropped once a frame has been drawn with it, so frames that aren't the field's get none
+ static SIM_EnhancedFog sFog;
+ static bool sFogSet = false;
++// Enhanced graphics' forest sun patches (SIM_SetEnhancedSunPatches): drawn in the same pass, with the same lifetime
++static SIM_EnhancedSunPatches sSunPatches;
++static bool sSunPatchesSet = false;
+ // Enhanced graphics' lamps (SIM_SetLampTextures): found from the polygons drawn with the lamps' textures
+ static GLuint g3LampProgramID;
+ static GLuint g3BloomBrightProgramID, g3BloomBlurProgramID, g3BloomApplyProgramID;
+@@ -3365,6 +3368,13 @@
+   }
+ }
+ 
++extern "C" void SIM_SetEnhancedSunPatches(const SIM_EnhancedSunPatches *patches) {
++  sSunPatchesSet = patches != nullptr && patches->strength > 0.0f;
++  if (sSunPatchesSet) {
++    sSunPatches = *patches;
++  }
++}
++
+ extern "C" u32 G3SIM_TakeLampPoints(const float **points, const SIM_LampTexture **textures);
+ extern "C" void G3SIM_ClearLampTextures(void);
+ 
+@@ -3466,7 +3476,8 @@
+   const bool shafts = air && sSunFrameCamera && sAtmosphere[0] > 0.001f &&
+                       (sSunLight[0] + sSunLight[1] + sSunLight[2]) > 0.0f;
+   const bool fog = s_SIM_config.enhancedFog && sFogSet && sEnhancedCameraSet && sWorldOriginSet;
+-  if (!sSunFrameDrawn || (!haze && !shafts && !fog) || sSamples != 0 || s_SIM_useWBuffer ||
++  const bool patches = s_SIM_config.enhancedSunPatches && sSunPatchesSet && sEnhancedCameraSet && sWorldOriginSet;
++  if (!sSunFrameDrawn || (!haze && !shafts && !fog && !patches) || sSamples != 0 || s_SIM_useWBuffer ||
+       sG3Viewport[2] <= 0 || sG3Viewport[3] <= 0) {
+     return;
+   }
+@@ -3549,14 +3560,27 @@
+   glProgramUniform1f(apply, WaterUniform(apply, "hazeAmount"), haze ? sAtmosphere[4] : 0.0f);
+   glProgramUniform1i(apply, WaterUniform(apply, "debugMode"), sDebug);
+   glProgramUniform1i(apply, WaterUniform(apply, "useFog"), fog ? 1 : 0);
+-  if (fog) {
+-    // SIM_ATMOSPHERE_DEBUG=2 shows the fog's share alone
++  glProgramUniform1i(apply, WaterUniform(apply, "usePatches"), patches ? 1 : 0);
++  if (fog || patches) {
+     glProgramUniform4f(apply, WaterUniform(apply, "projection"), sEnhancedCamera[0], sEnhancedCamera[1],
+                        sEnhancedCamera[2], sEnhancedCamera[3]);
+     glProgramUniform1f(apply, WaterUniform(apply, "xScale"), xScale);
+     glProgramUniform3f(apply, WaterUniform(apply, "upView"), sEnhancedCamera[4], sEnhancedCamera[5], sEnhancedCamera[6]);
+-    glProgramUniform3f(apply, WaterUniform(apply, "eastView"), sFog.eastX, sFog.eastY, sFog.eastZ);
+     glProgramUniform3f(apply, WaterUniform(apply, "worldOrigin"), sWorldOrigin[0], sWorldOrigin[1], sWorldOrigin[2]);
++  }
++  if (patches) {
++    // SIM_ATMOSPHERE_DEBUG=3 shows the patches' light alone
++    const SIM_EnhancedSunPatches &p = sSunPatches;
++    glProgramUniform3f(apply, WaterUniform(apply, "patchEast"), p.eastX, p.eastY, p.eastZ);
++    glProgramUniform3f(apply, WaterUniform(apply, "patchColor"), p.r, p.g, p.b);
++    glProgramUniform4f(apply, WaterUniform(apply, "patchParams"), p.strength, p.glow, p.size, p.coverage);
++    glProgramUniform2f(apply, WaterUniform(apply, "patchGround"), p.groundLevel, p.groundFade);
++    const float wrap = 4096.0f * (p.size > 1.0f ? p.size : 1.0f); // as the fog's drift, below
++    glProgramUniform2f(apply, WaterUniform(apply, "patchDrift"), fmodf(p.windX * p.time, wrap), fmodf(p.windZ * p.time, wrap));
++  }
++  if (fog) {
++    // SIM_ATMOSPHERE_DEBUG=2 shows the fog's share alone
++    glProgramUniform3f(apply, WaterUniform(apply, "eastView"), sFog.eastX, sFog.eastY, sFog.eastZ);
+     glProgramUniform3f(apply, WaterUniform(apply, "fogColor"), sFog.r, sFog.g, sFog.b);
+     glProgramUniform3f(apply, WaterUniform(apply, "fogGround"), sFog.groundDensity, sFog.groundFalloff, sFog.groundLevel);
+     glProgramUniform2f(apply, WaterUniform(apply, "fogDistance"), sFog.distanceDensity, sFog.distanceStart);
+@@ -3568,12 +3592,20 @@
+                        fmodf(sFog.windZ * sFog.time, wrap));
+   }
+   glEnable(GL_BLEND);
+-  // premultiplied: the fog and the haze's colour over what is there, the shafts added (the alpha stays)
++  glUseProgram(apply);
++  if (patches && sDebug == 0) {
++    // The sun patches first, under the fog: sunlight multiplies what it falls on, dst * (1 + light) (the alpha stays)
++    glProgramUniform1i(apply, WaterUniform(apply, "patchPass"), 1);
++    glBlendFuncSeparate(GL_DST_COLOR, GL_ONE, GL_ZERO, GL_ONE);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++  }
++  glProgramUniform1i(apply, WaterUniform(apply, "patchPass"), 0);
++  // premultiplied: the fog and the haze's colour over what is there, the shafts and the patches' glow added (the alpha
++  // stays)
+   glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+-  if (sDebug == 1 || sDebug == 2) {
++  if (sDebug >= 1 && sDebug <= 3) {
+     glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ONE);
+   }
+-  glUseProgram(apply);
+   glDrawArrays(GL_TRIANGLES, 0, 3);
+   glDrawBuffers(2, kBoth);
+   glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+@@ -3874,6 +3906,7 @@
+   // field) has none
+   if (sSunFrameDrawn) {
+     sFogSet = false;
++    sSunPatchesSet = false;
+     G3SIM_ClearLampTextures();
+   }
+ 
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -356,6 +356,14 @@
+     SaveConfig();
+   }
+ 
++  bool sunPatches = config->enhancedSunPatches != 0;
++  if (Toggle("Forest sunlight", "Enhanced graphics: patches of sunlight falling through the trees in forests that don't "
++             "have the game's own (Ilex Forest), drifting slowly, with a soft glow of the sun around their brightest "
++             "parts; none at night. Needs 3D smoothing (anti-aliasing) off.", &sunPatches)) {
++    config->enhancedSunPatches = sunPatches ? 1 : 0;
++    SaveConfig();
++  }
++
+   bool lamps = config->enhancedLamps != 0;
+   if (Toggle("Lamp light", "Enhanced graphics: at night, street lamps and other lights cast warm pools of light around "
+              "them, and people and Pokemon near one cast a shadow away from it. Needs 3D smoothing (anti-aliasing) off.",

@@ -1,0 +1,14 @@
+# Enhanced graphics' lamp light at night in Jubilife City: the street lamps (in the land models; found by libntr from
+# their texture c1_o02b) light pools around them, and the player's shadow falls away from the nearest one. From the
+# turtwig fixture with TEST_CONFIG="EnhancedLamps=true EnhancedBloom=true" -Hour 22 (and -Hour 13: no lamps by day,
+# -Hour 19: the lamps half lit beside the low sun). POKEPLATINUM_LAMP_LOG=1 lists the lamps found and their tiles
+# (171 and 177, 775 and 789 here).
+mash A until free
+jump 3 174 784
+until free timeout 3000
+wait 90
+shot street
+jump 3 174 790
+until free timeout 3000
+wait 90
+shot street_south

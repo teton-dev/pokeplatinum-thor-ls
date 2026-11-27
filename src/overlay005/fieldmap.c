@@ -87,6 +87,7 @@
 #ifdef SDK_PORT
 #include "port/widescreen.h"
 #include "port/enhanced_graphics.h"
+#include "port/enhanced_scene.h"
 #include "port/camera_tilt.h"
 #endif
 
@@ -711,8 +712,9 @@ static void ov5_021D15F4(FieldSystem *fieldSystem)
 
     PokeRadar_ClearIfAllOutOfView(fieldSystem);
 #ifdef SDK_PORT
-    EnhancedGraphics_SetCamera(NNS_G3dGlbGetProjectionMtx(), NNS_G3dGlbGetCameraMtx());
-    EnhancedGraphics_LandDrawing(TRUE);
+    EnhancedGraphics_FieldDrawing(fieldSystem);
+    EnhancedScene_SetCamera(NNS_G3dGlbGetProjectionMtx(), NNS_G3dGlbGetCameraMtx());
+    EnhancedScene_LandDrawing(TRUE);
 #endif
     LandDataManager_RenderLoadedMaps(fieldSystem->landDataMan, fieldSystem->areaModelAttrs);
 
@@ -722,7 +724,7 @@ static void ov5_021D15F4(FieldSystem *fieldSystem)
 
     MapPropManager_Render2(fieldSystem->mapPropManager, fieldSystem->areaDataManager);
 #ifdef SDK_PORT
-    EnhancedGraphics_LandDrawing(FALSE);
+    EnhancedScene_LandDrawing(FALSE);
 #endif
 
     {

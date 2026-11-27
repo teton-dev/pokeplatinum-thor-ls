@@ -17,7 +17,7 @@
 #include "narc.h"
 
 #ifdef SDK_PORT
-#include "port/enhanced_graphics.h"
+#include "port/enhanced_scene.h"
 #endif
 
 static void MapPropManager_InitRenderObj(const int modelID, AreaDataManager *const areaDataManager, NNSG3dRenderObj *renderObj, NNSG3dResMdl **model);
@@ -153,7 +153,7 @@ void MapPropManager_Render(const VecFx32 *positionOffset, const AreaDataManager 
 
             BOOL inView = GFXBoxTest_IsModelInView(loadedProp->model, &position, &rotationMatrix, &loadedProp->scale);
 #ifdef SDK_PORT
-            inView = inView || (EnhancedGraphics_WantsOffScreenCasters() && EnhancedGraphics_NearView(&position));
+            inView = inView || (EnhancedScene_WantsOffScreenCasters() && EnhancedScene_NearView(&position));
 #endif
             if (inView) {
                 const MapPropMaterialShape *propMatShp = AreaDataManager_GetMapPropMaterialShape(areaDataManager);

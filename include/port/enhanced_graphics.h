@@ -1,11 +1,11 @@
 #ifndef POKEPLATINUM_PORT_ENHANCED_GRAPHICS_H
 #define POKEPLATINUM_PORT_ENHANCED_GRAPHICS_H
 
-// Enhanced graphics (Settings > Display, libntr's settings; plan: docs/thor/dev/enhanced-graphics.md).
-// The game tells libntr what light the scene wants (SIM_SetEnhancedScene); libntr's pass draws it.
+// Enhanced graphics (Settings > Display, libntr's settings; plan: docs/thor/dev/enhanced-graphics.md). The game-neutral
+// part is port-common's port/enhanced_scene.h (EnhancedScene_*), shared with the HGSS port; this is Platinum's adapter:
+// the hour, the outdoor test, the per-map looks (fog, lamps' textures) and the water tiles.
 
 #include <nitro/types.h>
-#include <nitro/fx/fx.h>
 
 #include "field/field_system_decl.h"
 
@@ -17,25 +17,14 @@ extern "C" {
 // draws nothing extra
 void EnhancedGraphics_Update(FieldSystem *fieldSystem);
 
+// In the field map's 3D render, before the camera is set (EnhancedScene_SetCamera): what this frame of the field needs
+// from it (the fog's ground under the player, the lamps' textures in the map's texture sets), read while the field is
+// surely there
+void EnhancedGraphics_FieldDrawing(FieldSystem *fieldSystem);
+
 // In the field map's 3D render, after the scene: the water tiles around the player as the water mask (libntr draws the
 // reflections from it); nothing with Water reflections off
 void EnhancedGraphics_DrawWaterMask(FieldSystem *fieldSystem);
-
-// The sun casts the objects' shadows now (the game's own blob shadows stay hidden then)
-BOOL EnhancedGraphics_SunShadowsShown(void);
-
-// In the field map's 3D render, once the camera is set and before the map is drawn: libntr's sun shadows of the 3D need the
-// game's projection and camera to read the depth buffer; and around the land and buildings being drawn, their own faint
-// shadow polygons are not drawn while the sun's are shown
-void EnhancedGraphics_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera);
-void EnhancedGraphics_LandDrawing(BOOL drawing);
-// The map's props just off the screen are drawn too (EnhancedGraphics_NearView; nothing of them is shown: libntr keeps
-// them as shadow casters before clipping and the clip drops the rest), so a house past the edge still casts onto it
-BOOL EnhancedGraphics_WantsOffScreenCasters(void);
-// Is a point (a prop's position) on the screen or within about half the screen of it, with this frame's camera
-BOOL EnhancedGraphics_NearView(const VecFx32 *position);
-// Around other models that should cast the sun's shadows (signposts, mailboxes: map objects drawn as models)
-void EnhancedGraphics_CasterDrawing(BOOL drawing);
 
 #ifdef __cplusplus
 }

@@ -7,6 +7,7 @@
 #ifdef SDK_PORT
 #include <simulator/sim.h>
 
+#include "port/enhanced_scene.h"
 #include "port/frame_rate.h"
 
 // The overworld's sprites are nudged toward the camera for the depth test, up to this much at their tops (view
@@ -280,6 +281,10 @@ static void BillboardList_Draw(BillboardList *list)
                 NNS_G3dGeFlushBuffer();
                 SIM_SetSpriteShadow(casting);
             }
+            if (casting) {
+                // At night, near a lamp: its shadow instead of the sun's (read as the sprite's polygon is submitted)
+                EnhancedScene_SpriteLampShadow(&billboard->pos);
+            }
 #endif
             if (billboard->callback != NULL) {
                 billboard->callback(billboard, billboard->callbackParam);
@@ -308,6 +313,7 @@ static void BillboardList_Draw(BillboardList *list)
 
 #ifdef SDK_PORT
     NNS_G3dGeFlushBuffer();
+    EnhancedScene_SpriteLampShadowsEnd();
     SIM_SetSpriteShadow(FALSE);
     SIM_SetSpriteDepthBias(0);
 #endif

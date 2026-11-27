@@ -426,3 +426,116 @@ Order: infrastructure + time-of-day, then sprite shadows, then water, then leave
   the map and tile at each step, `debug.eterna.sunlog 1` the shadow casters/fit, `debug.eterna.sundebug N` and
   `debug.eterna.separate 1` the desktop's `SIM_SUNSHADOW_DEBUG` / `SIM_SEPARATE_APPLY`, `debug.eterna.perflog 1` the
   frame timings (at launch), `debug.eterna.hour H` the light's hour.
+- **Fog and lamp light (2026-11-26, Windows desktop), `libntr_enhanced_fog_lamps.patch`, *Display > Fog* and *Display >
+  Lamp light* (`EnhancedFog`, `EnhancedLamps`), both off by default.**
+  **Fog** (`SIM_SetEnhancedFog`, every field frame from `EnhancedGraphics_SetCamera`): drawn inside the atmosphere's
+  full-resolution apply pass (`g3_atmosphere_apply_fragment.glsl`), so it adds no pass, framebuffer or copy; the pass now
+  runs when either Atmosphere or Fog has something to draw. Each pixel's place is rebuilt from the attribute texture's
+  depth; ground fog (density thinning by e every `groundFalloff` units above the player's ground, eased) is integrated in
+  closed form along the camera ray, plus distance fog past `distanceStart`; two octaves of value noise in the world's x/z
+  (fixed to the world, drifting with `wind`) vary the ground fog. Under the haze, premultiplied, never filters the art.
+  Which maps: a table by map header in `src/port/enhanced_graphics.c` (`sFogPresets`; Eterna Forest only for now: it is
+  `MAP_TYPE_CAVE`, so fog is not gated by map type); colour blended day to night (`Night()`: 18:30-19:30 and 5:30-6:30).
+  `SIM_ATMOSPHERE_DEBUG=2` shows the fog's share. Test: `tests/scripts/enhanced_fog.txt` (`-Hour 13` / `22`).
+  **Ilex Forest is HGSS: not done** (Goldenrod has no enhanced game side yet; it needs `EnhancedGraphics_*` ported or
+  shared first, not copy-forked).
+  **Lamp light:** the street lamps are mostly part of the **land models**, not map props (Jubilife's prop list near the
+  lamps had none), so a prop-ID table can't find them. Instead the game names the lamps' **textures**
+  (`sLampTextures`), looks them up in the area's map and prop texture sets (`NNS_G3dGetTexDataByName` + the set's VRAM
+  key, as NNS binds them) and tells libntr their VRAM addresses (`SIM_SetLampTextures`, with colour times the night
+  factor and a radius). libntr keeps the points of every polygon drawn with them (before clipping, so lamps just off the
+  screen count), groups them in view space (16 units across the world's up), and each group is a lamp
+  (`SIM_GetFrameLamps`). At the end of the frame (after the grade, before the glow) each lamp is one full-resolution draw
+  of `g3_lamp_fragment.glsl` scissored to its sphere's box on the screen: falloff `(1 - d^2/r^2)^2`, facing from the
+  screen-space derivatives of the rebuilt position (sprites take a fixed share), blended `dst * (1 + light)`. GPU time
+  is its own entry ("lamps") in the frame-timings overlay.
+  Textures found from the land models' texture names (`res/field/maps/data`, `texture_sets`) and checked at night on the
+  screen with `POKEPLATINUM_LAMP_LOG=1` (lists the lamps found and their tiles): `c1_o02b` Jubilife's street lamps (4 found
+  at tiles 171/177 x 775/789, where the lamps stand), `c2_light_a` Canalave's canal-post lamps (`c2_light_b` is the same
+  lamps' frame: both doubled them), `c5_light` Hearthome's street lamps (13 found), `neon3` Veilstone's Game Corner front
+  (prop 207; found as three groups, so each is dim). Not used: `c1_lamp01/02` (nothing seen), `bf_light*` (Battle
+  Frontier), `dun_light*` (caves; lamps are outdoors-only for now), `c9_o03` (the globe lamp props 36/230: their texture
+  is in the prop model itself, not the area's sets, so it isn't found by name; Sunyshore had none). No torches or braziers
+  outdoors in Platinum's data (`gym07hibachi`, `yokoFire` are indoor props). The textures are looked up, and the fog's
+  ground read, in `EnhancedGraphics_FieldDrawing` (fieldmap.c, before the camera), so nothing reads the field from the
+  main-loop update; libntr drops the list and the points after each drawn frame (`G3SIM_ClearLampTextures`), so a frame
+  that isn't the field has no lamps. At most 2048 lamp points a frame (logged 3 times a run when exceeded: seen only after
+  a test's last command, frames submitted without a swap). Tests: `enhanced_lamps.txt` (Jubilife, `-Hour 22`;
+  by day nothing), `enhanced_lamps_towns.txt` (Canalave, Hearthome, Veilstone), `enhanced_lamps_menus.txt` (the bag, a
+  warp indoors and back, a wild battle, then the forest's fog and the start menu: the lamps' shots after each are
+  pixel-identical to the one before, twice; also run at 16:9 4x with every effect on, water included: the pools sit on the
+  lamps). One earlier run of it showed the lamps out after the warp and the battle; not reproduced in three more runs.
+  **The player's shadow from lamps:** at night, a casting sprite near a lamp gets that lamp's shadow instead of the sun's
+  (`EnhancedGraphics_SpriteLampShadow` per billboard in `BillboardList_Draw`, `SIM_SetSpriteShadowLight`): away from the
+  strongest lamp within 1.25x its radius, length distance / the light's height (at most 1.6x the sprite's height), dark
+  0.6 x (1 - d^2/reach^2) x night; nothing far from a lamp. libntr's sprite shadow quads now carry their own alpha (the
+  sun's or the lamp's) and may lean down the screen (a lamp north of the sprite). At dusk the darker of the sun's and the
+  lamp's casts. The 3D shadow map stays off at night (the sun's strength is still 0). **The blob shadow is hidden where a
+  lamp casts** (owner's choice, 2026-11-26): `EnhancedGraphics_LampShadowShown` in the two blob updates of
+  `ov5_021F134C.c`, once the lamp's shadow is 0.12 dark or more (fainter, at the edge of a lamp's reach, the blob stays
+  too, so there is always something under the feet). Checked in Jubilife and Hearthome at 22:00.
+  **Not done / not checked:** the Duo/Thor and their cost (fog: one more depth read + ~8 hashes + 2 exp per 3D pixel in
+  a pass that already runs with Atmosphere; lamps: per lamp, the pixels in its box); fireflies; lamps in other towns'
+  props; fog in other maps (Route 210's own fog weather, Lake Valor/Verity mornings); the sprite shadows' attribute write
+  (`attr = vec4(0.0)` in `g3_fragment.glsl`) may leave those few pixels unfogged (not checked).
+- **Forest sunlight in HGSS's Ilex Forest (2026-11-26, Windows desktop), `libntr_enhanced_sun_patches.patch`, *Display >
+  Forest sunlight* (`EnhancedSunPatches`), off by default.** Platinum's Eterna Forest has light patches of its own (a
+  weather layer); Ilex has none, so libntr draws them (owner's choice: recreated in a shader, not ported from Platinum).
+  `SIM_SetEnhancedSunPatches`: value noise in the world's x/z, stepped on a one-unit grid (pixel-step edges fixed to the
+  ground), drifting slowly; a patch, a lighter core inside it and a glow (the "slight bloom") about the core. Sunlight
+  multiplies what it falls on: added light over Ilex's teal floor read as grey mist, so the patches are their own draw of
+  the atmosphere's apply shader (`patchPass`, blended `dst * (1 + light)`, only while patches are on), the glow added in
+  the main draw under the fog. They fade out over `groundFade` units above `groundLevel` (the eased ground under the
+  player), so treetops and roofs stay unlit. `SIM_ATMOSPHERE_DEBUG=3` shows them.
+  Game side (first): Goldenrod's own `lib/port/enhanced_forest.c`; since the same night folded into the shared game side
+  (next entry): the camera
+  (`SIM_SetEnhancedCamera` / `SIM_SetEnhancedWorldOrigin`), and on `MAP_ILEX_FOREST` the patches by day (warmer when
+  the sun is low; none from 19:30 to 5:30) and a light ground mist (`SIM_SetEnhancedFog`; thinner than Eterna Forest's
+  and with no distance fog, since HGSS's higher camera makes every ray long). Hour from the RTC, or
+  `POKEHEARTGOLD_ENHANCED_HOUR` in tests. Test: Goldenrod's `tests/scripts/enhanced_forest.txt` (`-Hour 13` / `22`).
+  **Not done / not checked:** the Duo/Thor and the cost (one more full-screen draw of the apply shader in Ilex by day);
+  the rest of HGSS's enhanced graphics; other forests (Viridian, Route 2's woods); the look of the patches at 16:9.
+- **HGSS's whole game side, shared with Platinum (2026-11-26, Windows desktop), port-common's `enhanced_scene.c`.** Owner's
+  choices: the game-neutral part moves into port-common rather than a second copy (PLAN B-1), and HGSS gets every effect,
+  lamps included. `port-common_enhanced_scene.patch` (the same file in both repos' `packagefiles`, after
+  `port-common_gear_option.patch` and `port-common_nuzlocke_mode.patch`; Platinum's wrap now applies the gear-option patch
+  too, default on, so both build the same port-common; port-common now also takes NitroSystem's headers) adds
+  `include/port/enhanced_scene.h` + `src/enhanced_scene.c` (`EnhancedScene_*`): the light, air and sun curves, the sun's
+  direction from the camera, fog, forest sunlight, the lamps (texture lookup, lamp shadows), the water mask, the land and
+  caster brackets, `NearView`. Each game keeps an adapter with three calls (`EnhancedGraphics_Update`, `_FieldDrawing`,
+  `_DrawWaterMask`): the hour (`EnhancedScene_Hour`: the RTC, the test variable, `debug.eterna.hour`), the outdoor test,
+  the per-map looks and the water tiles (a query with the game's bounds check). Platinum's `src/port/enhanced_graphics.c`
+  is now that adapter (behaviour unchanged; its callers in `billboard.c`, `fieldmap.c`, `map_prop.c`, `ov5_021F10E8.c`,
+  `ov5_021F134C.c` call `EnhancedScene_*`); Goldenrod's is `lib/port/enhanced_graphics.c` (`enhanced_forest.c` folded in:
+  Ilex's fog and sunlight are its looks). HGSS's hooks: `Widescreen_Update` (the field shown, not in a Gen 5 battle),
+  `FieldMap_Render3D` (field drawing + camera after `Camera_PushLookAtToNNSGlb`, the land bracket around the loaded maps and
+  props, the water mask before the swap), `Billboard_Draw` (HGSS's `BillboardObject` is Platinum's `Billboard`:
+  `castsShadow`, set in `MapObject_CreateBillboardForSprite` and the sprite-change billboard from the sprite's effect flags'
+  `shadow`, so field effects and the Wi-Fi plaza's billboards don't cast; cleared when a pooled object is reused), the three blob draws of `field_shadow.c` (skipped while the sun's or a lamp's
+  shadow is shown). HGSS's `MapPropManager_Draw` doesn't cull props to the screen, so `NearView` isn't needed there, and
+  its signs are map props (no caster bracket). Lamps: HGSS's area texture sets (prop textures, NARC a/0/7/0) searched by
+  name: `ko_light` (Goldenrod's and Ecruteak's street lamps; lit on the screen by Goldenrod's Pokémon Center at 22:00).
+  Its globe is about 20 units across, wider than libntr's 16-unit grouping, so each lamp is found as two (8 found for 4
+  lamps, 20 units apart): its colour is half of Jubilife's so the two give one lamp's light (a libntr fix, grouping by
+  the texture's polygons, would be better). Candidates seen in the data but **not looked at**, so not listed (a wrong entry
+  lights things twice): `kk_tourou_a`, `kk_tourou_b.1-3` (Violet's stone lanterns), `ar_light`, `as_toudai1/2` (Olivine's
+  lighthouse); `d15_light_*`, `g04_light.*` are indoor or unknown.
+  Checked (Goldenrod `tests/scripts/enhanced_scene.txt`, 2x, every setting on, 9:00 / 13:00 / 17:00 / 22:00 and off at
+  13:00; all pass): New Bark by its pond (the player's sun shadow left at 9:00, right and long at 17:00, no blob; the
+  blob back at 22:00; the pond mirrors its far bank; haze; orange grade at 17:00, blue at 22:00), Route 30 (the trees'
+  and the NPC's shadows), Goldenrod (the lamp's light and glow at 22:00); `SIM_SUNSHADOW_DEBUG=1` / `SIM_WATER_DEBUG=1`
+  show the shadow map's mask (houses, trees, the turbine) and the pond's mask. `enhanced_forest.txt` at 13:00 and 22:00
+  passes and looks as before (patches by day, none at night).
+  Platinum unchanged: Eterna's `enhanced_lamps` (22:00), `enhanced_fog` (13:00), `enhanced_posts` (16:00) and `enhanced_water`
+  (13:00) with every effect on, on the build before the move and after: all pass, shots identical but for an NPC that moved
+  and the water ripple's phase.
+  More checks the same night: HGSS's own baked house shadow (`h_kage`) is hidden by day, not doubled (libntr's rule
+  for translucent built-in shadows catches it); at 16:9 (`SecondaryScreen=true Widescreen=true`, 17:00) every effect
+  covers the width; a following Cyndaquil (`editor give 155 5`) loses its blob by day like the player (its own sun
+  shadow falls behind the player in the shots, so it isn't clearly seen); Ilex's patches drift as fast as before
+  (same shift between two shots, old and new build). A thin bright streak across New Bark's sand at 17:00 comes from
+  the Atmosphere pass (gone with it off; probably shafts through the wind turbine's blade).
+  **Not done / not checked:** Android builds of either game (port-common's new NitroSystem dependency included) and the
+  Duo/Thor; the player's lamp shadow (not clearly visible in the one shot beside a lamp, where the follower stands);
+  HGSS's own reflections (`hasReflection` billboards) beside ours; the 17:00 streak; other HGSS lamps and fog maps (only
+  Ilex); the Gen 5 battle and bag screens with the effects on (the update gets NULL there, as in Platinum, not shot).

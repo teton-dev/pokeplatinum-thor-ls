@@ -17,7 +17,7 @@
 
 #ifdef SDK_PORT
 #include "port/frame_rate.h"
-#include "port/enhanced_graphics.h"
+#include "port/enhanced_scene.h"
 #endif
 
 typedef struct {
@@ -273,8 +273,9 @@ static void ov5_021F1604(OverworldAnimManager *param0, void *param1)
     }
 
 #ifdef SDK_PORT
-    // Enhanced graphics: the sun's shadow stands in for the blob (checked every frame, so dusk and map entry follow)
-    if (EnhancedGraphics_SunShadowsShown()) {
+    // Enhanced graphics: the sun's shadow stands in for the blob (checked every frame, so dusk and map entry follow), and
+    // so does a lamp's at night where it casts one
+    if (EnhancedScene_SunShadowsShown()) {
         v0->unk_0C = 1;
         return;
     }
@@ -284,6 +285,12 @@ static void ov5_021F1604(OverworldAnimManager *param0, void *param1)
         VecFx32 v2;
 
         MapObject_GetPosPtr(v1, &v2);
+#ifdef SDK_PORT
+        if (EnhancedScene_LampShadowShown(&v2)) {
+            v0->unk_0C = 1;
+            return;
+        }
+#endif
         OverworldAnimManager_SetPosition(param0, &v2);
     }
 }
@@ -353,8 +360,9 @@ static void ov5_021F1718(OverworldAnimManager *param0, void *param1)
     }
 
 #ifdef SDK_PORT
-    // Enhanced graphics: the sun's shadow stands in for the blob (checked every frame, so dusk and map entry follow)
-    if (EnhancedGraphics_SunShadowsShown()) {
+    // Enhanced graphics: the sun's shadow stands in for the blob (checked every frame, so dusk and map entry follow), and
+    // so does a lamp's at night where it casts one
+    if (EnhancedScene_SunShadowsShown()) {
         v0->unk_0C = 1;
         return;
     }
@@ -364,6 +372,12 @@ static void ov5_021F1718(OverworldAnimManager *param0, void *param1)
         VecFx32 v2;
 
         MapObject_GetPosPtr(v1, &v2);
+#ifdef SDK_PORT
+        if (EnhancedScene_LampShadowShown(&v2)) {
+            v0->unk_0C = 1;
+            return;
+        }
+#endif
         OverworldAnimManager_SetPosition(param0, &v2);
     }
 }

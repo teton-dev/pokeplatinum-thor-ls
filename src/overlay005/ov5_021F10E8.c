@@ -12,7 +12,7 @@
 #include "simple3d.h"
 
 #ifdef SDK_PORT
-#include "port/enhanced_graphics.h"
+#include "port/enhanced_scene.h"
 #endif
 
 typedef struct {
@@ -254,11 +254,11 @@ static void ov5_021F1310(OverworldAnimManager *param0, void *param1)
     OverworldAnimManager_GetPosition(param0, &v1);
 #ifdef SDK_PORT
     // Enhanced graphics: signposts and mailboxes cast sun shadows (the shadow map's casters)
-    EnhancedGraphics_CasterDrawing(TRUE);
+    EnhancedScene_CasterDrawing(TRUE);
 #endif
     Simple3D_DrawRenderObjWithPos(v0->unk_18, &v1);
 #ifdef SDK_PORT
-    EnhancedGraphics_CasterDrawing(FALSE);
+    EnhancedScene_CasterDrawing(FALSE);
 #endif
 }
 

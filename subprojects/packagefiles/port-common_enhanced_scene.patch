@@ -1,0 +1,875 @@
+--- a/meson.build
++++ b/meson.build
+@@ -24,6 +24,12 @@
+     includes: true,
+     sources: true,
+ )
++# NitroSystem's headers too (the enhanced graphics' core binds textures and draws the water mask with NNS's G3D)
++nitrosystem_headers_dep = dependency('NitroSystem').partial_dependency(
++    compile_args: true,
++    includes: true,
++    sources: true,
++)
+ 
+ port_common_includes = include_directories('include')
+ is_native = (build_target == 'linux' or build_target == 'win64')
+@@ -43,6 +49,7 @@
+ port_common_sources = files(
+     'src/autosave.c',
+     'src/cheats.c',
++    'src/enhanced_scene.c',
+     'src/nuzlocke.c',
+     'src/save_slots.c',
+     'src/save_sync.c',
+@@ -59,7 +66,7 @@
+     port_common_sources,
+     c_args: ['-std=c99'],
+     include_directories: port_common_includes,
+-    dependencies: nitrosdk_headers_dep,
++    dependencies: [nitrosdk_headers_dep, nitrosystem_headers_dep],
+     # Same machine as libntr and the game's main (the desktop builds are native)
+     native: is_native,
+ )
+--- /dev/null
++++ b/include/port/enhanced_scene.h
+@@ -0,0 +1,106 @@
++#ifndef PORT_COMMON_PORT_ENHANCED_SCENE_H
++#define PORT_COMMON_PORT_ENHANCED_SCENE_H
++
++// Enhanced graphics, the game-neutral part of the game side (Settings > Display, libntr's settings; plan and findings:
++// pokeplatinum's docs/thor/dev/enhanced-graphics.md). libntr draws the effects; this tells it what the scene wants:
++// the time of day's light and air, the sun (sprite shadows, the 3D shadow map, highlights), fog, forest sunlight,
++// water, lamps. Each game keeps a small adapter (Platinum src/port/enhanced_graphics.c, HGSS
++// lib/port/enhanced_graphics.c) that supplies what only it knows: the hour, whether the map is outdoors, the per-map
++// looks, the tiles that are water and the texture sets the lamps are in.
++
++#include <nitro/types.h>
++#include <nitro/fx/fx.h>
++#include <nnsys/g3d/binres/res_struct.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++// A map's fog, by day and by night (blended by the hour). Lengths are world units (a tile is 16).
++typedef struct EnhancedFogLook {
++    float dayR, dayG, dayB, nightR, nightG, nightB;
++    float groundDensity, groundFalloff; // dense at the ground, thinning by e every groundFalloff units up
++    float distanceDensity, distanceStart;
++    float noiseScale, noiseAmount, windX, windZ;
++} EnhancedFogLook;
++
++// A forest's patches of sunlight on its floor (libntr's SIM_SetEnhancedSunPatches): by day only, warmer when the sun
++// is low. fade: world units above the floor over which they fade out (so treetops and roofs stay unlit)
++typedef struct EnhancedSunPatchLook {
++    float strength, glow, size, coverage, fade;
++} EnhancedSunPatchLook;
++
++// A texture that is a lamp's in the map's texture sets: libntr finds the lamps from the polygons drawn with it
++// (SIM_SetLampTextures). radius: world units the light reaches; r, g, b: its colour times its strength
++typedef struct EnhancedLampLook {
++    const char *texture;
++    float radius;
++    float r, g, b;
++} EnhancedLampLook;
++
++// What the game shows now, once per main loop iteration
++typedef struct EnhancedSceneState {
++    BOOL field;                          // a field map is shown (FALSE in menus and battles: nothing is drawn)
++    BOOL outdoors;                       // the sun lights it (light, shadows, air, lamps)
++    float hour;                          // 0 to 24 (EnhancedScene_Hour)
++    const EnhancedFogLook *fog;          // this map's fog, or NULL
++    const EnhancedSunPatchLook *patches; // this map's forest sunlight, or NULL
++} EnhancedSceneState;
++
++void EnhancedScene_Update(const EnhancedSceneState *state);
++
++// The hour the light follows: clockHour (the game's clock), or in tests the environment variable testEnv (H or H.5),
++// or on Android `adb shell setprop debug.eterna.hour H` (empty to clear; looked up about once a second)
++float EnhancedScene_Hour(float clockHour, const char *testEnv);
++
++// In the field map's 3D render, before the camera is set: the player's ground (world units; the fog and the forest's
++// sunlight lie on it, eased) and the map's texture sets, in which the lamps' textures are looked up (as NNS binds them)
++void EnhancedScene_FieldDrawing(float groundY, const NNSG3dResTex *const *textureSets, int setCount,
++    const EnhancedLampLook *lamps, int lampCount);
++
++// In the field map's 3D render, once the camera is set and before the map is drawn: libntr's passes that rebuild the
++// scene from its depth need the game's projection and camera; the sun's direction follows the sprites' shadows
++void EnhancedScene_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera);
++
++// Around the land and its props being drawn: they are the shadow map's (and the planar mirror's) casters, their own
++// faint shadow polygons are not drawn while the sun's are shown, and the lamps are found in them
++void EnhancedScene_LandDrawing(BOOL drawing);
++// Around other models that should cast the sun's shadows (Platinum's signposts and mailboxes)
++void EnhancedScene_CasterDrawing(BOOL drawing);
++// The map's props just off the screen are wanted too (as casters: libntr keeps them before clipping), for a game that
++// culls its props to the screen
++BOOL EnhancedScene_WantsOffScreenCasters(void);
++// Is a point on the screen or within about half the screen of it, with this frame's camera
++BOOL EnhancedScene_NearView(const VecFx32 *position);
++
++// The sun casts the objects' shadows now (the game's own blob shadows stay hidden then)
++BOOL EnhancedScene_SunShadowsShown(void);
++
++// Inside the billboards' shadow bracket (libntr's SIM_SetSpriteShadow), before a sprite that casts: its shadow from the
++// nearest lamp instead of the sun's, at night (SIM_SetSpriteShadowLight); ..._SpriteLampShadowsEnd after the last one
++void EnhancedScene_SpriteLampShadow(const VecFx32 *position);
++void EnhancedScene_SpriteLampShadowsEnd(void);
++// A lamp casts the shadow of an object standing there now (its blob shadow is hidden then, as under the sun's)
++BOOL EnhancedScene_LampShadowShown(const VecFx32 *position);
++
++// The water tiles, as the game knows them
++typedef struct EnhancedWaterQuery {
++    void *context;
++    // A tile of the loaded map that is water (a reflective or surfable tile). Must stay inside what the game has loaded:
++    // Platinum's lookup outside its map matrix set a link error (a white-screen reset)
++    BOOL (*isWater)(void *context, int x, int z);
++    // The height of the tile's surface (world units as fx32)
++    fx32 (*height)(void *context, int x, int z);
++    int playerX, playerZ; // the player's tile
++    int mapId;            // a change of map finds the water again
++} EnhancedWaterQuery;
++
++// In the field map's 3D render, after the scene: the water tiles around the player as the water mask (libntr draws the
++// reflections from it); with Water reflections off (or query NULL), nothing
++void EnhancedScene_DrawWaterMask(const EnhancedWaterQuery *query);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif // PORT_COMMON_PORT_ENHANCED_SCENE_H
+--- /dev/null
++++ b/src/enhanced_scene.c
+@@ -0,0 +1,731 @@
++// Enhanced graphics, the game-neutral part of the game side: see include/port/enhanced_scene.h
++#include "port/enhanced_scene.h"
++
++#include <nitro.h>
++#include <nnsys.h>
++#include <math.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#ifdef __ANDROID__
++#include <sys/system_properties.h>
++#endif
++#include <simulator/config/sim_config.h>
++#include <simulator/sim.h>
++
++#define TILE_SIZE FX32_CONST(16)
++
++typedef struct {
++    int hour;
++    u8 r, g, b;
++    u8 vignette;
++} LightKey;
++
++// The light at each hour, between which it is blended by the minute. Gentle: the games' own area light already
++// darkens the night and warms the evening, so this is a grade on top of it, not a replacement.
++static const LightKey sKeys[] = {
++    { 0, 175, 190, 235, 70 },
++    { 5, 185, 195, 235, 60 },
++    { 7, 255, 228, 205, 30 },
++    { 9, 255, 255, 255, 0 },
++    { 16, 255, 255, 255, 0 },
++    { 18, 255, 214, 176, 35 },
++    { 20, 190, 180, 215, 55 },
++    { 22, 175, 190, 235, 70 },
++    { 24, 175, 190, 235, 70 },
++};
++
++// The air by the hour: the haze's colour and its share at the top of the screen, and how brightly the glowing parts
++// (lamps, lit windows) shine: the luminance they must pass and how strongly they glow
++typedef struct {
++    int hour;
++    float hazeR, hazeG, hazeB, haze;
++    float bloomThreshold, bloomStrength;
++} AirKey;
++
++static const AirKey sAir[] = {
++    { 0, 0.30f, 0.38f, 0.60f, 0.28f, 0.70f, 0.80f },
++    { 5, 0.30f, 0.38f, 0.60f, 0.28f, 0.70f, 0.80f },
++    { 7, 0.95f, 0.70f, 0.55f, 0.30f, 0.90f, 0.35f },
++    { 9, 0.75f, 0.85f, 0.97f, 0.20f, 0.97f, 0.12f },
++    { 16, 0.78f, 0.86f, 0.97f, 0.20f, 0.97f, 0.12f },
++    { 18, 1.00f, 0.66f, 0.45f, 0.32f, 0.92f, 0.35f },
++    { 20, 0.35f, 0.38f, 0.62f, 0.28f, 0.72f, 0.75f },
++    { 24, 0.30f, 0.38f, 0.60f, 0.28f, 0.70f, 0.80f },
++};
++
++// The sun's shadows by the hour: they fall to the left in the morning (the sun in the east) and the right in the
++// evening, short at noon and long when it is low, with none at night
++static BOOL sSunShadows = FALSE;
++static BOOL sSunLit = FALSE; // the sun is up (and a setting that reads the game's camera is on)
++// Toward the sun, in the world (x east, y up, z south), unit length
++static float sSunWorld[3] = { 0.0f, 1.0f, 0.0f };
++// The sprites' shadows' lean (SIM_SetEnhancedSun): sideways in NDC x per NDC y of height, and up the screen per height
++static float sSpriteShear[2] = { 0.0f, 0.24f };
++static float sSunShadowAlpha = 0.0f; // how dark the sun's sprite shadows are now (0: none), for the hand-over at dusk
++
++// This frame's camera and projection as floats (row vectors), for EnhancedScene_NearView and the lamps
++static float sViewCamera[4][3], sViewProjection[4][4];
++static BOOL sViewSet = FALSE;
++
++// The map's fog and forest sunlight (NULL: none), the hour's share of night, and the ground they lie on
++static const EnhancedFogLook *sFog = NULL;
++static const EnhancedSunPatchLook *sPatches = NULL;
++static float sNight = 0.0f;     // 0 day to 1 night
++static float sHour = 12.0f;
++static float sGround = 0.0f;    // the ground's height under the player, eased (world units)
++static BOOL sGroundSet = FALSE;
++static u32 sFrames = 0;         // the drift's clock (field frames)
++
++// Lamps: how much they are lit now, 0 to 1 (by the hour, outdoors only), and whether this frame wants them
++static float sLampNight = 0.0f;
++static BOOL sLampsWanted = FALSE;
++
++// This frame's lamps in the world (from libntr once the land is drawn), for the sprites' shadows
++typedef struct {
++    float x, y, z, radius;
++} LampSeen;
++
++static LampSeen sLampsSeen[SIM_ENHANCED_LAMPS_MAX];
++static int sLampsSeenCount = 0;
++
++static void SetAir(float hour, float shaft)
++{
++    AirKey now = sAir[0];
++    for (int i = 0; i < (int)(sizeof(sAir) / sizeof(sAir[0])) - 1; i++) {
++        if (hour >= sAir[i].hour && hour < sAir[i + 1].hour) {
++            const float t = (hour - sAir[i].hour) / (float)(sAir[i + 1].hour - sAir[i].hour);
++            now.hazeR = sAir[i].hazeR + (sAir[i + 1].hazeR - sAir[i].hazeR) * t;
++            now.hazeG = sAir[i].hazeG + (sAir[i + 1].hazeG - sAir[i].hazeG) * t;
++            now.hazeB = sAir[i].hazeB + (sAir[i + 1].hazeB - sAir[i].hazeB) * t;
++            now.haze = sAir[i].haze + (sAir[i + 1].haze - sAir[i].haze) * t;
++            now.bloomThreshold = sAir[i].bloomThreshold + (sAir[i + 1].bloomThreshold - sAir[i].bloomThreshold) * t;
++            now.bloomStrength = sAir[i].bloomStrength + (sAir[i + 1].bloomStrength - sAir[i].bloomStrength) * t;
++            break;
++        }
++    }
++    SIM_SetEnhancedAtmosphere(shaft, now.hazeR, now.hazeG, now.hazeB, now.haze);
++    SIM_SetEnhancedBloom(now.bloomThreshold, now.bloomStrength);
++}
++
++static u8 Lerp(u8 a, u8 b, int t, int span)
++{
++    return (u8)(a + ((int)b - (int)a) * t / span);
++}
++
++// The world's x axis in view space (row vectors: the camera's first row), unit length; FALSE when degenerate
++static BOOL CameraEast(const MtxFx43 *camera, float *east)
++{
++    const float k = 1.0f / 4096.0f;
++    const float ex = camera->_00 * k, ey = camera->_01 * k, ez = camera->_02 * k;
++    const float length = sqrtf(ex * ex + ey * ey + ez * ez);
++    if (length < 0.0001f) {
++        return FALSE;
++    }
++    east[0] = ex / length;
++    east[1] = ey / length;
++    east[2] = ez / length;
++    return TRUE;
++}
++
++// The fog for this frame, with the camera just set (libntr takes the world's up and origin from the same frame's calls)
++static void SendFog(const float *east)
++{
++    if (sFog == NULL || east == NULL || !SIM_GetConfigPtr()->enhancedFog) {
++        SIM_SetEnhancedFog(NULL);
++        return;
++    }
++    const EnhancedFogLook *look = sFog;
++    const float n = sNight;
++    SIM_EnhancedFog fog = {
++        .r = look->dayR + (look->nightR - look->dayR) * n,
++        .g = look->dayG + (look->nightG - look->dayG) * n,
++        .b = look->dayB + (look->nightB - look->dayB) * n,
++        .groundDensity = look->groundDensity,
++        .groundFalloff = look->groundFalloff,
++        .groundLevel = sGround,
++        .distanceDensity = look->distanceDensity,
++        .distanceStart = look->distanceStart,
++        .noiseScale = look->noiseScale,
++        .noiseAmount = look->noiseAmount,
++        .windX = look->windX,
++        .windZ = look->windZ,
++        .time = sFrames / 60.0f,
++        .eastX = east[0],
++        .eastY = east[1],
++        .eastZ = east[2],
++    };
++    SIM_SetEnhancedFog(&fog);
++}
++
++// The forest's sunlight on its floor: by day only; warmer when the sun is low
++static void SendSunPatches(const float *east)
++{
++    const float day = 1.0f - sNight;
++    if (sPatches == NULL || east == NULL || day <= 0.0f) {
++        SIM_SetEnhancedSunPatches(NULL);
++        return;
++    }
++    const EnhancedSunPatchLook *look = sPatches;
++    const float fromNoon = fabsf(sHour - 12.0f);
++    const float low = fromNoon / 6.0f > 1.0f ? 1.0f : fromNoon / 6.0f;
++    SIM_EnhancedSunPatches patches = {
++        .r = 1.0f,
++        .g = 0.82f - 0.12f * low,
++        .b = 0.40f - 0.15f * low,
++        .strength = look->strength * day,
++        .glow = look->glow * day,
++        .size = look->size,
++        .coverage = look->coverage,
++        .groundLevel = sGround,
++        .groundFade = look->fade,
++        .windX = 2.0f,
++        .windZ = 0.7f,
++        .time = sFrames / 60.0f,
++        .eastX = east[0],
++        .eastY = east[1],
++        .eastZ = east[2],
++    };
++    SIM_SetEnhancedSunPatches(&patches);
++}
++
++// A texture's VRAM address in bytes, as libntr sees the polygons' TEXIMAGE_PARAM (the dictionary's parameter plus the
++// texture block's place, as NNS binds it to a material); 0 when the set has no such texture or isn't in VRAM
++static u32 TextureAddress(const NNSG3dResTex *set, const char *name)
++{
++    if (set == NULL) {
++        return 0;
++    }
++    NNSG3dResName resName;
++    memset(&resName, 0, sizeof(resName));
++    strncpy(resName.name, name, sizeof(resName.name));
++    const NNSG3dResDictTexData *data = NNS_G3dGetTexDataByName(set, &resName);
++    if (data == NULL) {
++        return 0;
++    }
++    const BOOL compressed = ((data->texImageParam & REG_G3_TEXIMAGE_PARAM_TEXFMT_MASK) >> REG_G3_TEXIMAGE_PARAM_TEXFMT_SHIFT)
++        == GX_TEXFMT_COMP4x4;
++    const NNSGfdTexKey key = compressed ? set->tex4x4Info.vramKey : set->texInfo.vramKey;
++    if (key == 0) {
++        return 0;
++    }
++    const u32 param = data->texImageParam + (NNS_GfdGetTexKeyAddr(key) >> NNS_GFD_TEXKEY_ADDR_SHIFT);
++    return (param & 0xFFFF) << 3;
++}
++
++// The lamps' textures for this frame, before the land is drawn (in the map's texture sets)
++static void SendLampTextures(const NNSG3dResTex *const *sets, int setCount, const EnhancedLampLook *lamps, int lampCount)
++{
++    if (!sLampsWanted || sets == NULL || lamps == NULL) {
++        SIM_SetLampTextures(NULL, 0);
++        return;
++    }
++    SIM_LampTexture textures[SIM_LAMP_TEXTURES_MAX];
++    int count = 0;
++    for (int i = 0; i < lampCount; i++) {
++        for (int s = 0; s < setCount && count < SIM_LAMP_TEXTURES_MAX; s++) {
++            const u32 address = TextureAddress(sets[s], lamps[i].texture);
++            if (address == 0) {
++                continue;
++            }
++            SIM_LampTexture *texture = &textures[count++];
++            texture->textureOffset = address;
++            texture->radius = lamps[i].radius;
++            texture->r = lamps[i].r * sLampNight;
++            texture->g = lamps[i].g * sLampNight;
++            texture->b = lamps[i].b * sLampNight;
++        }
++    }
++    SIM_SetLampTextures(textures, count);
++    // Tests: POKEPLATINUM_LAMP_LOG=1 (POKEHEARTGOLD_LAMP_LOG=1) also logs the textures named, when they change
++    static u32 sLoggedAddress = 0xFFFFFFFF;
++    const u32 address = count > 0 ? textures[0].textureOffset : 0;
++    if (address != sLoggedAddress && (getenv("POKEPLATINUM_LAMP_LOG") != NULL || getenv("POKEHEARTGOLD_LAMP_LOG") != NULL)) {
++        sLoggedAddress = address;
++        printf("[lamps] %d lamp textures, the first at 0x%05x\n", count, (unsigned)address);
++        fflush(stdout);
++    }
++}
++
++// Once the land is drawn: the lamps libntr found, back in the world (the camera's rows are the world's axes in view space:
++// world = (view - origin) times their transpose), for the sprites drawn after
++static void TakeFrameLamps(void)
++{
++    sLampsSeenCount = 0;
++    if (!sLampsWanted || !sViewSet) {
++        return;
++    }
++    SIM_EnhancedLamp lamps[SIM_ENHANCED_LAMPS_MAX];
++    const int count = SIM_GetFrameLamps(lamps, SIM_ENHANCED_LAMPS_MAX);
++    for (int i = 0; i < count; i++) {
++        const float v[3] = { lamps[i].x - sViewCamera[3][0], lamps[i].y - sViewCamera[3][1], lamps[i].z - sViewCamera[3][2] };
++        LampSeen *seen = &sLampsSeen[sLampsSeenCount++];
++        seen->x = v[0] * sViewCamera[0][0] + v[1] * sViewCamera[0][1] + v[2] * sViewCamera[0][2];
++        seen->y = v[0] * sViewCamera[1][0] + v[1] * sViewCamera[1][1] + v[2] * sViewCamera[1][2];
++        seen->z = v[0] * sViewCamera[2][0] + v[1] * sViewCamera[2][1] + v[2] * sViewCamera[2][2];
++        seen->radius = lamps[i].radius;
++    }
++    // Tests: the lamp log lists the lamps found, each time their count changes
++    static int sLoggedCount = -1;
++    if (count != sLoggedCount && (getenv("POKEPLATINUM_LAMP_LOG") != NULL || getenv("POKEHEARTGOLD_LAMP_LOG") != NULL)) {
++        sLoggedCount = count;
++        printf("[lamps] %d found\n", count);
++        for (int i = 0; i < sLampsSeenCount; i++) {
++            printf("[lamps]   at %.0f %.0f %.0f (tile %d, %d) r %.2f\n", sLampsSeen[i].x, sLampsSeen[i].y, sLampsSeen[i].z,
++                (int)floorf(sLampsSeen[i].x / 16.0f), (int)floorf(sLampsSeen[i].z / 16.0f), lamps[i].r);
++        }
++        fflush(stdout);
++    }
++}
++
++// libntr reads the lamp's shadow as each sprite's polygons are submitted, so the commands already sent are drawn before it
++// changes; when it doesn't change (most sprites, and every one by day), nothing is flushed
++static void SetSpriteLampShadow(float shearX, float shearY, float alpha)
++{
++    static float sSent[3] = { 0.0f, 0.0f, 0.0f };
++    if (shearX == sSent[0] && shearY == sSent[1] && alpha == sSent[2]) {
++        return;
++    }
++    sSent[0] = shearX;
++    sSent[1] = shearY;
++    sSent[2] = alpha;
++    NNS_G3dGeFlushBuffer();
++    SIM_SetSpriteShadowLight(shearX, shearY, alpha);
++}
++
++// The shadow a lamp gives an object standing at position: its darkness (0: none, as far from every lamp, or while the sun's
++// is darker at dusk and dawn) and, when shearX is given, its lean on the screen as SIM_SetEnhancedSun's
++static float LampShadow(const VecFx32 *position, float *shearX, float *shearY)
++{
++    if (sLampsSeenCount == 0 || position == NULL) {
++        return 0.0f;
++    }
++    const float px = position->x / 4096.0f, py = position->y / 4096.0f, pz = position->z / 4096.0f;
++    // The lamp that lights this sprite most: it casts the shadow (one shadow, the strongest light's)
++    float bestWeight = 0.0f, bestDx = 0.0f, bestDz = 0.0f, bestHeight = 1.0f;
++    for (int i = 0; i < sLampsSeenCount; i++) {
++        const LampSeen *seen = &sLampsSeen[i];
++        const float dx = px - seen->x, dz = pz - seen->z;
++        const float reach = seen->radius * 1.25f;
++        const float d2 = (dx * dx + dz * dz) / (reach * reach);
++        const float height = seen->y - py;
++        if (d2 >= 1.0f || height < 8.0f) {
++            continue; // out of its reach, or a light no higher than the sprite casts nothing useful
++        }
++        const float weight = 1.0f - d2; // still clear a few tiles from a lamp, gone past its reach
++        if (weight > bestWeight) {
++            bestWeight = weight;
++            bestDx = dx;
++            bestDz = dz;
++            bestHeight = height;
++        }
++    }
++    const float alpha = 0.6f * bestWeight * sLampNight;
++    // At dusk and dawn the stronger of the two casts: the sun's until the lamp's is darker (no pop: both fade)
++    if (alpha < 0.02f || alpha <= sSunShadowAlpha) {
++        return 0.0f;
++    }
++    if (shearX != NULL) {
++        // Away from the lamp: per unit of the sprite's height, the shadow reaches (distance / the light's height) along
++        // the ground (a point light over a short figure), at most 1.6 times the height. Then on the screen as the sun's
++        // shadows are (EnhancedScene_SetCamera's sums, the other way): x by the camera's east scale, northward by its
++        // pitch
++        float east = bestDx / bestHeight, north = -bestDz / bestHeight;
++        const float reach = sqrtf(east * east + north * north);
++        if (reach > 1.6f) {
++            east *= 1.6f / reach;
++            north *= 1.6f / reach;
++        }
++        *shearX = 0.75f * east * sViewCamera[0][0];
++        *shearY = north * -sViewCamera[2][1];
++    }
++    return alpha;
++}
++
++void EnhancedScene_SpriteLampShadow(const VecFx32 *position)
++{
++    float shearX = 0.0f, shearY = 0.0f;
++    const float alpha = LampShadow(position, &shearX, &shearY);
++    SetSpriteLampShadow(alpha > 0.0f ? shearX : 0.0f, alpha > 0.0f ? shearY : 0.0f, alpha);
++}
++
++BOOL EnhancedScene_LampShadowShown(const VecFx32 *position)
++{
++    // Once the lamp's shadow is clear; fainter (at the edge of a lamp's reach) the blob stays as well, so there's always
++    // some shadow under the feet
++    return LampShadow(position, NULL, NULL) >= 0.12f;
++}
++
++void EnhancedScene_SpriteLampShadowsEnd(void)
++{
++    SetSpriteLampShadow(0.0f, 0.0f, 0.0f);
++}
++
++void EnhancedScene_SetCamera(const MtxFx44 *projection, const MtxFx43 *camera)
++{
++    sViewSet = FALSE;
++    if (projection == NULL || camera == NULL) {
++        return;
++    }
++    const float k = 1.0f / 4096.0f;
++    for (int r = 0; r < 4; r++) {
++        for (int c = 0; c < 3; c++) {
++            sViewCamera[r][c] = camera->m[r][c] * k;
++        }
++        for (int c = 0; c < 4; c++) {
++            sViewProjection[r][c] = projection->m[r][c] * k;
++        }
++    }
++    sViewSet = TRUE;
++    // A new frame of the field: its lamps are found again as the land is drawn
++    sLampsSeenCount = 0;
++    // The camera for the passes that rebuild the scene from its depth (the water's mirror, fog, forest sunlight), by day
++    // and by night
++    {
++        const float ux = camera->_10 * k, uy = camera->_11 * k, uz = camera->_12 * k;
++        const float upLength = sqrtf(ux * ux + uy * uy + uz * uz);
++        if (upLength > 0.0001f) {
++            SIM_SetEnhancedCamera(projection->_00 * k, projection->_11 * k, projection->_22 * k, projection->_32 * k,
++                ux / upLength, uy / upLength, uz / upLength);
++        }
++    }
++    // The world's origin in view space (row vectors: the translation row), which holds the shadow map's texels still
++    SIM_SetEnhancedWorldOrigin(camera->_30 * k, camera->_31 * k, camera->_32 * k);
++    float east[3];
++    const BOOL hasEast = CameraEast(camera, east);
++    SendFog(hasEast ? east : NULL);
++    SendSunPatches(hasEast ? east : NULL);
++    if (!sSunLit) {
++        return;
++    }
++    float x = sSunWorld[0], y = sSunWorld[1], z = sSunWorld[2];
++    // The 3D's sun casts as the sprites' shadows lean: a thing as tall as a sprite throws a shadow as long, the same way.
++    // A sprite's shadow moves (4/3) shx (NDC x is 4/3 of NDC y on a 4:3 screen) across and shy up the screen per unit of
++    // its height, in view units; on the ground that is shx' east per unit of height (the camera has no yaw: view x is
++    // world x) and, northward, whatever reaches shy up the screen through the camera's pitch (view y of world z, _21)
++    if (camera->_00 > 0 && camera->_21 < -0.05f * 4096.0f) {
++        const float eastward = (4.0f / 3.0f) * sSpriteShear[0] / (camera->_00 * k);
++        const float north = sSpriteShear[1] / (-camera->_21 * k);
++        const float n = sqrtf(eastward * eastward + 1.0f + north * north);
++        x = -eastward / n;
++        y = 1.0f / n;
++        z = north / n;
++    }
++    // The matrices are the DS's, for row vectors: a world direction is multiplied on the left
++    float vx = (x * camera->_00 + y * camera->_10 + z * camera->_20) * k;
++    float vy = (x * camera->_01 + y * camera->_11 + z * camera->_21) * k;
++    float vz = (x * camera->_02 + y * camera->_12 + z * camera->_22) * k;
++    const float length = sqrtf(vx * vx + vy * vy + vz * vz);
++    if (length < 0.0001f) {
++        return;
++    }
++    // The world's up in view space, for libntr to tell the ground from walls and roofs
++    float ux = camera->_10 * k, uy = camera->_11 * k, uz = camera->_12 * k;
++    const float upLength = sqrtf(ux * ux + uy * uy + uz * uz);
++    if (upLength < 0.0001f) {
++        return;
++    }
++    SIM_SetEnhancedShadowCamera(projection->_00 * k, projection->_11 * k, projection->_22 * k, projection->_32 * k,
++        vx / length, vy / length, vz / length, ux / upLength, uy / upLength, uz / upLength);
++}
++
++BOOL EnhancedScene_WantsOffScreenCasters(void)
++{
++    // The sun's shadows of things off the screen reach onto it (the water's planar mirror, SIM_WATER_METHOD=planar, would
++    // show them too, but the default flip doesn't use them: not worth their cost for it)
++    return sSunShadows;
++}
++
++BOOL EnhancedScene_NearView(const VecFx32 *position)
++{
++    if (!sViewSet) {
++        return FALSE;
++    }
++    const float p[3] = { position->x / 4096.0f, position->y / 4096.0f, position->z / 4096.0f };
++    float view[3];
++    for (int c = 0; c < 3; c++) {
++        view[c] = p[0] * sViewCamera[0][c] + p[1] * sViewCamera[1][c] + p[2] * sViewCamera[2][c] + sViewCamera[3][c];
++    }
++    float clip[4];
++    for (int c = 0; c < 4; c++) {
++        clip[c] = view[0] * sViewProjection[0][c] + view[1] * sViewProjection[1][c] + view[2] * sViewProjection[2][c]
++            + sViewProjection[3][c];
++    }
++    if (clip[3] <= 0.0f) {
++        return FALSE;
++    }
++    // A prop's origin is at its foot: one up to about half the screen's width or height beyond an edge can still throw
++    // a shadow (or a reflection) onto it
++    return fabsf(clip[0]) <= clip[3] * 2.0f && fabsf(clip[1]) <= clip[3] * 2.0f;
++}
++
++void EnhancedScene_LandDrawing(BOOL drawing)
++{
++    // The commands already sent are drawn as they were
++    NNS_G3dGeFlushBuffer();
++    SIM_SetHideBuiltInShadows(drawing && sSunShadows);
++    SIM_SetLandDrawing(drawing);
++    if (!drawing) {
++        TakeFrameLamps(); // the land and its props, and so their lamps, have been drawn
++    }
++}
++
++void EnhancedScene_CasterDrawing(BOOL drawing)
++{
++    NNS_G3dGeFlushBuffer();
++    SIM_SetSunCasters(drawing); // (kept for the water's mirror image too: libntr keeps them only when one wants them)
++}
++
++BOOL EnhancedScene_SunShadowsShown(void)
++{
++    return sSunShadows;
++}
++
++static void SetSun(float hour)
++{
++    static const struct {
++        float hour;
++        u8 strength;
++    } kStrength[] = { { 6.0f, 0 }, { 7.5f, 70 }, { 10.0f, 105 }, { 14.0f, 105 }, { 17.0f, 90 }, { 19.0f, 40 }, { 20.0f, 0 } };
++    float strength = 0.0f;
++    for (int i = 0; i < (int)(sizeof(kStrength) / sizeof(kStrength[0])) - 1; i++) {
++        if (hour >= kStrength[i].hour && hour < kStrength[i + 1].hour) {
++            const float t = (hour - kStrength[i].hour) / (kStrength[i + 1].hour - kStrength[i].hour);
++            strength = kStrength[i].strength + (kStrength[i + 1].strength - kStrength[i].strength) * t;
++        }
++    }
++    const float fromNoon = hour - 12.0f;
++    const float away = fromNoon < 0.0f ? -fromNoon : fromNoon;
++    sSpriteShear[0] = fromNoon * 0.12f;
++    sSpriteShear[1] = 0.24f + 0.03f * away;
++    SIM_SetEnhancedSun(sSpriteShear[0], sSpriteShear[1], (u8)strength);
++    sSunShadowAlpha = SIM_GetConfigPtr()->enhancedShadows ? strength / 255.0f : 0.0f;
++    sSunShadows = strength >= 30.0f && SIM_GetConfigPtr()->enhancedShadows;
++    const BOOL wantsLight = SIM_GetConfigPtr()->enhancedHighlights || SIM_GetConfigPtr()->enhancedAtmosphere;
++    sSunLit = strength >= 30.0f && (SIM_GetConfigPtr()->enhancedShadows || wantsLight);
++    // The sun's light for the highlights: white-warm at noon, orange as it gets low, as strong as the shadows' strength
++    const float low = away / 6.0f > 1.0f ? 1.0f : away / 6.0f;
++    // The air scatters more of a low sun's light: stronger shafts in the morning and evening
++    SetAir(hour, strength >= 30.0f ? 0.05f + 0.10f * low : 0.0f);
++    if (strength >= 30.0f && wantsLight) {
++        const float level = strength / 105.0f > 1.0f ? 1.0f : strength / 105.0f;
++        SIM_SetEnhancedSunLight(level, level * (0.95f - 0.23f * low), level * (0.85f - 0.4f * low));
++    } else {
++        SIM_SetEnhancedSunLight(0.0f, 0.0f, 0.0f);
++    }
++    // Toward the sun: up, and opposite the shadows' way (the sprites' shadows lean to the east in the evening and away
++    // from the camera, north, at noon: the sun is in the west, south of overhead)
++    {
++        const float ex = -fromNoon * 0.35f, ez = 0.45f + 0.05f * away;
++        const float n = sqrtf(ex * ex + 1.0f + ez * ez);
++        sSunWorld[0] = ex / n;
++        sSunWorld[1] = 1.0f / n;
++        sSunWorld[2] = ez / n;
++    }
++}
++
++// The water mask: the water tiles around the player as runs along x, found again when the player's tile changes (or
++// every half second), and drawn every frame as a few quads that libntr keeps as the mask (SIM_SetPolygonTag)
++#define WATER_RANGE_X 30
++#define WATER_RANGE_Z 22
++#define WATER_MAX_RUNS 400
++
++typedef struct {
++    s16 x;
++    s16 z;
++    s16 length;
++    fx32 height;
++} WaterRun;
++
++static WaterRun sWaterRuns[WATER_MAX_RUNS];
++static int sWaterRunCount = 0;
++static int sWaterCacheX = -1, sWaterCacheZ = -1, sWaterCacheMap = -1, sWaterCacheAge = 0;
++
++static void FindWater(const EnhancedWaterQuery *query)
++{
++    const int px = query->playerX, pz = query->playerZ;
++    sWaterRunCount = 0;
++    for (int z = pz - WATER_RANGE_Z; z <= pz + WATER_RANGE_Z; z++) {
++        int start = -1;
++        for (int x = px - WATER_RANGE_X; x <= px + WATER_RANGE_X + 1; x++) {
++            const BOOL water = x <= px + WATER_RANGE_X && query->isWater(query->context, x, z);
++            if (water && start < 0) {
++                start = x;
++            } else if (!water && start >= 0) {
++                if (sWaterRunCount < WATER_MAX_RUNS) {
++                    WaterRun *run = &sWaterRuns[sWaterRunCount++];
++                    run->x = start;
++                    run->z = z;
++                    run->length = x - start;
++                    run->height = query->height(query->context, start, z);
++                }
++                start = -1;
++            }
++        }
++    }
++}
++
++void EnhancedScene_DrawWaterMask(const EnhancedWaterQuery *query)
++{
++    if (!SIM_GetConfigPtr()->enhancedWater || query == NULL) {
++        SIM_SetEnhancedWater(0);
++        return;
++    }
++
++    if (query->playerX != sWaterCacheX || query->playerZ != sWaterCacheZ || query->mapId != sWaterCacheMap
++        || ++sWaterCacheAge >= 30) {
++        sWaterCacheX = query->playerX;
++        sWaterCacheZ = query->playerZ;
++        sWaterCacheMap = query->mapId;
++        sWaterCacheAge = 0;
++        FindWater(query);
++    }
++    SIM_SetEnhancedWater(sWaterRunCount > 0 ? 190 : 0);
++    if (sWaterRunCount == 0) {
++        return;
++    }
++
++    // Each run is a unit quad scaled to its length: the polygons are not drawn, libntr keeps them as the mask
++    MtxFx33 identity;
++    MTX_Identity33(&identity);
++    NNS_G3dGeFlushBuffer();
++    SIM_SetPolygonTag(1);
++    G3_PolygonAttr(GX_LIGHTMASK_NONE, GX_POLYGONMODE_MODULATE, GX_CULL_NONE, 0, 31, 0);
++    for (int i = 0; i < sWaterRunCount; i++) {
++        const WaterRun *run = &sWaterRuns[i];
++        VecFx32 pos = { run->x * TILE_SIZE, run->height, run->z * TILE_SIZE };
++        VecFx32 scale = { run->length * TILE_SIZE, FX32_ONE, TILE_SIZE };
++        NNS_G3dGlbSetBaseTrans(&pos);
++        NNS_G3dGlbSetBaseRot(&identity);
++        NNS_G3dGlbSetBaseScale(&scale);
++        NNS_G3dGlbFlush();
++        G3_Begin(GX_BEGIN_QUADS);
++        G3_Vtx(0, 0, 0);
++        G3_Vtx(FX16_ONE, 0, 0);
++        G3_Vtx(FX16_ONE, 0, FX16_ONE);
++        G3_Vtx(0, 0, FX16_ONE);
++        G3_End();
++    }
++    NNS_G3dGeFlushBuffer();
++    SIM_SetPolygonTag(0);
++    // The base transform back to nothing: later draws set their own, but not every one sets all three
++    VecFx32 origin = { 0, 0, 0 };
++    VecFx32 unit = { FX32_ONE, FX32_ONE, FX32_ONE };
++    NNS_G3dGlbSetBaseTrans(&origin);
++    NNS_G3dGlbSetBaseScale(&unit);
++}
++
++static void SetNeutral(void)
++{
++    SIM_SetEnhancedScene(255, 255, 255, 0);
++    SIM_SetEnhancedSun(0.0f, 0.0f, 0);
++    SIM_SetEnhancedSunLight(0.0f, 0.0f, 0.0f);
++    SIM_SetEnhancedAtmosphere(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
++    SIM_SetEnhancedBloom(1.0f, 0.0f);
++    sSunShadows = FALSE;
++    sSunLit = FALSE;
++    sSunShadowAlpha = 0.0f;
++}
++
++// 0 by day to 1 by night, easing over an hour at dusk (18:30 to 19:30) and at dawn (5:30 to 6:30)
++static float Night(float hour)
++{
++    if (hour >= 19.5f || hour < 5.5f) {
++        return 1.0f;
++    }
++    if (hour >= 18.5f) {
++        return hour - 18.5f;
++    }
++    if (hour < 6.5f) {
++        return 6.5f - hour;
++    }
++    return 0.0f;
++}
++
++float EnhancedScene_Hour(float clockHour, const char *testEnv)
++{
++    float hour = clockHour;
++    const char *test = testEnv != NULL ? getenv(testEnv) : NULL;
++    if (test != NULL && test[0] != '\0') {
++        hour = (float)atof(test);
++    }
++#ifdef __ANDROID__
++    // On a device: `adb shell setprop debug.eterna.hour H` (to time the daytime passes at night; empty to clear),
++    // looked up about once a second
++    static char sPropHour[PROP_VALUE_MAX];
++    static int sPropAge = 0;
++    if (sPropAge-- <= 0) {
++        sPropAge = 60;
++        if (__system_property_get("debug.eterna.hour", sPropHour) <= 0) {
++            sPropHour[0] = '\0';
++        }
++    }
++    if (sPropHour[0] != '\0') {
++        hour = (float)atof(sPropHour);
++    }
++#endif
++    return hour;
++}
++
++void EnhancedScene_FieldDrawing(float groundY, const NNSG3dResTex *const *textureSets, int setCount,
++    const EnhancedLampLook *lamps, int lampCount)
++{
++    if (sFog != NULL || sPatches != NULL) {
++        // The fog and the sunlight lie on the ground under the player, eased so steps and slopes don't jolt them
++        sGround = sGroundSet ? sGround + (groundY - sGround) * 0.1f : groundY;
++        sGroundSet = TRUE;
++    }
++    SendLampTextures(textureSets, setCount, lamps, lampCount);
++}
++
++void EnhancedScene_Update(const EnhancedSceneState *state)
++{
++    const BOOL field = state != NULL && state->field;
++    const float hour = field ? state->hour : 12.0f;
++    const float night = Night(hour);
++    sHour = hour;
++    sNight = night;
++
++    // Fog and forest sunlight, by map
++    sFog = field ? state->fog : NULL;
++    sPatches = field ? state->patches : NULL;
++    if (sFog != NULL || sPatches != NULL) {
++        sFrames++;
++    } else {
++        sGroundSet = FALSE;
++    }
++    if (!field) {
++        // Nothing reads the field now: the camera's frame passes send these again when it is back
++        SIM_SetEnhancedFog(NULL);
++        SIM_SetEnhancedSunPatches(NULL);
++    }
++
++    // Lamps: outdoors, by night, with the setting on (their textures are named in the field's render,
++    // EnhancedScene_FieldDrawing, and libntr finds the lamps as the land is drawn)
++    sLampNight = night;
++    sLampsWanted = field && state->outdoors && night > 0.0f && SIM_GetConfigPtr()->enhancedLamps;
++    if (!sLampsWanted) {
++        sLampsSeenCount = 0;
++    }
++
++    if (!field || !state->outdoors) {
++        SetNeutral();
++        return;
++    }
++    SetSun(hour);
++    const int minutes = (int)(hour * 60.0f);
++    for (int i = 0; i < (int)(sizeof(sKeys) / sizeof(sKeys[0])) - 1; i++) {
++        const int from = sKeys[i].hour * 60;
++        const int to = sKeys[i + 1].hour * 60;
++        if (minutes >= from && minutes < to) {
++            const int t = minutes - from;
++            const int span = to - from;
++            SIM_SetEnhancedScene(Lerp(sKeys[i].r, sKeys[i + 1].r, t, span),
++                Lerp(sKeys[i].g, sKeys[i + 1].g, t, span),
++                Lerp(sKeys[i].b, sKeys[i + 1].b, t, span),
++                Lerp(sKeys[i].vignette, sKeys[i + 1].vignette, t, span));
++            return;
++        }
++    }
++    SIM_SetEnhancedScene(255, 255, 255, 0);
++}

@@ -1,0 +1,16 @@
+# Enhanced graphics' lamp light at night in other towns, to check the lamps found from their textures (Canalave's canal
+# posts, Hearthome's street lamps, Veilstone's Game Corner neon). From the turtwig fixture with
+# TEST_CONFIG="EnhancedLamps=true" -Hour 22; POKEPLATINUM_LAMP_LOG=1 lists the lamps found (world position and tile).
+mash A until free
+jump 33 50 730
+until free timeout 3000
+wait 90
+shot canalave
+jump 86 479 699
+until free timeout 3000
+wait 90
+shot hearthome
+jump 132 706 625
+until free timeout 3000
+wait 90
+shot veilstone_game_corner

@@ -1,0 +1,41 @@
+--- a/meson.build
++++ b/meson.build
+@@ -40,18 +40,23 @@
+     command: [python3, files('tools/bin2c.py'), '@OUTPUT@', '@INPUT@'],
+ )
+ 
++port_common_sources = files(
++    'src/autosave.c',
++    'src/cheats.c',
++    'src/nuzlocke.c',
++    'src/save_slots.c',
++    'src/save_sync.c',
++    'src/save_version.c',
++    'src/shiny_hunt.c',
++)
++# The Gear needs the game's Gear_* data adapters (port/gear_*.h): a game without them yet leaves it out
++if get_option('gear')
++    port_common_sources += files('src/gear_ui.cpp')
++endif
++
+ port_common_lib = static_library('port_common',
+     gear_fonts_c,
+-    files(
+-        'src/autosave.c',
+-        'src/cheats.c',
+-        'src/gear_ui.cpp',
+-        'src/nuzlocke.c',
+-        'src/save_slots.c',
+-        'src/save_sync.c',
+-        'src/save_version.c',
+-        'src/shiny_hunt.c',
+-    ),
++    port_common_sources,
+     c_args: ['-std=c99'],
+     include_directories: port_common_includes,
+     dependencies: nitrosdk_headers_dep,
+--- a/meson.options
++++ b/meson.options
+@@ -1 +1,2 @@
+ option('build_target', type: 'combo', choices: ['arm', 'win64', 'linux', 'nx', 'prospero', 'android'], value: 'android', description: 'Target build platform (taken from the game)', yield: true)
++option('gear', type: 'boolean', value: true, description: 'The Gear (src/gear_ui.cpp): off for a game without its Gear_* data adapters yet')
