@@ -15,8 +15,10 @@
 #include <vector>
 
 #include "gen5.h"
+#include "gen5_rom_fs.h"
 
 namespace fs = std::filesystem;
+using gen5rom::RomFile;
 
 namespace {
 
@@ -86,86 +88,12 @@ void Load()
     }
 }
 
-struct RomFile {
-    std::string path;
-    uint32_t start, end;
-};
-
-uint32_t Read32(const std::vector<uint8_t> &data, size_t offset)
-{
-    return data[offset] | data[offset + 1] << 8 | data[offset + 2] << 16 | (uint32_t)data[offset + 3] << 24;
-}
-
-uint16_t Read16(const std::vector<uint8_t> &data, size_t offset)
-{
-    return data[offset] | data[offset + 1] << 8;
-}
-
-// The ROM's file system: the file name table's folders and the allocation table's ranges
-bool ListFiles(std::ifstream &rom, std::vector<RomFile> &files, std::string &error)
-{
-    std::vector<uint8_t> header(0x50);
-    rom.seekg(0);
-    rom.read((char *)header.data(), header.size());
-    const uint32_t fntOffset = Read32(header, 0x40), fntSize = Read32(header, 0x44);
-    const uint32_t fatOffset = Read32(header, 0x48), fatSize = Read32(header, 0x4C);
-    if (!rom || fntSize < 8 || fntSize > (1 << 20) || fatSize > (1 << 20)) {
-        error = "Its file system can't be read";
-        return false;
-    }
-    std::vector<uint8_t> fnt(fntSize), fat(fatSize);
-    rom.seekg(fntOffset);
-    rom.read((char *)fnt.data(), fnt.size());
-    rom.seekg(fatOffset);
-    rom.read((char *)fat.data(), fat.size());
-    if (!rom) {
-        error = "Its file system can't be read";
-        return false;
-    }
-
-    // Each folder's entry: where its names start and its first file's ID. Names: a length byte (with 0x80 for a
-    // folder, followed by its ID), 0 at the end
-    std::vector<std::pair<uint16_t, std::string>> folders = { { 0xF000, "" } };
-    while (!folders.empty()) {
-        auto [id, prefix] = folders.back();
-        folders.pop_back();
-        const size_t entry = (id & 0xFFF) * 8;
-        if (entry + 8 > fnt.size()) {
-            error = "Its file system is damaged";
-            return false;
-        }
-        size_t at = Read32(fnt, entry);
-        uint16_t fileId = Read16(fnt, entry + 4);
-        while (at < fnt.size() && fnt[at] != 0) {
-            const uint8_t length = fnt[at] & 0x7F;
-            const bool folder = (fnt[at] & 0x80) != 0;
-            if (at + 1 + length + (folder ? 2 : 0) > fnt.size()) {
-                error = "Its file system is damaged";
-                return false;
-            }
-            const std::string name((const char *)&fnt[at + 1], length);
-            at += 1 + length;
-            if (folder) {
-                folders.push_back({ Read16(fnt, at), prefix + name + "/" });
-                at += 2;
-            } else {
-                if ((size_t)fileId * 8 + 8 > fat.size()) {
-                    error = "Its file system is damaged";
-                    return false;
-                }
-                files.push_back({ prefix + name, Read32(fat, fileId * 8), Read32(fat, fileId * 8 + 4) });
-                fileId++;
-            }
-        }
-    }
-    return true;
-}
-
 void ImportThread(std::string path, bool deleteAfter)
 {
     std::string error;
     std::string game;
     std::error_code ec;
+    uint64_t romSize = 0;
 
     std::ifstream rom(path, std::ios::binary);
     char gameCode[5] = {};
@@ -186,7 +114,7 @@ void ImportThread(std::string path, bool deleteAfter)
     // The whole ROM's SHA1
     if (error.empty()) {
         rom.seekg(0, std::ios::end);
-        const uint64_t size = rom.tellg();
+        const uint64_t size = romSize = rom.tellg();
         rom.seekg(0);
         MATHSHA1Context sha1;
         MATH_SHA1Init(&sha1);
@@ -223,14 +151,24 @@ void ImportThread(std::string path, bool deleteAfter)
 
     // The files, into gen5.tmp/, which becomes gen5/ once complete
     std::vector<RomFile> files;
-    if (error.empty() && ListFiles(rom, files, error)) {
+    if (error.empty() && gen5rom::ListFiles(rom, romSize, files, error)) {
         fs::remove_all(TempDir(), ec);
         std::vector<char> buffer(1 << 20);
         int count = 0, total = 0;
         for (const RomFile &file : files) {
-            total += IsExtracted(file.path) ? 1 : 0;
+            if (IsExtracted(file.path)) {
+                // The names come from the ROM: only plain relative paths are written under the extraction folder
+                if (!gen5rom::IsSafePath(file.path)) {
+                    error = "The ROM's file system holds a file name that isn't safe to extract.";
+                    break;
+                }
+                total++;
+            }
         }
         for (const RomFile &file : files) {
+            if (!error.empty()) {
+                break;
+            }
             if (!IsExtracted(file.path)) {
                 continue;
             }
