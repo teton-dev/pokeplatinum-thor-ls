@@ -58,10 +58,21 @@ tools\windows\test.ps1 -Script tests/scripts/enhanced_posts.txt -From turtwig -H
 ```
 
 The same scripts and fixtures as `desktop.sh test`. The run is muted (`SDL_AUDIODRIVER=dummy`, `MasterVolume=0`) and as
-headless as Windows allows: the window is moved off every screen as soon as it appears, without taking focus, and shots
-are read from the window itself (`PrintWindow`), so nothing covers the desktop. `-Env @{SIM_SUNSHADOW_DEBUG='1'}` passes
-debug variables; `-Name` keeps runs apart (`test-shots/<script>-<name>`). Shots include some empty margin to the right
-and below when Windows scales the window; crop to the game's size.
+headless as Windows allows: the window is moved off every screen as soon as it appears, without taking focus, so nothing
+covers the desktop. `-Env @{SIM_SUNSHADOW_DEBUG='1'}` passes debug variables; `-Name` keeps runs apart
+(`test-shots/<script>-<name>`).
+
+**Shots are written by the game** (since 2026-11-26): on a `shot` or `stillshot` line the script asks libntr
+(`libntr_test_shot.patch`, `SIM_TestShotRequest`) for the next frame it presents, read back from the main window at
+its drawable size and saved as `<name>.png` in the folder `test.ps1` passes as `POKEPLATINUM_TEST_SHOTS`
+(`POKEHEARTGOLD_TEST_SHOTS` for Goldenrod); `test.ps1` waits for the file. A `PrintWindow` of the off-screen window,
+used before, lagged what the game showed: black or stale shots of frames that were drawn (Gen 5 battles, widescreen).
+Only a run that hangs (`timeout`) is still saved with `PrintWindow`. Without the variable (Docker's `desktop.sh`) the
+game writes nothing and that harness takes its own.
+
+**Run folder:** `test.ps1` wipes and reuses `<THOR_DEV>/test-run`, so two sessions testing at once overwrite each
+other's runs. Give each session its own `THOR_DEV` (a folder with a `fixtures` junction to the shared one, and
+`PKMNB2.nds` if the script imports the BW2 ROM) and pass `-Data` explicitly.
 
 Checked on win64: `gen5_rom.txt`, `gen5_battle.txt` (a whole battle in BW2's engine), the enhanced-graphics scripts.
 

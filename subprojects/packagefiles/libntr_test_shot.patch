@@ -1,0 +1,148 @@
+diff --git a/include/simulator/sim_test_shot.h b/include/simulator/sim_test_shot.h
+new file mode 100644
+--- /dev/null
++++ b/include/simulator/sim_test_shot.h
+@@ -0,0 +1,28 @@
++#ifndef LIBNTR_SIM_TEST_SHOT_H
++#define LIBNTR_SIM_TEST_SHOT_H
++
++// A test script's screenshot, written by the simulator itself: the next frame it presents (presented even if test
++// mode would have skipped it) is read back from the main window and saved as a PNG. The window's own picture, read
++// by another program, lagged the frames presented (an off-screen GL window: black shots of frames that were drawn).
++
++#include <nitro/types.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++// Saves the next presented frame of the main window to path (a PNG; replaces a request not yet taken)
++void SIM_TestShotRequest(const char *path);
++
++// TRUE until the requested frame is saved, or the save failed
++BOOL SIM_TestShotPending(void);
++
++#ifdef __cplusplus
++}
++
++struct SDL_Window;
++// The simulator, with the frame drawn and before it is swapped: saves it if one was requested
++void SIM_TestShotCapture(SDL_Window *window);
++#endif
++
++#endif // LIBNTR_SIM_TEST_SHOT_H
+diff --git a/libraries/sim/src/sim_test_shot.cpp b/libraries/sim/src/sim_test_shot.cpp
+new file mode 100644
+--- /dev/null
++++ b/libraries/sim/src/sim_test_shot.cpp
+@@ -0,0 +1,82 @@
++// A test script's screenshot from the frame presented; see include/simulator/sim_test_shot.h
++#include <simulator/sim_test_shot.h>
++
++#include <SDL2/SDL.h>
++#include <simulator/sim_opengl.h>
++
++#include <cstdio>
++#include <cstring>
++#include <string>
++#include <vector>
++
++#include "stb/stb_image_write.h" // implemented in sim_texture_packs.cpp
++
++namespace {
++
++// Set by the game's thread (the script) and taken by the same thread when it presents: no lock needed
++std::string sPath;
++
++} // namespace
++
++extern "C" void SIM_TestShotRequest(const char *path) {
++  sPath = path != nullptr ? path : "";
++}
++
++extern "C" BOOL SIM_TestShotPending(void) {
++  return sPath.empty() ? FALSE : TRUE;
++}
++
++void SIM_TestShotCapture(SDL_Window *window) {
++  if (sPath.empty()) {
++    return;
++  }
++  const std::string path = sPath;
++  sPath.clear(); // taken once, whether or not it can be saved: the script must not wait on a frame forever
++
++  int width = 0;
++  int height = 0;
++  SDL_GL_GetDrawableSize(window, &width, &height);
++  if (width <= 0 || height <= 0 || width > 16384 || height > 16384) {
++    fprintf(stderr, "[test] shot %s: the window has no picture (%dx%d)\n", path.c_str(), width, height);
++    return;
++  }
++
++  // The window's back buffer, the frame about to be shown
++  GLint readFramebuffer = 0;
++  GLint packAlignment = 4;
++  glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer);
++  glGetIntegerv(GL_PACK_ALIGNMENT, &packAlignment);
++  glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
++#ifndef SIM_GLES
++  glReadBuffer(GL_BACK);
++#endif
++  glPixelStorei(GL_PACK_ALIGNMENT, 1);
++  const size_t rowBytes = (size_t)width * 4;
++  std::vector<unsigned char> pixels(rowBytes * (size_t)height);
++  glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
++  glPixelStorei(GL_PACK_ALIGNMENT, packAlignment);
++  glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)readFramebuffer);
++
++  // GL's rows go up from the bottom; a PNG's go down. Opaque: the window shows no alpha
++  std::vector<unsigned char> image(pixels.size());
++  for (int y = 0; y < height; y++) {
++    unsigned char *dst = &image[(size_t)y * rowBytes];
++    memcpy(dst, &pixels[(size_t)(height - 1 - y) * rowBytes], rowBytes);
++    for (int x = 0; x < width; x++) {
++      dst[x * 4 + 3] = 0xFF;
++    }
++  }
++
++  // Written beside, then renamed: the harness waits for the file and must never read half of one
++  const std::string partial = path + ".part";
++  if (stbi_write_png(partial.c_str(), width, height, 4, image.data(), (int)rowBytes) == 0) {
++    fprintf(stderr, "[test] shot %s: couldn't write %s\n", path.c_str(), partial.c_str());
++    remove(partial.c_str());
++    return;
++  }
++  remove(path.c_str());
++  if (rename(partial.c_str(), path.c_str()) != 0) {
++    fprintf(stderr, "[test] shot %s: couldn't rename %s\n", path.c_str(), partial.c_str());
++    remove(partial.c_str());
++  }
++}
+diff --git a/libraries/sim/src/meson.build b/libraries/sim/src/meson.build
+--- a/libraries/sim/src/meson.build
++++ b/libraries/sim/src/meson.build
+@@ -46,6 +46,7 @@
+     'sim_settings_link.cpp',
+     'sim_ui.cpp',
+     'sim_shaders.cpp',
++    'sim_test_shot.cpp',
+     'sim_texture_packs.cpp',
+     'sim_vars.c'
+ )
+diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -44,2 +44,3 @@
+ #include <simulator/sim_carts.h>
++#include <simulator/sim_test_shot.h>
+ #ifdef SDK_BUILD_ANDROID
+@@ -3430,2 +3431,5 @@
+     }
++    if (SIM_TestShotPending() && !(sSkipNextFrame && !paused)) {
++      present = true; // a test script's shot is of this frame (sim_test_shot.cpp)
++    }
+     sSkipNextFrame = false;
+@@ -4089,2 +4093,3 @@
+ 
++      SIM_TestShotCapture(window);
+       SIM_Display_KeepMainAsync();

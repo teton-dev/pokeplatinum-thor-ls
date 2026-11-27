@@ -1,6 +1,6 @@
 # Windows counterpart of tools/docker/desktop.sh test (docs/thor/dev/desktop-windows.md): runs a test script
 # (tests/README.md) with the win64 build in a fresh data folder, from a fixture's save, muted, its window parked off
-# the screens without taking focus, and saves the window (PrintWindow) on each "[test] shot NAME" line.
+# the screens without taking focus; on each "[test] shot NAME" line the game itself writes NAME.png (POKEPLATINUM_TEST_SHOTS).
 # THOR_DEV (default: thor-dev beside the repository's folder) holds desktop/ (the data folder with the extracted ROM),
 # fixtures/, PKMNB2.nds; runs go in test-run, shots and the log in test-shots/<script>[-Name].
 #   tools\windows\test.ps1 -Script tests/scripts/x.txt [-From fixture] [-Data dir] [-Config 'K=v K=v'] [-ConfigPrj 'K=v']
@@ -100,6 +100,8 @@ $psi.EnvironmentVariables['LIBNTR_TEST_MODE'] = '1'
 $psi.EnvironmentVariables['POKEPLATINUM_TEST_SCRIPT'] = $scriptPath
 $psi.EnvironmentVariables['SDL_AUDIODRIVER'] = 'dummy'
 $psi.EnvironmentVariables['POKEPLATINUM_ENHANCED_HOUR'] = $Hour
+# The game writes each shot itself, from the frame it presents (libntr_test_shot.patch): NAME.png here
+$psi.EnvironmentVariables['POKEPLATINUM_TEST_SHOTS'] = $shots
 $gen5Rom = Join-Path $ThorDev 'PKMNB2.nds'
 if (Test-Path $gen5Rom) { $psi.EnvironmentVariables['POKEPLATINUM_GEN5_ROM'] = $gen5Rom }
 # Goldenrod reads the same settings as POKEHEARTGOLD_*
@@ -112,8 +114,9 @@ $log = Join-Path $shots 'log.txt'
 $errTask = $proc.StandardError.ReadToEndAsync()
 Write-Host "Running $testName$(if ($From) { " from $From" })"
 
-# Headless as far as Windows allows: the window is moved off every screen (no focus taken) as soon as it shows,
-# and shots are read from the window itself (PrintWindow, full content), not from the screen
+# Headless as far as Windows allows: the window is moved off every screen (no focus taken) as soon as it shows.
+# Shots are the game's own PNGs; only a run that hangs is saved from the window (PrintWindow), which can lag what the
+# game shows (2026-11-26: black shots of drawn frames)
 $script:parked = $false
 function Hide-Window {
     if ($script:parked) { return }
@@ -124,7 +127,17 @@ function Hide-Window {
     [W]::SetWindowPos($h, [IntPtr]1, $x, 0, 0, 0, 0x0001 -bor 0x0010) | Out-Null # HWND_BOTTOM, NOSIZE, NOACTIVATE
     $script:parked = $true
 }
-function Save-Shot([string]$shotName) {
+# A "[test] shot NAME" line: the game writes NAME.png at the frame it shows next (written beside, then renamed, so a
+# file that exists is whole)
+function Wait-Shot([string]$shotName) {
+    $file = Join-Path $shots "$shotName.png"
+    $until = (Get-Date).AddSeconds(3)
+    while (-not (Test-Path $file) -and (Get-Date) -lt $until -and -not $proc.HasExited) { Start-Sleep -Milliseconds 20 }
+    if (Test-Path $file) { Write-Host "[test] shot $shotName -> $file" }
+    else { Write-Host "[test] shot ${shotName}: the game wrote no picture (a build without libntr_test_shot.patch?)" }
+}
+# The window's own picture, for a run that hangs (the game can't write one then)
+function Save-WindowShot([string]$shotName) {
     Hide-Window
     $proc.Refresh()
     $h = $proc.MainWindowHandle
@@ -152,13 +165,13 @@ while ($true) {
         $line = $readTask.Result
         if ($null -eq $line) { break }
         $lines.Add($line)
-        if ($line -match '^\[test\] shot (.+)$') { Save-Shot $Matches[1] }
+        if ($line -match '^\[test\] shot ([A-Za-z0-9_-]+)$') { Wait-Shot $Matches[1] }
         elseif ($line -match '^\[test\] |\[assert\]|Assert') { Write-Host $line }
         $readTask = $proc.StandardOutput.ReadLineAsync()
     }
     if (((Get-Date) - $start).TotalSeconds -ge $Limit) {
         Write-Host "[test] FAIL: still running after $Limit s"
-        Save-Shot 'timeout'
+        Save-WindowShot 'timeout'
         $proc.Kill()
         break
     }
